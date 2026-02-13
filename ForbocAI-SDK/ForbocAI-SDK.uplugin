@@ -1,0 +1,21 @@
+{
+    "Name": "ForbocAI-SDK",
+    "Version": "1.0",
+    "VersionName": "1.0",
+    "FriendlyName": "ForbocAI SDK",
+    "Category": "AI",
+    "CreatedBy": "ForbocAI",
+    "CreatedByURL": "https://forboc.ai",
+    "DocsURL": "https://docs.forboc.ai",
+    "MarketplaceURL": "",
+    "SupportURL": "",
+    "EngineVersion": "5.7.3",
+    "Description": "Autonomous AI for Unreal Engine 5.7.3.",
+    "bEnabledByDefault": true,
+    "Modules": [
+        {
+            "Name": "ForbocAI-SDK",
+            "Type": "Runtime"
+        }
+    ]
+}
