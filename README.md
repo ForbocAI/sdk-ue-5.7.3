@@ -10,7 +10,7 @@
 
 **ᚠ ᛫ ᛟ ᛫ ᚱ ᛫ ᛒ ᛫ ᛟ ᛫ ᚲ**
 
-Autonomous AI for Unreal Engine 5.7.3.
+Autonomous AI for Unreal Engine 5.7.
 
 [![Documentation](https://img.shields.io/badge/docs-docs.forboc.ai-blue)](https://docs.forboc.ai)
 </div>
@@ -24,11 +24,6 @@ Autonomous AI for Unreal Engine 5.7.3.
 `Córe_Módules // UE5_Plugin`
 
 The **ForbocAI SDK for Unreal Engine 5.7** leverages modern engine features to drive hyper-realistic NPC behavior.
-
-- **Native C++11** — Functional paradigm compatibility for robust AI logic.
-- **Subsystem Integration** — Global access via `UGameInstanceSubsystem`.
-- **Async Blueprints** — Non-blocking Latent Actions for smooth gameplay integration.
-- **Mass Entity Ready** — Designed for compatibility with Mass Entity systems.
 
 ---
 
@@ -68,6 +63,43 @@ auto Agent = AI->CreateAgent(TEXT("Cyber-Merchant"));
 
 ---
 
+## Command Line Interface
+
+`CLI // Verification`
+
+The SDK includes a built-in Commandlet for verification and administration.
+
+To run the CLI, use `UnrealEditor-Cmd` (paths may vary):
+
+```bash
+# macOS Example
+"/Users/Shared/Epic Games/UE_5.7/Engine/Binaries/Mac/UnrealEditor-Cmd" \
+  "/Path/To/Your.uproject" \
+  -run=ForbocAI_SDK -Command=doctor \
+  -nosplash -nopause -unattended
+```
+
+> **Note:** The first run takes several minutes while the engine loads
+> (dylib linking, DDC initialization, shader compilation). Subsequent runs
+> are significantly faster (~30s engine startup).
+
+**Commands:**
+*   `doctor`: Check API connection status.
+*   `agent_list`: List active agents.
+*   `agent_create -Persona="..."`: Create a new agent.
+*   `agent_process -Id="..." -Input="..."`: Interact with an agent.
+*   `soul_export -Id="..."`: Export an agent's soul.
+
+**Example `doctor` output:**
+```
+ForbocAI SDK CLI (UE5) - Command: doctor
+Running Doctor check on https://api.forboc.ai...
+API Status: ONLINE
+Response: {"message":"Neuro-Symbolic Grid: ACTIVE","status":"online","version":"1.0.0"}
+```
+
+---
+
 ## Architecture & Concepts
 
 `UE5_Arch // Fúnctional_C++`
@@ -78,7 +110,7 @@ ForbocAI emphasizes a **Functional Programming** approach even within C++. We av
 - **Factory Functions** (vs Constructors)
 - **Higher-Order Functions** (std::function, lambdas)
 
-For a deep dive into writing Functional C++11/17 with this SDK, please read our **[Functional C++ Guide](./GUIDE.md)**.
+For a deep dive into writing Functional C++11 with this SDK, please read our **[Functional C++ Guide](./C++11-FP-GUIDE.md)** and the core library at [`functional_core.hpp`](./Plugins/ForbocAI_SDK/Source/ForbocAI_SDK/Public/Core/functional_core.hpp).
 
 ---
 

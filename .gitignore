@@ -1,0 +1,50 @@
+# Unreal Engine
+Binaries/
+Intermediate/
+Saved/
+DerivedDataCache/
+Build/
+Content/
+Releases/
+Collections/
+Developers/
+User/
+
+# Unreal Assets (code-only SDK — no content)
+*.uasset
+*.umap
+
+# Archives
+*.zip
+
+# Plugins
+Plugins/*/Binaries/
+Plugins/*/Intermediate/
+
+# Visual Studio / VS Code
+.vs/
+.vscode/
+*.sln
+*.suo
+*.opensdf
+*.sdf
+*.user
+*.code-workspace
+
+# Xcode / macOS
+*.xcodeproj
+*.xcworkspace
+xcuserdata/
+.DS_Store
+
+# JetBrains Rider
+.idea/
+*.sln.DotSettings.user
+
+# Python
+__pycache__/
+*.py[cod]
+
+# Other
+*.log
+*.tmp
