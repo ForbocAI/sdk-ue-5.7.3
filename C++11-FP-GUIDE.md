@@ -5,35 +5,36 @@
 > A guide to functional programming in **strict C++11** for the ForbocAI SDK.
 > All code targets C++11 only -- no C++14/17 features.
 >
-> **Library**: This guide accompanies [`functional_core.hpp`](Plugins/ForbocAI_SDK/Source/ForbocAI_SDK/Public/Core/functional_core.hpp), which provides production-ready implementations of Maybe, Either, Currying, Lazy evaluation, Pipeline, Composition, and fmap.
+> **Library**: This guide accompanies [`functional_core.hpp`](Plugins/ForbocAI_SDK/Source/ForbocAI_SDK/Public/Core/functional_core.hpp), which provides production-ready implementations of Maybe, Either, Currying, Lazy evaluation, Pipeline, Composition, and fmap — all as **pure data structs with free functions only**.
 
 ---
 
 ## Core Principles
 
-| OOP (avoid)               | FP (prefer)                          |
-|---------------------------|--------------------------------------|
-| `class` with methods      | `struct` with public `const` data    |
-| Constructors              | **Factory functions** in namespaces  |
-| `this->mutate()`          | Return a **new value**               |
-| Inheritance / virtual     | Higher-order functions / composition |
-| `void` methods            | Pure functions that **always return**  |
-| `for` loops with mutation | `std::transform` / `std::accumulate` |
-| `new` / `delete`          | Stack values or `std::shared_ptr`    |
+| OOP (avoid)                | FP (prefer)                               |
+|----------------------------|-------------------------------------------|
+| `class` with methods       | `struct` — pure data, **no methods**      |
+| Constructors               | **Factory functions** in namespaces       |
+| Member functions           | **Free functions** in namespaces          |
+| `this->mutate()`           | Return a **new value**                    |
+| Inheritance / virtual      | Higher-order functions / composition      |
+| `void` methods             | Pure functions that **always return**     |
+| `for` loops with mutation  | `std::transform` / `std::accumulate`      |
+| `new` / `delete`           | Stack values or `std::shared_ptr`         |
+
+**The iron rule: structs hold data; namespaces hold functions.**
 
 ---
 
 ## 1. Data vs. Behavior (Structs, not Classes)
 
-In OOP, you encapsulate data and methods. In FP, you **separate** them. Use `struct` purely as data carriers and `namespace` to group the functions that operate on them.
-
-**The Rule:** Structs have no methods (except constructors for convenience). All members should ideally be `const`. All logic lives in free functions inside namespaces.
+In FP, data and behavior are **separated**. Structs are pure data carriers with **no member functions** (except `operator()` on callable types, which is the C++ mechanism for first-class functions). All logic lives in free functions inside namespaces.
 
 ```cpp
 #include <string>
 #include <vector>
 
-// Pure Data — no logic, no methods
+// Pure Data — no logic, no methods, no constructors
 struct Player {
     const std::string name;
     const int hp;
@@ -50,22 +51,19 @@ struct WorldState {
 
 ---
 
-## 2. The Factory Pattern (Replaces Constructors)
+## 2. The Factory Pattern (Replaces ALL Constructors)
 
-Instead of class constructors, use **factory functions** that return instances. Factories separate creation logic (validation, defaults, ID generation) from the data layout. This is the primary construction pattern in the ForbocAI SDK.
+**Never use constructors.** Use factory functions in namespaces for all creation. Factories separate creation logic from the data layout and are composable with other functions.
 
 ```cpp
-// Factory namespace — replaces class constructors entirely
+// Factory namespace — replaces constructors entirely
 namespace PlayerFactory {
-    // Pure factory function: inputs -> Player
+    // Pure factory: inputs -> Player (aggregate initialization)
     Player create(const std::string& name, int startX, int startY) {
-        // Validation, defaults, and computation happen here
         return Player{name, 100, startX, startY};
     }
 
-    // Factory from serialized data
     Player fromJson(const std::string& json) {
-        // Parse and return — no class needed
         return Player{"Parsed", 100, 0, 0};
     }
 }
@@ -74,22 +72,34 @@ namespace PlayerFactory {
 auto hero = PlayerFactory::create("Hero", 0, 0);
 ```
 
+**For UE USTRUCTs** (which require a default constructor for reflection and cannot use aggregate init due to `GENERATED_BODY()`):
+
+```cpp
+namespace TypeFactory {
+    inline FMyStruct Create(FString Name, int32 Value) {
+        FMyStruct S;         // UE default constructor
+        S.Name = MoveTemp(Name);
+        S.Value = Value;
+        return S;            // Factory returns the configured instance
+    }
+}
+```
+
 **Why factories over constructors?**
 - Logic is testable independently of data layout
-- Multiple named factories for different creation paths (`create`, `fromJson`, `fromSave`)
-- No hidden `this` pointer -- all inputs and outputs are explicit
+- Multiple named factories for different creation paths
+- No hidden `this` pointer — all inputs and outputs are explicit
 - Composable with other functions (a factory IS a function)
 
 ---
 
-## 3. Immutability & Transformations (Copy-on-Write)
+## 3. Free Functions Only (No Member Functions)
 
-In pure FP, you never mutate state -- you return a **new** value. In C++11, Move Semantics and Return Value Optimization (RVO) make this performant.
+All operations on data go in namespace-scoped free functions. Structs never have methods.
 
 ```cpp
 // Operations namespace — stateless pure functions
 namespace PlayerOps {
-    // Pure: old Player -> new Player (no side effects)
     Player move(const Player& p, int dx, int dy) {
         return Player{p.name, p.hp, p.x + dx, p.y + dy};
     }
@@ -115,7 +125,7 @@ auto p3 = PlayerOps::takeDamage(p2, 25);     // p2 unchanged
 
 ## 4. Higher-Order Functions (HOF)
 
-C++11's `std::function` and lambdas allow functions to accept and return other functions. This replaces the Strategy Pattern, Observer Pattern, and similar OOP indirection.
+C++11's `std::function` and lambdas allow functions to accept and return other functions, replacing Strategy, Observer, and similar OOP patterns.
 
 ```cpp
 #include <functional>
@@ -125,84 +135,75 @@ Player applyEffect(const Player& p, std::function<Player(const Player&)> effect)
     return effect(p);
 }
 
-int main() {
-    auto p1 = PlayerFactory::create("Hero", 0, 0);
+auto p1 = PlayerFactory::create("Hero", 0, 0);
 
-    // Lambda as a pure function
-    auto poison = [](const Player& p) {
-        return PlayerOps::takeDamage(p, 5);
-    };
+auto poison = [](const Player& p) {
+    return PlayerOps::takeDamage(p, 5);
+};
 
-    // Chaining transformations (immutably)
-    auto p2 = applyEffect(p1, poison);
-    auto p3 = PlayerOps::move(p2, 10, 0);
-
-    // p1 is untouched — immutability preserved
-}
+auto p2 = applyEffect(p1, poison);   // p1 untouched
 ```
 
 ---
 
 ## 5. Maybe Monad (Optional Values)
 
-`Maybe<T>` from `functional_core.hpp` represents a value that may or may not exist. Use the `Just()` and `Nothing()` **factory functions** -- never construct directly.
+`Maybe<T>` from `functional_core.hpp` represents a value that may or may not exist. **Pure data struct, no methods.** Use free functions for all operations.
 
 ```cpp
 #include "Core/functional_core.hpp"
-using func::Maybe;
 
 // --- Factory construction ---
-auto health = Maybe<int>::Just(100);
-auto noHealth = Maybe<int>::Nothing();
+auto health   = func::just(100);
+auto noHealth = func::nothing<int>();
 
-// --- Transform with map (functor) ---
-auto doubled = health.map([](int hp) { return hp * 2; });
+// --- Transform with fmap (functor) ---
+auto doubled = func::fmap(health, [](int hp) { return hp * 2; });
 // doubled == Just(200)
 
-auto nope = noHealth.map([](int hp) { return hp * 2; });
+auto nope = func::fmap(noHealth, [](int hp) { return hp * 2; });
 // nope == Nothing (transformation skipped safely)
 
-// --- Chain with bind (monad / flatMap) ---
-auto safeDivide = [](int x) -> Maybe<int> {
-    if (x == 0) return Maybe<int>::Nothing();
-    return Maybe<int>::Just(100 / x);
+// --- Chain with mbind (monadic bind / flatMap) ---
+auto safeDivide = [](int x) -> func::Maybe<int> {
+    if (x == 0) return func::nothing<int>();
+    return func::just(100 / x);
 };
-auto result = health.bind(safeDivide);  // Just(1)
-auto fail   = Maybe<int>::Just(0).bind(safeDivide);  // Nothing
+auto result = func::mbind(health, safeDivide);            // Just(1)
+auto fail   = func::mbind(func::just(0), safeDivide);    // Nothing
 
 // --- Extract with default ---
-int hp   = health.orElse(0);     // 100
-int noHp = noHealth.orElse(0);   // 0
-```
+int hp   = func::or_else(health, 0);     // 100
+int noHp = func::or_else(noHealth, 0);   // 0
 
-**When to use Maybe:**
-- Function that might not find a result (lookup, search)
-- Optional configuration values
-- Replacing null pointers with a safe algebraic type
+// --- Pattern match ---
+auto msg = func::match(health,
+    [](int hp) { return std::string("Alive"); },
+    []()       { return std::string("Dead"); });
+```
 
 ---
 
 ## 6. Either Monad (Error Handling)
 
-`Either<E, T>` replaces exceptions and error codes. Convention: **Left = error**, **Right = success**. Use factory functions only.
+`Either<E, T>` replaces exceptions and error codes. Convention: **Left = error, Right = success.** Pure data struct, free functions only.
 
 ```cpp
 #include "Core/functional_core.hpp"
-using func::Either;
 
-typedef Either<std::string, Player> PlayerResult;
+typedef func::Either<std::string, Player> PlayerResult;
 
 // --- Factory construction ---
-auto ok  = PlayerResult::Right(PlayerFactory::create("Hero", 0, 0));
-auto err = PlayerResult::Left(std::string("Invalid name"));
+auto ok  = func::make_right<std::string, Player>(PlayerFactory::create("Hero", 0, 0));
+auto err = func::make_left<std::string, Player>(std::string("Invalid name"));
 
 // --- Transform the success value ---
-auto moved = ok.map([](const Player& p) {
+auto moved = func::fmap(ok, [](const Player& p) {
     return PlayerOps::move(p, 5, 0);
 });
 // moved == Right(Player at x=5)
 
-auto stillErr = err.map([](const Player& p) {
+auto stillErr = func::fmap(err, [](const Player& p) {
     return PlayerOps::move(p, 5, 0);
 });
 // stillErr == Left("Invalid name") — error propagates automatically
@@ -210,27 +211,26 @@ auto stillErr = err.map([](const Player& p) {
 // --- Chain operations that can fail ---
 auto validateAndMove = [](const Player& p) -> PlayerResult {
     if (p.hp <= 0)
-        return PlayerResult::Left(std::string("Dead players cannot move"));
-    return PlayerResult::Right(PlayerOps::move(p, 1, 0));
+        return func::make_left<std::string, Player>(std::string("Dead"));
+    return func::make_right<std::string, Player>(PlayerOps::move(p, 1, 0));
 };
-auto result = ok.bind(validateAndMove);
-```
+auto result = func::ebind(ok, validateAndMove);
 
-**When to use Either:**
-- Operations that can fail with a reason (API calls, validation)
-- Replacing try/catch with composable error propagation
-- Chaining fallible steps where early failure short-circuits
+// --- Pattern match ---
+auto msg = func::ematch(result,
+    [](const std::string& e) { return e; },
+    [](const Player& p)      { return p.name; });
+```
 
 ---
 
 ## 7. Currying & Partial Application
 
-`curry<N>()` from `functional_core.hpp` converts an N-argument function into a chain of single-argument calls. This enables **partial application** -- fixing some arguments to create specialized functions.
+`curry<N>()` from `functional_core.hpp` converts an N-argument function into a chain of single-argument calls.
 
 ```cpp
 #include "Core/functional_core.hpp"
 
-// --- Using the curry<N>() factory function ---
 auto damage = [](int base, float multiplier, const Player& p) {
     int amount = static_cast<int>(base * multiplier);
     return PlayerOps::takeDamage(p, amount);
@@ -242,52 +242,31 @@ auto curriedDamage = func::curry<3>(damage);
 auto fireDamage = curriedDamage(20)(1.5f);   // base=20, mult=1.5
 auto iceDamage  = curriedDamage(15)(0.8f);   // base=15, mult=0.8
 
-// Apply to players
 auto p1 = PlayerFactory::create("Mage", 0, 0);
 auto p2 = fireDamage(p1);   // 30 fire damage
 auto p3 = iceDamage(p1);    // 12 ice damage
-```
-
-**Manual partial application** (without the library) uses capturing lambdas:
-
-```cpp
-// Factory that returns a function (partial application by hand)
-std::function<Player(const Player&)> makeDamageEffect(int amount) {
-    return [amount](const Player& p) {
-        return PlayerOps::takeDamage(p, amount);
-    };
-}
-
-auto heavyHit = makeDamageEffect(50);
-auto p4 = heavyHit(p1);
 ```
 
 ---
 
 ## 8. Lazy Evaluation
 
-`Lazy<T>` defers a computation until its result is needed, then caches it. Use the `lazy()` **factory function**.
+`Lazy<T>` defers computation until needed, then caches it. Use the `lazy()` factory and `eval()` free function.
 
 ```cpp
 #include "Core/functional_core.hpp"
 
 // Nothing runs yet — the thunk is stored, not evaluated
 auto expensiveState = func::lazy([]() {
-    // Imagine: database query, file I/O, AI inference...
     return WorldState{{}, 0};
 });
 
 // First call evaluates the thunk and caches the result
-const WorldState& state1 = expensiveState.get();
+const WorldState& state1 = func::eval(expensiveState);
 
 // Second call returns the cached result (no recomputation)
-const WorldState& state2 = expensiveState.get();
+const WorldState& state2 = func::eval(expensiveState);
 ```
-
-**When to use Lazy:**
-- Expensive computations that may not be needed
-- Breaking circular initialization dependencies
-- Deferring side-effect-free work until the result is consumed
 
 > **Note**: `Lazy<T>` is not thread-safe. Use from a single thread (e.g. game thread).
 
@@ -305,13 +284,15 @@ Loops rely on mutable iterators. FP uses `std::transform`, `std::accumulate`, an
 std::vector<int> nums = {1, 2, 3, 4, 5};
 auto doubled = func::fmap(nums, [](int x) { return x * 2; });
 // doubled == {2, 4, 6, 8, 10}
+
+// fmap also works on Maybe:
+auto val = func::fmap(func::just(10), [](int x) { return x * 3; });
+// val == Just(30)
 ```
 
 **Map equivalent (`std::transform`):**
 
 ```cpp
-#include <algorithm>
-
 std::vector<Player> allPlayers = { /* ... */ };
 std::vector<Player> movedPlayers;
 movedPlayers.reserve(allPlayers.size());
@@ -356,30 +337,31 @@ int result = double_then_inc(5);  // add_one(double_it(5)) = 11
 
 ### Pipeline (from `functional_core.hpp`)
 
-`Pipeline<T>` threads a value through a chain of transformations. Unlike `compose`, it reads **left-to-right** and supports **type-changing** steps (T -> U -> V).
+`Pipeline<T>` threads a value through transforms using `operator|`. Reads **left-to-right** and supports **type-changing** steps.
 
 ```cpp
 #include "Core/functional_core.hpp"
 
 // Type changes through the pipeline: Player -> Player -> int -> bool
-auto result = func::start_pipe(PlayerFactory::create("Mage", 0, 0))
-    .pipe([](const Player& p) { return PlayerOps::move(p, 5, 5); })
-    .pipe([](const Player& p) { return PlayerOps::takeDamage(p, 10); })
-    .pipe([](const Player& p) { return p.hp; })        // Player -> int
-    .pipe([](int hp) { return hp > 0; })                // int -> bool
-    .unwrap();  // result is bool
+auto result = func::pipe(PlayerFactory::create("Mage", 0, 0))
+    | [](const Player& p) { return PlayerOps::move(p, 5, 5); }
+    | [](const Player& p) { return PlayerOps::takeDamage(p, 10); }
+    | [](const Player& p) { return p.hp; }        // Player -> int
+    | [](int hp) { return hp > 0; };               // int -> bool
+
+bool isAlive = result.val;  // access data directly (no unwrap method)
 ```
 
 ---
 
 ## 11. Unreal Engine FP Patterns
 
-The functional paradigm applies identically to Unreal Engine types (`FString`, `TArray`, `TMap`, `USTRUCT`). The ForbocAI SDK follows these patterns throughout.
+The functional paradigm applies identically to Unreal Engine types. The ForbocAI SDK follows these patterns throughout.
 
 ### Data Structs with USTRUCT (no methods, no logic)
 
 ```cpp
-// Pure immutable data — struct, not class
+// Pure data — struct, not class. Default constructor only (UE-required).
 USTRUCT()
 struct FPlayerState {
     GENERATED_BODY()
@@ -393,8 +375,8 @@ struct FPlayerState {
     UPROPERTY()
     TArray<FString> Inventory;
 
-    // Default constructor only (required by UE reflection)
     FPlayerState() : HP(100) {}
+    // NO parameterized constructors. Use TypeFactory.
 };
 ```
 
@@ -403,14 +385,14 @@ struct FPlayerState {
 ```cpp
 // Factory namespace — all creation logic here
 namespace PlayerStateFactory {
-    MYMODULE_API FPlayerState Create(const FString& Name) {
+    inline FPlayerState Create(const FString& Name) {
         FPlayerState State;
         State.Name = Name;
         State.HP = 100;
         return State;
     }
 
-    MYMODULE_API FPlayerState FromSave(const FString& Json) {
+    inline FPlayerState FromSave(const FString& Json) {
         FPlayerState State;
         FJsonObjectConverter::JsonObjectStringToUStruct(Json, &State, 0, 0);
         return State;
@@ -423,19 +405,13 @@ namespace PlayerStateFactory {
 ```cpp
 // Operations namespace — stateless pure functions
 namespace PlayerStateOps {
-    MYMODULE_API FPlayerState TakeDamage(const FPlayerState& State, int32 Amount) {
+    FPlayerState TakeDamage(const FPlayerState& State, int32 Amount) {
         FPlayerState New = State;  // copy
         New.HP = FMath::Max(0, State.HP - Amount);
-        return New;  // return new value
+        return New;  // return new value, original untouched
     }
 
-    MYMODULE_API FPlayerState Heal(const FPlayerState& State, int32 Amount) {
-        FPlayerState New = State;
-        New.HP = FMath::Min(100, State.HP + Amount);
-        return New;
-    }
-
-    MYMODULE_API FPlayerState AddItem(const FPlayerState& State, const FString& Item) {
+    FPlayerState AddItem(const FPlayerState& State, const FString& Item) {
         FPlayerState New = State;
         New.Inventory.AddUnique(Item);
         return New;
@@ -456,26 +432,6 @@ TArray<FPlayerState> ApplyDamageToAll(
     }
     return Result;  // new array, original untouched
 }
-
-// Fold/Reduce: collapse to a single value
-int32 TotalHP(const TArray<FPlayerState>& Players) {
-    int32 Sum = 0;
-    for (const FPlayerState& P : Players) {
-        Sum += P.HP;
-    }
-    return Sum;
-}
-
-// Filter: return matching elements
-TArray<FPlayerState> AliveOnly(const TArray<FPlayerState>& Players) {
-    TArray<FPlayerState> Result;
-    for (const FPlayerState& P : Players) {
-        if (P.HP > 0) {
-            Result.Add(P);
-        }
-    }
-    return Result;
-}
 ```
 
 ### Pipeline with UE Types
@@ -483,27 +439,44 @@ TArray<FPlayerState> AliveOnly(const TArray<FPlayerState>& Players) {
 ```cpp
 #include "Core/functional_core.hpp"
 
-auto result = func::start_pipe(PlayerStateFactory::Create(TEXT("Hero")))
-    .pipe([](const FPlayerState& S) {
+auto result = func::pipe(PlayerStateFactory::Create(TEXT("Hero")))
+    | [](const FPlayerState& S) {
         return PlayerStateOps::TakeDamage(S, 20);
-    })
-    .pipe([](const FPlayerState& S) {
+    }
+    | [](const FPlayerState& S) {
         return PlayerStateOps::AddItem(S, TEXT("Health Potion"));
-    })
-    .unwrap();
+    };
+
+FPlayerState final = result.val;  // direct data access
 ```
+
+---
+
+## UE-Required Exceptions
+
+The following OOP patterns are **required by Unreal Engine** and are the only acceptable deviations:
+
+| Pattern                     | Reason                                     |
+|-----------------------------|--------------------------------------------|
+| `UCLASS() : public UBase`  | UE reflection + commandlet interface       |
+| `GENERATED_BODY()`         | UE header tool code generation             |
+| `virtual ... override`     | UE interface implementation (Commandlets)  |
+| Default constructors only  | UE reflection needs default-constructible  |
+| Non-const USTRUCT members  | UE reflection needs mutable access         |
+| `IMPLEMENT_MODULE(...)`    | UE module registration macro               |
+| `operator()` on callables  | C++ mechanism for first-class functions    |
 
 ---
 
 ## Summary
 
-1. **Use `struct`, not `class`** — Data is public, immutable, and has no logic.
-2. **Use factory functions, not constructors** — All creation in namespaces (`XFactory::Create()`).
-3. **Use operations namespaces, not methods** — All logic in namespaces (`XOps::Transform()`).
-4. **Avoid `void`** — Functions always return a new value.
-5. **Avoid mutation** — Return new data instead of modifying in place.
-6. **Avoid `for` loops** — Use `std::transform`, `std::accumulate`, `func::fmap`, or range-based patterns.
-7. **Avoid `new`/`delete`** — Use stack allocation or `std::shared_ptr`.
-8. **Use Maybe/Either** — Replace null/exceptions with composable algebraic types.
-9. **Use composition** — `func::compose()` and `func::start_pipe()` replace complex call chains.
+1.  **Use `struct`, not `class`** — Data is public, ideally `const`, and has **no methods**.
+2.  **Use factory functions, not constructors** — All creation in namespaces (`XFactory::Create()`).
+3.  **Use free functions, not member functions** — All logic in namespaces (`XOps::Transform()`).
+4.  **Avoid `void`** — Functions always return a new value.
+5.  **Avoid mutation** — Return new data instead of modifying in place.
+6.  **Avoid `for` loops** — Use `std::transform`, `std::accumulate`, `func::fmap`, or range-based patterns.
+7.  **Avoid `new`/`delete`** — Use stack allocation or `std::shared_ptr`.
+8.  **Use Maybe/Either** — Replace null/exceptions with composable algebraic types via free functions.
+9.  **Use composition** — `func::compose()` and `func::pipe() | f | g` replace complex call chains.
 10. **Strict C++11** — No `auto` return types (use trailing `-> decltype`), no `if constexpr`, no structured bindings.

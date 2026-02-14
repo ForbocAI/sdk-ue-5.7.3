@@ -23,7 +23,19 @@ Autonomous AI for Unreal Engine 5.7.
 
 `Córe_Módules // UE5_Plugin`
 
-The **ForbocAI SDK for Unreal Engine 5.7** leverages modern engine features to drive hyper-realistic NPC behavior.
+The **ForbocAI SDK for Unreal Engine 5.7** drives hyper-realistic NPC behavior through a neuro-symbolic AI architecture, written in strict **Functional C++11**.
+
+### Modules
+
+| Module | Purpose |
+|--------|---------|
+| **AgentModule** | Agent creation (factories), state management, AI processing |
+| **BridgeModule** | Neuro-symbolic action validation against game rules |
+| **MemoryModule** | Immutable memory store with embedding-based recall |
+| **SoulModule** | Portable identity serialization (JSON import/export) |
+| **CLIModule** | HTTP-based API operations for CLI commands |
+| **Commandlet** | UE command-line interface for verification and admin |
+| **functional_core.hpp** | Pure C++11 FP library: Maybe, Either, Currying, Lazy, Pipeline, Composition |
 
 ---
 
@@ -42,23 +54,52 @@ Get the plugin directly from **Fab** (formerly Unreal Engine Marketplace).
 ### Option 2: Manual
 
 1.  Download the latest release.
-2.  Copy the `ForbocAI` folder to your project's `Plugins/` directory.
+2.  Copy the `ForbocAI_SDK` folder to your project's `Plugins/` directory.
+3.  Regenerate project files and build.
 
 ---
 
 ## Quick Start
 
-`Blúeprint_Async // Líve_Línk`
+`Fáctory_Init // Agent_Créate`
 
-**Using the Subsystem:**
-1.  Get the **ForbocAI Subsystem** from the Game Instance.
-2.  Call `CreateAgent` to spawn a virtual mind.
-3.  Use the **Async Action** node `Process Input` to handle dialogue without freezing the game thread.
+**C++ — Using Factories and Free Functions (Strict FP):**
 
 ```cpp
-// C++ Example
-UForbocAISubsystem* AI = GetGameInstance()->GetSubsystem<UForbocAISubsystem>();
-auto Agent = AI->CreateAgent(TEXT("Cyber-Merchant"));
+#include "AgentModule.h"
+#include "MemoryModule.h"
+
+// 1. Create an agent via factory function (no constructors, no classes)
+FAgentConfig Config;
+Config.Persona = TEXT("Cyber-Merchant");
+Config.ApiUrl = TEXT("https://api.forboc.ai");
+
+const FAgent Merchant = AgentFactory::Create(Config);
+
+// 2. Process input via free function
+const FAgentResponse Response = AgentOps::Process(
+    Merchant, TEXT("What wares do you have?"), {});
+
+// 3. Functional update — returns a NEW agent (original unchanged)
+const FAgentState NewState = TypeFactory::AgentState(TEXT("Suspicious"));
+const FAgent UpdatedMerchant = AgentOps::WithState(Merchant, NewState);
+
+// 4. Memory — immutable store, returns new store on add
+const FMemoryStore Store = MemoryOps::CreateStore();
+const FMemoryStore Updated = MemoryOps::Store(
+    Store, TEXT("Customer asked about wares"), TEXT("interaction"), 0.8f);
+```
+
+**Pipeline chaining (from `functional_core.hpp`):**
+
+```cpp
+#include "Core/functional_core.hpp"
+
+auto result = func::pipe(AgentFactory::Create(Config))
+    | [](const FAgent& a) { return AgentOps::WithState(a, NewState); }
+    | [](const FAgent& a) { return AgentOps::Export(a); };
+
+FSoul soul = result.val;  // direct data access
 ```
 
 ---
@@ -69,12 +110,29 @@ auto Agent = AI->CreateAgent(TEXT("Cyber-Merchant"));
 
 The SDK includes a built-in Commandlet for verification and administration.
 
-To run the CLI, use `UnrealEditor-Cmd` (paths may vary):
+### macOS
 
 ```bash
-# macOS Example
 "/Users/Shared/Epic Games/UE_5.7/Engine/Binaries/Mac/UnrealEditor-Cmd" \
   "/Path/To/Your.uproject" \
+  -run=ForbocAI_SDK -Command=doctor \
+  -nosplash -nopause -unattended
+```
+
+### Windows
+
+```powershell
+& "C:\Program Files\Epic Games\UE_5.7\Engine\Binaries\Win64\UnrealEditor-Cmd.exe" `
+  "C:\Path\To\Your.uproject" `
+  -run=ForbocAI_SDK -Command=doctor `
+  -nosplash -nopause -unattended
+```
+
+### Linux
+
+```bash
+"/opt/UnrealEngine/Engine/Binaries/Linux/UnrealEditor-Cmd" \
+  "/path/to/Your.uproject" \
   -run=ForbocAI_SDK -Command=doctor \
   -nosplash -nopause -unattended
 ```
@@ -102,15 +160,24 @@ Response: {"message":"Neuro-Symbolic Grid: ACTIVE","status":"online","version":"
 
 ## Architecture & Concepts
 
-`UE5_Arch // Fúnctional_C++`
+`UE5_Arch // Fúnctional_C++11`
 
-ForbocAI emphasizes a **Functional Programming** approach even within C++. We avoid traditional OOP heavy inheritance in favor of:
+ForbocAI enforces **strict Functional Programming** in C++11. The entire SDK contains **no classes** (except UE-required `UCLASS` for the Commandlet). All code follows these rules:
 
-- **Immutable Data** (`struct` vs `class`)
-- **Factory Functions** (vs Constructors)
-- **Higher-Order Functions** (std::function, lambdas)
+| Rule | Pattern |
+|------|---------|
+| **Data** | `struct` only — public, immutable where possible, no member functions |
+| **Construction** | Factory functions in namespaces (`AgentFactory::Create`, `TypeFactory::Soul`) |
+| **Operations** | Free functions in namespaces (`AgentOps::Process`, `MemoryOps::Recall`) |
+| **Updates** | Copy-on-write — always return a new value (`AgentOps::WithState`) |
+| **Error handling** | `Maybe<T>` / `Either<E,T>` monads with free functions (`func::fmap`, `func::mbind`) |
+| **Chaining** | `func::pipe(x) \| f \| g` or `func::compose(f, g)` |
+| **Deferred work** | `func::lazy(thunk)` with `func::eval(lz)` |
 
-For a deep dive into writing Functional C++11 with this SDK, please read our **[Functional C++ Guide](./C++11-FP-GUIDE.md)** and the core library at [`functional_core.hpp`](./Plugins/ForbocAI_SDK/Source/ForbocAI_SDK/Public/Core/functional_core.hpp).
+**Key references:**
+- **[Functional C++11 Guide](./C++11-FP-GUIDE.md)** — Patterns, rules, and examples
+- **[`functional_core.hpp`](./Plugins/ForbocAI_SDK/Source/ForbocAI_SDK/Public/Core/functional_core.hpp)** — Production FP library
+- **[`style-guide.md`](./style-guide.md)** — Aesthetic protocols
 
 ---
 

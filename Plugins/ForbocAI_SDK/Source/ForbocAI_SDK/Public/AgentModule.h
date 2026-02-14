@@ -4,79 +4,85 @@
 #include "Core/functional_core.hpp" // C++11 Functional Core Library
 #include "ForbocAI_SDK_Types.h"
 
+// ==========================================================
+// Agent Module — Strict FP
+// ==========================================================
+// FAgent is a pure data struct with const members (immutable).
+// NO constructors, NO member functions.
+// Construction via AgentFactory namespace (factory functions).
+// Operations via AgentOps namespace (free functions).
+// ==========================================================
+
 /**
- * Agent Entity - Pure Data Structure.
- * Contains all state required for an autonomous entity.
+ * Agent Entity — Pure immutable data.
+ * All members are const: once created, an agent cannot be mutated.
+ * Use AgentOps::WithState / AgentOps::WithMemories for
+ * functional updates (returns a new FAgent).
  */
 struct FAgent {
   const FString Id;
   const FString Persona;
   const FAgentState State;
   const TArray<FMemoryItem> Memories;
-
-  // Configuration constraints (immutable)
   const FString ApiUrl;
-
-  // Constructors for immutability
-  FAgent(FString InId, FString InPersona, FAgentState InState,
-         TArray<FMemoryItem> InMemories, FString InApiUrl)
-      : Id(InId), Persona(InPersona), State(InState), Memories(InMemories),
-        ApiUrl(InApiUrl) {}
-
-  // Copy with new State (Functional Update)
-  FAgent WithState(const FAgentState &NewState) const {
-    return FAgent(Id, Persona, NewState, Memories, ApiUrl);
-  }
-
-  // Copy with new Memories (Functional Update)
-  FAgent WithMemories(const TArray<FMemoryItem> &NewMemories) const {
-    return FAgent(Id, Persona, State, NewMemories, ApiUrl);
-  }
 };
 
 /**
- * Factory for creating Agents.
+ * Factory functions for creating Agents.
  */
 namespace AgentFactory {
+
 /**
- * Creates a new Agent instance.
+ * Creates a new Agent from configuration.
  * Pure function: Config -> FAgent
  */
 FORBOCAI_SDK_API FAgent Create(const FAgentConfig &Config);
 
 /**
  * Creates an Agent from a Soul.
- * Pure function: Soul -> FAgent
+ * Pure function: (Soul, ApiUrl) -> FAgent
  */
 FORBOCAI_SDK_API FAgent FromSoul(const FSoul &Soul, const FString &ApiUrl);
+
 } // namespace AgentFactory
 
 /**
- * Operations on Agents.
- * Stateless namespaces containing pure functions (or impure functions
- * explicitly marked).
+ * Operations on Agents — stateless free functions.
  */
 namespace AgentOps {
+
 /**
- * Pure: Calculates the next state based on updates.
+ * Pure: Returns a new Agent with updated State.
+ * Functional update — original is not modified.
+ */
+FORBOCAI_SDK_API FAgent WithState(const FAgent &Agent,
+                                  const FAgentState &NewState);
+
+/**
+ * Pure: Returns a new Agent with updated Memories.
+ * Functional update — original is not modified.
+ */
+FORBOCAI_SDK_API FAgent WithMemories(const FAgent &Agent,
+                                     const TArray<FMemoryItem> &NewMemories);
+
+/**
+ * Pure: Calculates the next state by merging updates into current.
  */
 FORBOCAI_SDK_API FAgentState CalculateNewState(const FAgentState &Current,
                                                const FAgentState &Updates);
 
 /**
- * Impure/Async: Processes input and returns a response.
- * This involves Side Effects (API Usage), but logic remains separated.
- *
- * In a strict FP world, this might return an IO or Task Monad.
- * For UE compatibility, we use a callback or latent action style,
- * but here we expose the blocking logic for simplicity or wrapping.
+ * Impure: Processes input and returns a response.
+ * Side effects (API call) are isolated here.
+ * In strict FP this would return an IO monad.
  */
 FORBOCAI_SDK_API FAgentResponse Process(const FAgent &Agent,
                                         const FString &Input,
                                         const TMap<FString, FString> &Context);
 
 /**
- * Pure: Exports Agent to Soul.
+ * Pure: Exports Agent data to a Soul.
  */
 FORBOCAI_SDK_API FSoul Export(const FAgent &Agent);
+
 } // namespace AgentOps

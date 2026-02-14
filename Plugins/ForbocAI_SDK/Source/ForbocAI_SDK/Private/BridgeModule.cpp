@@ -1,47 +1,45 @@
 #include "BridgeModule.h"
 
-namespace BridgeRules {
 // ==========================================
 // PURE VALIDATION FUNCTIONS
 // ==========================================
 
+namespace BridgeRules {
+
 FValidationResult ValidateMovement(const FAgentAction &Action,
                                    const FBridgeValidationContext &Context) {
-  // Simple example: Check if coordinates exist in JSON payload (simulated)
   if (Action.PayloadJson.Contains(TEXT("x")) &&
       Action.PayloadJson.Contains(TEXT("y"))) {
-    return FValidationResult(true, TEXT("Valid coordinates"));
+    return TypeFactory::Valid(TEXT("Valid coordinates"));
   }
 
-  // Fail
-  FAgentAction Corrected = Action;
-  Corrected.Type = TEXT("IDLE");
-  Corrected.Reason = TEXT("Invalid coordinates");
-
-  return FValidationResult(false, TEXT("Missing x,y in payload"));
+  return TypeFactory::Invalid(TEXT("Missing x,y in payload"));
 }
 
 FValidationResult ValidateAttack(const FAgentAction &Action,
                                  const FBridgeValidationContext &Context) {
   if (Action.Target.IsEmpty()) {
-    return FValidationResult(false, TEXT("Missing target"));
+    return TypeFactory::Invalid(TEXT("Missing target"));
   }
-  return FValidationResult(true, TEXT("Target specified"));
+  return TypeFactory::Valid(TEXT("Target specified"));
 }
+
 } // namespace BridgeRules
+
+// ==========================================
+// BRIDGE OPERATIONS — Free functions
+// ==========================================
 
 TArray<FValidationRule> BridgeOps::CreateDefaultRules() {
   TArray<FValidationRule> Rules;
 
-  // Movement Rule
-  Rules.Add(FValidationRule(TEXT("core.movement"), TEXT("Movement Validation"),
-                            {TEXT("MOVE"), TEXT("move")},
-                            BridgeRules::ValidateMovement));
+  Rules.Add(BridgeFactory::CreateRule(
+      TEXT("core.movement"), TEXT("Movement Validation"),
+      {TEXT("MOVE"), TEXT("move")}, BridgeRules::ValidateMovement));
 
-  // Attack Rule
-  Rules.Add(FValidationRule(TEXT("core.attack"), TEXT("Attack Validation"),
-                            {TEXT("ATTACK"), TEXT("attack")},
-                            BridgeRules::ValidateAttack));
+  Rules.Add(BridgeFactory::CreateRule(
+      TEXT("core.attack"), TEXT("Attack Validation"),
+      {TEXT("ATTACK"), TEXT("attack")}, BridgeRules::ValidateAttack));
 
   return Rules;
 }
@@ -50,16 +48,14 @@ FValidationResult BridgeOps::Validate(const FAgentAction &Action,
                                       const TArray<FValidationRule> &Rules,
                                       const FBridgeValidationContext &Context) {
   for (const FValidationRule &Rule : Rules) {
-    // Check if rule applies to this action type
     if (Rule.ActionTypes.Contains(Action.Type)) {
-      // Execute the wrapped std::function
-      FValidationResult Result = Rule.Validator(Action, Context);
+      const FValidationResult Result = Rule.Validator(Action, Context);
 
       if (!Result.bValid) {
-        return Result; // Stop at first failure
+        return Result;
       }
     }
   }
 
-  return FValidationResult(true, TEXT("All rules passed"));
+  return TypeFactory::Valid(TEXT("All rules passed"));
 }

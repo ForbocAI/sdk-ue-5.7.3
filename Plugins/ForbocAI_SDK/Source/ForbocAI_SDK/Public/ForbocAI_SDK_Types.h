@@ -3,13 +3,24 @@
 #include "CoreMinimal.h"
 #include "ForbocAI_SDK_Types.generated.h" // UHT generated
 
-// Ensure API macro is correct (UBT will define FORBOCAI_SDK_API)
-// We only need to export types if used across modules.
-// For now, removing FORBOCAI_API prefix from structs helps avoid linker errors
-// if macro mismatch exists or use FORBOCAI_SDK_API if we want to be strict.
+// ==========================================================
+// ForbocAI SDK — Data Types (Strict FP)
+// ==========================================================
+//
+// All types are plain data structs. NO parameterized
+// constructors, NO member functions, NO classes.
+//
+// USTRUCTs retain a default constructor only (UE-required
+// for reflection). Construction with specific values is
+// done exclusively through factory functions in TypeFactory.
+//
+// Plain structs (non-USTRUCT) use aggregate initialization
+// directly or via factory functions.
+// ==========================================================
 
 /**
- * Agent State (Immutable Data)
+ * Agent State — Immutable data.
+ * Default constructor required by UE reflection.
  */
 USTRUCT()
 struct FAgentState {
@@ -28,11 +39,10 @@ struct FAgentState {
   TMap<FString, float> Relationships;
 
   FAgentState() : Mood(TEXT("Neutral")) {}
-  FAgentState(FString InMood) : Mood(InMood) {}
 };
 
 /**
- * Memory Item
+ * Memory Item — Immutable data.
  */
 USTRUCT()
 struct FMemoryItem {
@@ -57,7 +67,7 @@ struct FMemoryItem {
 };
 
 /**
- * Agent Action
+ * Agent Action — Immutable data.
  */
 USTRUCT()
 struct FAgentAction {
@@ -76,12 +86,10 @@ struct FAgentAction {
   FString PayloadJson;
 
   FAgentAction() {}
-  FAgentAction(FString InType, FString InTarget, FString InReason = TEXT(""))
-      : Type(InType), Target(InTarget), Reason(InReason) {}
 };
 
 /**
- * Validation Result
+ * Validation Result — Immutable data.
  */
 USTRUCT()
 struct FValidationResult {
@@ -94,12 +102,10 @@ struct FValidationResult {
   FString Reason;
 
   FValidationResult() : bValid(true) {}
-  FValidationResult(bool bInValid, FString InReason)
-      : bValid(bInValid), Reason(InReason) {}
 };
 
 /**
- * Soul (Portable Identity)
+ * Soul (Portable Identity) — Immutable data.
  */
 USTRUCT()
 struct FSoul {
@@ -127,7 +133,7 @@ struct FSoul {
 };
 
 /**
- * Agent Response
+ * Agent Response — Plain data (aggregate-initializable).
  */
 struct FAgentResponse {
   FString Dialogue;
@@ -135,9 +141,91 @@ struct FAgentResponse {
   FString Thought;
 };
 
-// Configuration for factory
+/**
+ * Agent Configuration — Plain data (aggregate-initializable).
+ */
 struct FAgentConfig {
   FString Persona;
   FString ApiUrl;
   FAgentState InitialState;
 };
+
+// ==========================================================
+// TypeFactory — Factory functions for USTRUCTs
+// ==========================================================
+// Since USTRUCTs cannot use aggregate initialization
+// (GENERATED_BODY adds hidden members), all construction
+// with specific values goes through these factories.
+// ==========================================================
+
+namespace TypeFactory {
+
+// --- FAgentState ---
+inline FAgentState AgentState(FString Mood) {
+  FAgentState S;
+  S.Mood = MoveTemp(Mood);
+  return S;
+}
+
+inline FAgentState AgentState(FString Mood, TArray<FString> Inventory,
+                              TMap<FString, float> Skills,
+                              TMap<FString, float> Relationships) {
+  FAgentState S;
+  S.Mood = MoveTemp(Mood);
+  S.Inventory = MoveTemp(Inventory);
+  S.Skills = MoveTemp(Skills);
+  S.Relationships = MoveTemp(Relationships);
+  return S;
+}
+
+// --- FMemoryItem ---
+inline FMemoryItem MemoryItem(FString Id, FString Text, FString Type,
+                              float Importance, int64 Timestamp) {
+  FMemoryItem M;
+  M.Id = MoveTemp(Id);
+  M.Text = MoveTemp(Text);
+  M.Type = MoveTemp(Type);
+  M.Importance = Importance;
+  M.Timestamp = Timestamp;
+  return M;
+}
+
+// --- FAgentAction ---
+inline FAgentAction Action(FString Type, FString Target,
+                           FString Reason = TEXT("")) {
+  FAgentAction A;
+  A.Type = MoveTemp(Type);
+  A.Target = MoveTemp(Target);
+  A.Reason = MoveTemp(Reason);
+  return A;
+}
+
+// --- FValidationResult ---
+inline FValidationResult Valid(FString Reason) {
+  FValidationResult R;
+  R.bValid = true;
+  R.Reason = MoveTemp(Reason);
+  return R;
+}
+
+inline FValidationResult Invalid(FString Reason) {
+  FValidationResult R;
+  R.bValid = false;
+  R.Reason = MoveTemp(Reason);
+  return R;
+}
+
+// --- FSoul ---
+inline FSoul Soul(FString Id, FString Version, FString Name, FString Persona,
+                  FAgentState State, TArray<FMemoryItem> Memories) {
+  FSoul S;
+  S.Id = MoveTemp(Id);
+  S.Version = MoveTemp(Version);
+  S.Name = MoveTemp(Name);
+  S.Persona = MoveTemp(Persona);
+  S.State = MoveTemp(State);
+  S.Memories = MoveTemp(Memories);
+  return S;
+}
+
+} // namespace TypeFactory

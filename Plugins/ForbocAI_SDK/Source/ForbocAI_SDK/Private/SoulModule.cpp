@@ -1,18 +1,15 @@
 #include "SoulModule.h"
 #include "JsonObjectConverter.h"
 
+// ==========================================
+// SOUL OPERATIONS — Pure free functions
+// ==========================================
+
 FSoul SoulOps::FromAgent(const FAgentState &State,
                          const TArray<FMemoryItem> &Memories,
                          const FString &AgentId, const FString &Persona) {
-  FSoul Soul;
-  Soul.Id = AgentId;
-  Soul.Version = TEXT("1.0.0");
-  Soul.Name = TEXT("Agent Soul");
-  Soul.Persona = Persona;
-  Soul.State = State;
-  Soul.Memories = Memories;
-
-  return Soul;
+  return TypeFactory::Soul(AgentId, TEXT("1.0.0"), TEXT("Agent Soul"), Persona,
+                           State, Memories);
 }
 
 FString SoulOps::Serialize(const FSoul &Soul) {
@@ -24,7 +21,6 @@ FString SoulOps::Serialize(const FSoul &Soul) {
 FSoul SoulOps::Deserialize(const FString &Json) {
   FSoul Soul;
   if (!FJsonObjectConverter::JsonObjectStringToUStruct(Json, &Soul, 0, 0)) {
-    // Return empty/invalid soul on failure
     return FSoul();
   }
   return Soul;
@@ -32,11 +28,11 @@ FSoul SoulOps::Deserialize(const FString &Json) {
 
 FValidationResult SoulOps::Validate(const FSoul &Soul) {
   if (Soul.Id.IsEmpty()) {
-    return FValidationResult(false, TEXT("Missing Soul ID"));
+    return TypeFactory::Invalid(TEXT("Missing Soul ID"));
   }
   if (Soul.Persona.IsEmpty()) {
-    return FValidationResult(false, TEXT("Missing Persona"));
+    return TypeFactory::Invalid(TEXT("Missing Persona"));
   }
 
-  return FValidationResult(true, TEXT("Valid Soul"));
+  return TypeFactory::Valid(TEXT("Valid Soul"));
 }
