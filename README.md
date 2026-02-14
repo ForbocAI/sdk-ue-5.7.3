@@ -25,7 +25,7 @@ Autonomous AI for Unreal Engine 5.7.3.
 
 The **ForbocAI SDK for Unreal Engine 5.7** leverages modern engine features to drive hyper-realistic NPC behavior.
 
-- **Native C++17** — Modern standards for high-performance inference.
+- **Native C++11** — Functional paradigm compatibility for robust AI logic.
 - **Subsystem Integration** — Global access via `UGameInstanceSubsystem`.
 - **Async Blueprints** — Non-blocking Latent Actions for smooth gameplay integration.
 - **Mass Entity Ready** — Designed for compatibility with Mass Entity systems.
@@ -34,13 +34,20 @@ The **ForbocAI SDK for Unreal Engine 5.7** leverages modern engine features to d
 
 ## Installation
 
-`Instáll_Séquence // Plúgin_Load`
+`Instáll_Séquence // Fab_Dównload`
 
-1.  **Download**: Get the latest release for UE 5.7.3.
-2.  **Copy**: Place the `ForbocAI` folder into your project's `Plugins/` directory.
-    *   Example: `MyProject/Plugins/ForbocAI`
-3.  **Build**: Run your build pipeline (or open modules in standard editor flow).
-4.  **Enable**: Launch the editor and ensure "ForbocAI" is active in `Edit > Plugins`.
+### Option 1: Fab (Recommended)
+
+Get the plugin directly from **Fab** (formerly Unreal Engine Marketplace).
+
+1.  Search for **ForbocAI** on Fab.
+2.  Add to your library and install to the engine.
+3.  Enable the plugin via `Edit > Plugins` in your project.
+
+### Option 2: Manual
+
+1.  Download the latest release.
+2.  Copy the `ForbocAI` folder to your project's `Plugins/` directory.
 
 ---
 
@@ -61,11 +68,17 @@ auto Agent = AI->CreateAgent(TEXT("Cyber-Merchant"));
 
 ---
 
-## Architecture
+## Architecture & Concepts
 
-`UE5_Arch // Sübsystém`
+`UE5_Arch // Fúnctional_C++`
 
-UE 5 versions utilize `UGameInstanceSubsystem` for persistent AI state management across levels and streaming boundaries.
+ForbocAI emphasizes a **Functional Programming** approach even within C++. We avoid traditional OOP heavy inheritance in favor of:
+
+- **Immutable Data** (`struct` vs `class`)
+- **Factory Functions** (vs Constructors)
+- **Higher-Order Functions** (std::function, lambdas)
+
+For a deep dive into writing Functional C++11/17 with this SDK, please read our **[Functional C++ Guide](./GUIDE.md)**.
 
 ---
 
