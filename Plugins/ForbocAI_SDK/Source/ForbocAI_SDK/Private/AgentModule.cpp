@@ -58,17 +58,60 @@ FAgentState AgentOps::CalculateNewState(const FAgentState &Current,
 
 FAgentResponse AgentOps::Process(const FAgent &Agent, const FString &Input,
                                  const TMap<FString, FString> &Context) {
-  // Pure transformation logic (simulation)
-  // In production, this calls the Cortex/API endpoint.
-  const FString Directive = TEXT("Respond normally.");
-  const FString Instruction = TEXT("IDLE");
+  // =========================================================
+  // 7-Step Neuro-Symbolic Protocol (Simulated Synchronous)
+  // =========================================================
 
-  const FString Dialogue = FString::Printf(TEXT("Processed: '%s'"), *Input);
+  // 1. OBSERVE: Pack Context into Directive Request
+  // TODO: Use TJsonWriter to serialize Context to JSON
+  FString DirectiveReqJson = TEXT("{}");
 
-  const FString Thought = FString::Printf(TEXT("Directive: %s"), *Directive);
+  // 2. DIRECTIVE: API Call (SDK -> API)
+  // POST /agents/{id}/directive
+  // TODO: FHttpModule::CreateRequest() ...
+  // Simulation:
+  FString Directive = TEXT("Autonomous behavior");
+  FString Instruction = TEXT("IDLE");
 
-  return FAgentResponse{Dialogue, TypeFactory::Action(Instruction, Directive),
-                        Thought};
+  if (Context.Contains(TEXT("hp")) &&
+      FCString::Atoi(*Context[TEXT("hp")]) < 20) {
+    // NOTE: This fallback logic should be injected via Config/Delegate, not
+    // hardcoded. Keeping generic placeholder for now.
+    Directive = TEXT("Survival Instinct");
+    Instruction = TEXT("FLEE");
+  }
+
+  // 3. GENERATE: Local Inference (SDK -> Cortex)
+  // Using the Directive to guide the SLM
+  FString Prompt = FString::Printf(TEXT("System: %s (%s)\nUser: %s"),
+                                   *Instruction, *Directive, *Input);
+  FString GeneratedContent =
+      FString::Printf(TEXT("I am following instruction: %s"), *Instruction);
+
+  // 4. BUNDLE: Prepare Verdict Request
+  // Include Directive, Action, and Generated Content
+
+  // 5. VERDICT: API Call (SDK -> API)
+  // POST /agents/{id}/verdict
+  // TODO: FHttpModule::CreateRequest() ...
+
+  // 6. SIGN: Receive Validity and Signature
+  FString Signature = TEXT("sig_simulated_valid");
+  bool bValid = true;
+
+  // 7. EXECUTE: Return Executable Packet
+  if (!bValid) {
+    return FAgentResponse{
+        TEXT("..."),
+        TypeFactory::Action(TEXT("BLOCKED"), TEXT("Protocol Violation")),
+        TEXT("Blocked")};
+  }
+
+  FString Thought =
+      FString::Printf(TEXT("Directive: %s | Sig: %s"), *Directive, *Signature);
+
+  return FAgentResponse{GeneratedContent,
+                        TypeFactory::Action(Instruction, Directive), Thought};
 }
 
 FSoul AgentOps::Export(const FAgent &Agent) {

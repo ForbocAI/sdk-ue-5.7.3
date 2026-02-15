@@ -31,17 +31,9 @@ FValidationResult ValidateAttack(const FAgentAction &Action,
 // ==========================================
 
 TArray<FValidationRule> BridgeOps::CreateDefaultRules() {
-  TArray<FValidationRule> Rules;
-
-  Rules.Add(BridgeFactory::CreateRule(
-      TEXT("core.movement"), TEXT("Movement Validation"),
-      {TEXT("MOVE"), TEXT("move")}, BridgeRules::ValidateMovement));
-
-  Rules.Add(BridgeFactory::CreateRule(
-      TEXT("core.attack"), TEXT("Attack Validation"),
-      {TEXT("ATTACK"), TEXT("attack")}, BridgeRules::ValidateAttack));
-
-  return Rules;
+  // Game-Agnostic: No default rules are enforced by the protocol.
+  // Games must explicitly register rules or use presets.
+  return TArray<FValidationRule>();
 }
 
 FValidationResult BridgeOps::Validate(const FAgentAction &Action,
