@@ -9,16 +9,15 @@
 FAgent AgentFactory::Create(const FAgentConfig &Config) {
   const FString NewId =
       FString::Printf(TEXT("agent_%s"), *FGuid::NewGuid().ToString());
-  const FString Url = Config.ApiUrl.IsEmpty() ? TEXT("http://localhost:8080")
-                                              : Config.ApiUrl;
+  const FString Url =
+      Config.ApiUrl.IsEmpty() ? TEXT("http://localhost:8080") : Config.ApiUrl;
 
   return FAgent{NewId, Config.Persona, Config.InitialState,
                 TArray<FMemoryItem>(), Url};
 }
 
 FAgent AgentFactory::FromSoul(const FSoul &Soul, const FString &ApiUrl) {
-  const FString Url =
-      ApiUrl.IsEmpty() ? TEXT("http://localhost:8080") : ApiUrl;
+  const FString Url = ApiUrl.IsEmpty() ? TEXT("http://localhost:8080") : ApiUrl;
 
   return FAgent{Soul.Id, Soul.Persona, Soul.State, Soul.Memories, Url};
 }
@@ -27,8 +26,11 @@ FAgent AgentFactory::FromSoul(const FSoul &Soul, const FString &ApiUrl) {
 // AGENT OPERATIONS — Pure free functions
 // ==========================================
 
-FAgent AgentOps::WithState(const FAgent &Agent,
-                           const FAgentState &NewState) {
+// ==========================================
+// AGENT OPS implementation
+// ==========================================
+
+FAgent AgentOps::WithState(const FAgent &Agent, const FAgentState &NewState) {
   return FAgent{Agent.Id, Agent.Persona, NewState, Agent.Memories,
                 Agent.ApiUrl};
 }
@@ -41,31 +43,17 @@ FAgent AgentOps::WithMemories(const FAgent &Agent,
 
 FAgentState AgentOps::CalculateNewState(const FAgentState &Current,
                                         const FAgentState &Updates) {
-  // Build new inventory by merging
-  TArray<FString> NewInventory = Current.Inventory;
-  for (const FString &Item : Updates.Inventory) {
-    NewInventory.AddUnique(Item);
+  // Generic State Update Strategy:
+  // Since we are using raw JSON, we can either replace or merge.
+  // For this FP implementation without a heavy JSON library dependency here,
+  // we will assume the API returns the FULL new state in Updates.JsonData.
+  // If Updates.JsonData is empty/invalid, keep Current.
+
+  if (Updates.JsonData.IsEmpty() || Updates.JsonData == TEXT("{}")) {
+    return Current;
   }
 
-  // Build new skills by merging
-  TMap<FString, float> NewSkills = Current.Skills;
-  for (const auto &Pair : Updates.Skills) {
-    NewSkills.Add(Pair.Key, Pair.Value);
-  }
-
-  // Build new relationships by merging
-  TMap<FString, float> NewRelationships = Current.Relationships;
-  for (const auto &Pair : Updates.Relationships) {
-    NewRelationships.Add(Pair.Key, Pair.Value);
-  }
-
-  // Determine mood
-  const FString NewMood =
-      Updates.Mood.IsEmpty() ? Current.Mood : Updates.Mood;
-
-  return TypeFactory::AgentState(NewMood, MoveTemp(NewInventory),
-                                 MoveTemp(NewSkills),
-                                 MoveTemp(NewRelationships));
+  return TypeFactory::AgentState(Updates.JsonData);
 }
 
 FAgentResponse AgentOps::Process(const FAgent &Agent, const FString &Input,
@@ -75,10 +63,9 @@ FAgentResponse AgentOps::Process(const FAgent &Agent, const FString &Input,
   const FString Directive = TEXT("Respond normally.");
   const FString Instruction = TEXT("IDLE");
 
-  const FString Dialogue = FString::Printf(
-      TEXT("Processed: '%s' (Mood: %s)"), *Input, *Agent.State.Mood);
-  const FString Thought =
-      FString::Printf(TEXT("Directive: %s"), *Directive);
+  const FString Dialogue = FString::Printf(TEXT("Processed: '%s'"), *Input);
+
+  const FString Thought = FString::Printf(TEXT("Directive: %s"), *Directive);
 
   return FAgentResponse{Dialogue, TypeFactory::Action(Instruction, Directive),
                         Thought};

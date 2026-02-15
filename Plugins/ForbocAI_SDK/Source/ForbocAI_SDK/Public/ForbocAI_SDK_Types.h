@@ -27,18 +27,9 @@ struct FAgentState {
   GENERATED_BODY()
 
   UPROPERTY()
-  FString Mood;
+  FString JsonData;
 
-  UPROPERTY()
-  TArray<FString> Inventory;
-
-  UPROPERTY()
-  TMap<FString, float> Skills;
-
-  UPROPERTY()
-  TMap<FString, float> Relationships;
-
-  FAgentState() : Mood(TEXT("Neutral")) {}
+  FAgentState() : JsonData(TEXT("{}")) {}
 };
 
 /**
@@ -161,20 +152,9 @@ struct FAgentConfig {
 namespace TypeFactory {
 
 // --- FAgentState ---
-inline FAgentState AgentState(FString Mood) {
+inline FAgentState AgentState(FString JsonData) {
   FAgentState S;
-  S.Mood = MoveTemp(Mood);
-  return S;
-}
-
-inline FAgentState AgentState(FString Mood, TArray<FString> Inventory,
-                              TMap<FString, float> Skills,
-                              TMap<FString, float> Relationships) {
-  FAgentState S;
-  S.Mood = MoveTemp(Mood);
-  S.Inventory = MoveTemp(Inventory);
-  S.Skills = MoveTemp(Skills);
-  S.Relationships = MoveTemp(Relationships);
+  S.JsonData = MoveTemp(JsonData);
   return S;
 }
 
