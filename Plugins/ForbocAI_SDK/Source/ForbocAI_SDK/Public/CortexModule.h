@@ -11,6 +11,87 @@
 // Strict functional programming implementation for local
 // Small Language Model inference using sqlite-vss.
 // All operations are pure free functions.
+// Enhanced with functional core patterns for better
+// error handling and composition.
+// ==========================================================
+
+// Functional Core Type Aliases for Cortex operations
+namespace CortexTypes {
+    using func::Maybe;
+    using func::Either;
+    using func::Pipeline;
+    using func::Curried;
+    using func::Lazy;
+    using func::ValidationPipeline;
+    using func::ConfigBuilder;
+    using func::TestResult;
+    using func::AsyncResult;
+    
+    // Type aliases for Cortex operations
+    using CortexCreationResult = Either<FString, FCortex>;
+    using CortexInitResult = Either<FString, bool>;
+    using CortexCompletionResult = Either<FString, FCortexResponse>;
+    using CortexStreamResult = Either<FString, TArray<FString>>;
+}
+
+// Functional Core Helper Functions for Cortex operations
+namespace CortexHelpers {
+    // Helper to create a lazy cortex
+    inline CortexTypes::Lazy<FCortex> createLazyCortex(const FCortexConfig& config) {
+        return func::lazy([config]() -> FCortex {
+            return CortexFactory::Create(config);
+        });
+    }
+    
+    // Helper to create a validation pipeline for cortex configuration
+    inline CortexTypes::ValidationPipeline<FCortexConfig> cortexConfigValidationPipeline() {
+        return func::validationPipeline<FCortexConfig>()
+            .add([](const FCortexConfig& config) -> CortexTypes::Either<FString, FCortexConfig> {
+                if (config.Model.IsEmpty()) {
+                    return CortexTypes::make_left(FString(TEXT("Model cannot be empty")));
+                }
+                return CortexTypes::make_right(config);
+            })
+            .add([](const FCortexConfig& config) -> CortexTypes::Either<FString, FCortexConfig> {
+                if (config.MaxTokens < 1 || config.MaxTokens > 2048) {
+                    return CortexTypes::make_left(FString(TEXT("Max tokens must be between 1 and 2048")));
+                }
+                return CortexTypes::make_right(config);
+            })
+            .add([](const FCortexConfig& config) -> CortexTypes::Either<FString, FCortexConfig> {
+                if (config.Temperature < 0.0f || config.Temperature > 2.0f) {
+                    return CortexTypes::make_left(FString(TEXT("Temperature must be between 0.0 and 2.0")));
+                }
+                return CortexTypes::make_right(config);
+            });
+    }
+    
+    // Helper to create a pipeline for cortex completion
+    inline CortexTypes::Pipeline<FCortex> cortexCompletionPipeline(const FCortex& cortex) {
+        return func::pipe(cortex);
+    }
+    
+    // Helper to create a curried cortex creation function
+    inline CortexTypes::Curried<1, std::function<CortexTypes::CortexCreationResult(FCortexConfig)>> curriedCortexCreation() {
+        return func::curry<1>([](FCortexConfig config) -> CortexTypes::CortexCreationResult {
+            try {
+                FCortex cortex = CortexFactory::Create(config);
+                return CortexTypes::make_right(FString(), cortex);
+            } catch (const std::exception& e) {
+                return CortexTypes::make_left(FString(e.what()));
+            }
+        });
+    }
+}
+
+// ==========================================================
+// Cortex Module — Local SLM Inference (UE SDK)
+// ==========================================================
+// Strict functional programming implementation for local
+// Small Language Model inference using sqlite-vss.
+// All operations are pure free functions.
+// Enhanced with functional core patterns for better
+// error handling and composition.
 // ==========================================================
 
 /**
@@ -89,7 +170,7 @@ FORBOCAI_SDK_API FCortex Create(const FCortexConfig &Config);
  * @param Cortex The Cortex instance to initialize.
  * @return A validation result indicating success or failure.
  */
-FORBOCAI_SDK_API FValidationResult Init(FCortex &Cortex);
+FORBOCAI_SDK_API CortexTypes::CortexInitResult Init(FCortex &Cortex);
 
 /**
  * Generates text completion from prompt.
@@ -99,7 +180,7 @@ FORBOCAI_SDK_API FValidationResult Init(FCortex &Cortex);
  * @param Context Optional context data.
  * @return The generated response.
  */
-FORBOCAI_SDK_API FCortexResponse
+FORBOCAI_SDK_API CortexTypes::CortexCompletionResult
 Complete(const FCortex &Cortex, const FString &Prompt,
          const TMap<FString, FString> &Context = TMap<FString, FString>());
 
@@ -111,7 +192,7 @@ Complete(const FCortex &Cortex, const FString &Prompt,
  * @param Context Optional context data.
  * @return A stream of generated text chunks.
  */
-FORBOCAI_SDK_API TArray<FString> CompleteStream(
+FORBOCAI_SDK_API CortexTypes::CortexStreamResult CompleteStream(
     const FCortex &Cortex, const FString &Prompt,
     const TMap<FString, FString> &Context = TMap<FString, FString>());
 

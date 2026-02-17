@@ -8,9 +8,11 @@
 // ==========================================================
 // Memory Module Implementation — Full Embedding-Based Memory
 // ==========================================================
-// Strict functional programming implementation using sqlite-vss
-// for vector search and semantic recall.
+// Strict functional programming implementation for
+// persistent, semantic recall using sqlite-vss for vector search.
 // All operations are pure free functions.
+// Enhanced with functional core patterns for better
+// error handling and composition.
 // ==========================================================
 
 namespace {
@@ -26,10 +28,15 @@ namespace SQLiteVSS {
  * @param Path The database file path.
  * @return The database handle.
  */
-void* OpenDatabase(const FString &Path) {
-  // TODO: Implement actual sqlite-vss database opening
-  // For now, return a dummy handle
-  return reinterpret_cast<void*>(0x1); // Dummy handle
+MemoryTypes::MemoryStoreCreationResult OpenDatabase(const FString &Path) {
+  try {
+    // TODO: Implement actual sqlite-vss database opening
+    // For now, return a dummy handle
+    void* handle = reinterpret_cast<void*>>(0x1); // Dummy handle
+    return MemoryTypes::make_right(FString(), handle);
+  } catch (const std::exception& e) {
+    return MemoryTypes::make_left(FString(e.what()));
+  }
 }
 
 /**
@@ -47,9 +54,13 @@ void CloseDatabase(void* Handle) {
  * @param Handle The database handle.
  * @return The validation result.
  */
-FValidationResult CreateTables(void* Handle) {
-  // TODO: Implement actual table creation with sqlite-vss
-  return TypeFactory::Valid(TEXT("Tables created successfully"));
+MemoryTypes::MemoryStoreInitializationResult CreateTables(void* Handle) {
+  try {
+    // TODO: Implement actual table creation with sqlite-vss
+    return MemoryTypes::make_right(FString(), true);
+  } catch (const std::exception& e) {
+    return MemoryTypes::make_left(FString(e.what()));
+  }
 }
 
 /**
@@ -59,9 +70,13 @@ FValidationResult CreateTables(void* Handle) {
  * @param Item The memory item to insert.
  * @return The validation result.
  */
-FValidationResult InsertMemory(void* Handle, const FMemoryItem &Item) {
-  // TODO: Implement actual memory insertion with sqlite-vss
-  return TypeFactory::Valid(TEXT("Memory inserted successfully"));
+MemoryTypes::MemoryStoreAddResult InsertMemory(void* Handle, const FMemoryItem &Item) {
+  try {
+    // TODO: Implement actual memory insertion with sqlite-vss
+    return MemoryTypes::make_right(FString(), true);
+  } catch (const std::exception& e) {
+    return MemoryTypes::make_left(FString(e.what()));
+  }
 }
 
 /**
@@ -72,20 +87,24 @@ FValidationResult InsertMemory(void* Handle, const FMemoryItem &Item) {
  * @param Limit The maximum number of results.
  * @return The ranked memory results.
  */
-TArray<FMemoryItem> VectorSearch(void* Handle, const FString &Query, int32 Limit) {
-  TArray<FMemoryItem> Results;
-  
-  // TODO: Implement actual vector search with sqlite-vss
-  // For now, return dummy results
-  FMemoryItem Dummy;
-  Dummy.Id = TEXT("dummy_001");
-  Dummy.Text = TEXT("This is a placeholder memory result.");
-  Dummy.Type = TEXT("experience");
-  Dummy.Importance = 0.8f;
-  Dummy.Timestamp = FDateTime::Now().ToUnixTimestamp();
-  
-  Results.Add(Dummy);
-  return Results;
+MemoryTypes::MemoryStoreRecallResult VectorSearch(void* Handle, const FString &Query, int32 Limit) {
+  try {
+    TArray<FMemoryItem> Results;
+    
+    // TODO: Implement actual vector search with sqlite-vss
+    // For now, return dummy results
+    FMemoryItem Dummy;
+    Dummy.Id = TEXT("dummy_001");
+    Dummy.Text = TEXT("This is a placeholder memory result.");
+    Dummy.Type = TEXT("experience");
+    Dummy.Importance = 0.8f;
+    Dummy.Timestamp = FDateTime::Now().ToUnixTimestamp();
+    
+    Results.Add(Dummy);
+    return MemoryTypes::make_right(FString(), Results);
+  } catch (const std::exception& e) {
+    return MemoryTypes::make_left(FString(e.what()));
+  }
 }
 
 /**
@@ -95,17 +114,21 @@ TArray<FMemoryItem> VectorSearch(void* Handle, const FString &Query, int32 Limit
  * @param Text The text to embed.
  * @return The vector embedding.
  */
-TArray<float> GenerateEmbedding(void* Handle, const FString &Text) {
-  TArray<float> Vector;
-  
-  // TODO: Implement actual embedding generation with sqlite-vss
-  // For now, return a random vector
-  Vector.Init(0.0f, 384);
-  for (int i = 0; i < 384; i++) {
-    Vector[i] = FMath::FRand();
+MemoryTypes::MemoryStoreEmbeddingResult GenerateEmbedding(void* Handle, const FString &Text) {
+  try {
+    TArray<float> Vector;
+    
+    // TODO: Implement actual embedding generation with sqlite-vss
+    // For now, return a random vector
+    Vector.Init(0.0f, 384);
+    for (int i = 0; i < 384; i++) {
+      Vector[i] = FMath::FRand();
+    }
+    
+    return MemoryTypes::make_right(FString(), Vector);
+  } catch (const std::exception& e) {
+    return MemoryTypes::make_left(FString(e.what()));
   }
-  
-  return Vector;
 }
 
 } // namespace SQLiteVSS
@@ -126,24 +149,28 @@ FString GetDatabasePath(const FMemoryConfig &Config) {
  * @param Config The memory configuration to validate.
  * @return The validation result.
  */
-FValidationResult ValidateConfig(const FMemoryConfig &Config) {
-  if (Config.DatabasePath.IsEmpty()) {
-    return TypeFactory::Invalid(TEXT("Database path cannot be empty"));
+MemoryTypes::MemoryStoreCreationResult ValidateConfig(const FMemoryConfig &Config) {
+  try {
+    if (Config.DatabasePath.IsEmpty()) {
+      return MemoryTypes::make_left(FString(TEXT("Database path cannot be empty")));
+    }
+    
+    if (Config.MaxMemories <= 0) {
+      return MemoryTypes::make_left(FString(TEXT("Max memories must be greater than 0")));
+    }
+    
+    if (Config.VectorDimension != 384) {
+      return MemoryTypes::make_left(FString(TEXT("Vector dimension must be 384")));
+    }
+    
+    if (Config.MaxRecallResults <= 0) {
+      return MemoryTypes::make_left(FString(TEXT("Max recall results must be greater than 0")));
+    }
+    
+    return MemoryTypes::make_right(FString(), Config);
+  } catch (const std::exception& e) {
+    return MemoryTypes::make_left(FString(e.what()));
   }
-  
-  if (Config.MaxMemories <= 0) {
-    return TypeFactory::Invalid(TEXT("Max memories must be greater than 0"));
-  }
-  
-  if (Config.VectorDimension != 384) {
-    return TypeFactory::Invalid(TEXT("Vector dimension must be 384"));
-  }
-  
-  if (Config.MaxRecallResults <= 0) {
-    return TypeFactory::Invalid(TEXT("Max recall results must be greater than 0"));
-  }
-  
-  return TypeFactory::Valid(TEXT("Memory configuration valid"));
 }
 
 /**
@@ -162,8 +189,6 @@ FString GetMemoryStatistics(const FMemoryStore &Store) {
   Statistics += FString::Printf(TEXT("  Max Recall Results: %d\n"), Store.Config.MaxRecallResults);
   
   return Statistics;
-  
-  return Statistics;
 }
 
 } // namespace Internal
@@ -171,137 +196,160 @@ FString GetMemoryStatistics(const FMemoryStore &Store) {
 } // namespace
 
 // Factory function implementation
-FMemoryStore MemoryOps::CreateStore(const FMemoryConfig &Config) {
+FMemoryStore MemoryFactory::CreateStore(const FMemoryConfig &Config) {
+  // Use functional validation
+  auto validationResult = MemoryHelpers::memoryConfigValidationPipeline().run(Config);
+  if (validationResult.isLeft) {
+      throw std::runtime_error(validationResult.left.c_str());
+  }
+  
   FMemoryStore Store;
   Store.Config = Config;
   Store.bInitialized = false;
   Store.DatabaseHandle = nullptr;
-  
   return Store;
 }
 
 // Initialization implementation
-FValidationResult MemoryOps::Initialize(FMemoryStore &Store) {
-  if (Store.bInitialized) {
-    return TypeFactory::Valid(TEXT("Memory store already initialized"));
+MemoryTypes::MemoryStoreInitializationResult MemoryOps::Initialize(FMemoryStore &Store) {
+  try {
+    if (Store.bInitialized) {
+      return MemoryTypes::make_right(FString(), true);
+    }
+    
+    // Validate configuration
+    auto configValidation = Internal::ValidateConfig(Store.Config);
+    if (configValidation.isLeft) {
+        return configValidation;
+    }
+    
+    // Get database path
+    const FString DatabasePath = Internal::GetDatabasePath(Store.Config);
+    
+    // Open database connection
+    auto openResult = Internal::SQLiteVSS::OpenDatabase(DatabasePath);
+    if (openResult.isLeft) {
+        return openResult;
+    }
+    Store.DatabaseHandle = openResult.right;
+    
+    // Create tables
+    auto tableResult = Internal::SQLiteVSS::CreateTables(Store.DatabaseHandle);
+    if (tableResult.isLeft) {
+        Internal::SQLiteVSS::CloseDatabase(Store.DatabaseHandle);
+        Store.DatabaseHandle = nullptr;
+        return tableResult;
+    }
+    
+    Store.bInitialized = true;
+    return MemoryTypes::make_right(FString(), true);
+  } catch (const std::exception& e) {
+    return MemoryTypes::make_left(FString(e.what()));
   }
-  
-  // Validate configuration
-  const FValidationResult ConfigValidation = SQLiteVSSInternal::ValidateConfig(Store.Config);
-  if (!ConfigValidation.bValid) {
-    return ConfigValidation;
-  }
-  
-  // Get database path
-  const FString DatabasePath = SQLiteVSSInternal::GetDatabasePath(Store.Config);
-  
-  // Open database connection
-  Store.DatabaseHandle = SQLiteVSSInternal::SQLiteVSS::OpenDatabase(DatabasePath);
-  if (Store.DatabaseHandle == nullptr) {
-    return TypeFactory::Invalid(FString::Printf(TEXT("Failed to open database: %s"), *DatabasePath));
-  }
-  
-  // Create tables
-  const FValidationResult TableValidation = SQLiteVSSInternal::SQLiteVSS::CreateTables(Store.DatabaseHandle);
-  if (!TableValidation.bValid) {
-    SQLiteVSSInternal::SQLiteVSS::CloseDatabase(Store.DatabaseHandle);
-    Store.DatabaseHandle = nullptr;
-    return TableValidation;
-  }
-  
-  Store.bInitialized = true;
-  return TypeFactory::Valid(TEXT("Memory store initialized successfully"));
 }
 
 // Store implementation
-FMemoryStore MemoryOps::Store(const FMemoryStore &Store,
-                             const FString &Text,
-                             const FString &Type,
-                             float Importance) {
-  FMemoryStore NewStore = Store;
-  
-  if (!Store.bInitialized) {
-    // Return original store if not initialized
-    return Store;
+MemoryTypes::MemoryStoreAddResult MemoryOps::Store(const FMemoryStore &Store,
+                                                   const FString &Text,
+                                                   const FString &Type,
+                                                   float Importance) {
+  try {
+    FMemoryStore NewStore = Store;
+    
+    if (!Store.bInitialized) {
+      // Return original store if not initialized
+      return MemoryTypes::make_right(FString(), Store);
+    }
+    
+    // Generate a new memory item
+    FMemoryItem Item;
+    Item.Id = FString::Printf(TEXT("mem_%s"), *FGuid::NewGuid().ToString());
+    Item.Text = Text;
+    Item.Type = Type;
+    Item.Importance = FMath::Clamp(Importance, 0.0f, 1.0f);
+    Item.Timestamp = FDateTime::Now().ToUnixTimestamp();
+    
+    // Generate embedding
+    auto embeddingResult = MemoryOps::GenerateEmbedding(Store, Text);
+    if (embeddingResult.isLeft) {
+        return embeddingResult;
+    }
+    
+    // Insert into database
+    auto insertResult = Internal::SQLiteVSS::InsertMemory(Store.DatabaseHandle, Item);
+    if (insertResult.isLeft) {
+        return insertResult;
+    }
+    
+    // Add to items array
+    NewStore.Items.Add(Item);
+    
+    return MemoryTypes::make_right(FString(), NewStore);
+  } catch (const std::exception& e) {
+    return MemoryTypes::make_left(FString(e.what()));
   }
-  
-  // Generate a new memory item
-  FMemoryItem Item;
-  Item.Id = FString::Printf(TEXT("mem_%s"), *FGuid::NewGuid().ToString());
-  Item.Text = Text;
-  Item.Type = Type;
-  Item.Importance = FMath::Clamp(Importance, 0.0f, 1.0f);
-  Item.Timestamp = FDateTime::Now().ToUnixTimestamp();
-  
-  // Generate embedding
-  const TArray<float> Embedding = MemoryOps::GenerateEmbedding(Store, Text);
-  
-  // Insert into database
-  const FValidationResult InsertValidation = SQLiteVSSInternal::SQLiteVSS::InsertMemory(Store.DatabaseHandle, Item);
-  if (!InsertValidation.bValid) {
-    // Return original store if insertion fails
-    return Store;
-  }
-  
-  // Add to items array
-  NewStore.Items.Add(Item);
-  
-  return NewStore;
 }
 
 // Add implementation
-FMemoryStore MemoryOps::Add(const FMemoryStore &Store, const FMemoryItem &Item) {
-  FMemoryStore NewStore = Store;
-  
-  if (!Store.bInitialized) {
-    // Return original store if not initialized
-    return Store;
+MemoryTypes::MemoryStoreAddResult MemoryOps::Add(const FMemoryStore &Store, const FMemoryItem &Item) {
+  try {
+    FMemoryStore NewStore = Store;
+    
+    if (!Store.bInitialized) {
+      // Return original store if not initialized
+      return MemoryTypes::make_right(FString(), Store);
+    }
+    
+    // Insert into database
+    auto insertResult = Internal::SQLiteVSS::InsertMemory(Store.DatabaseHandle, Item);
+    if (insertResult.isLeft) {
+        return insertResult;
+    }
+    
+    // Add to items array
+    NewStore.Items.Add(Item);
+    
+    return MemoryTypes::make_right(FString(), NewStore);
+  } catch (const std::exception& e) {
+    return MemoryTypes::make_left(FString(e.what()));
   }
-  
-  // Insert into database
-  const FValidationResult InsertValidation = SQLiteVSSInternal::SQLiteVSS::InsertMemory(Store.DatabaseHandle, Item);
-  if (!InsertValidation.bValid) {
-    // Return original store if insertion fails
-    return Store;
-  }
-  
-  // Add to items array
-  NewStore.Items.Add(Item);
-  
-  return NewStore;
 }
 
 // Recall implementation
-TArray<FMemoryItem> MemoryOps::Recall(const FMemoryStore &Store, const FString &Query, int32 Limit) {
-  TArray<FMemoryItem> Results;
-  
-  if (!Store.bInitialized) {
-    return Results;
+MemoryTypes::MemoryStoreRecallResult MemoryOps::Recall(const FMemoryStore &Store, const FString &Query, int32 Limit) {
+  try {
+    TArray<FMemoryItem> Results;
+    
+    if (!Store.bInitialized) {
+      return MemoryTypes::make_right(FString(), Results);
+    }
+    
+    // Use default limit if not specified
+    int32 ActualLimit = (Limit > 0) ? Limit : Store.Config.MaxRecallResults;
+    
+    // Perform vector search
+    return Internal::SQLiteVSS::VectorSearch(Store.DatabaseHandle, Query, ActualLimit);
+  } catch (const std::exception& e) {
+    return MemoryTypes::make_left(FString(e.what()));
   }
-  
-  // Use default limit if not specified
-  int32 ActualLimit = (Limit > 0) ? Limit : Store.Config.MaxRecallResults;
-  
-  // Perform vector search
-  Results = Internal::SQLiteVSS::VectorSearch(Store.DatabaseHandle, Query, ActualLimit);
-  
-  return Results;
 }
 
 // Embedding generation implementation
-TArray<float> MemoryOps::GenerateEmbedding(const FMemoryStore &Store, const FString &Text) {
-  TArray<float> Vector;
-  
-  if (!Store.bInitialized) {
-    // Return empty vector if not initialized
-    Vector.Init(0.0f, Store.Config.VectorDimension);
-    return Vector;
+MemoryTypes::MemoryStoreEmbeddingResult MemoryOps::GenerateEmbedding(const FMemoryStore &Store, const FString &Text) {
+  try {
+    TArray<float> Vector;
+    
+    if (!Store.bInitialized) {
+      // Return empty vector if not initialized
+      Vector.Init(0.0f, Store.Config.VectorDimension);
+      return MemoryTypes::make_right(FString(), Vector);
+    }
+    
+    // Generate embedding using sqlite-vss
+    return Internal::SQLiteVSS::GenerateEmbedding(Store.DatabaseHandle, Text);
+  } catch (const std::exception& e) {
+    return MemoryTypes::make_left(FString(e.what()));
   }
-  
-  // Generate embedding using sqlite-vss
-  Vector = Internal::SQLiteVSS::GenerateEmbedding(Store.DatabaseHandle, Text);
-  
-  return Vector;
 }
 
 // Statistics implementation
@@ -312,8 +360,64 @@ FString MemoryOps::GetStatistics(const FMemoryStore &Store) {
 // Cleanup implementation
 void MemoryOps::Cleanup(FMemoryStore &Store) {
   if (Store.bInitialized && Store.DatabaseHandle != nullptr) {
-    SQLiteVSSInternal::SQLiteVSS::CloseDatabase(Store.DatabaseHandle);
+    Internal::SQLiteVSS::CloseDatabase(Store.DatabaseHandle);
     Store.DatabaseHandle = nullptr;
     Store.bInitialized = false;
   }
+}
+
+// Functional helper implementations
+namespace MemoryHelpers {
+    // Implementation of lazy memory store creation
+    MemoryTypes::Lazy<FMemoryStore> createLazyMemoryStore(const FMemoryConfig& config) {
+        return func::lazy([config]() -> FMemoryStore {
+            return MemoryFactory::CreateStore(config);
+        });
+    }
+    
+    // Implementation of memory config validation pipeline
+    MemoryTypes::ValidationPipeline<FMemoryConfig> memoryConfigValidationPipeline() {
+        return func::validationPipeline<FMemoryConfig>()
+            .add([](const FMemoryConfig& config) -> MemoryTypes::Either<FString, FMemoryConfig> {
+                if (config.DatabasePath.IsEmpty()) {
+                    return MemoryTypes::make_left(FString(TEXT("Database path cannot be empty")));
+                }
+                return MemoryTypes::make_right(config);
+            })
+            .add([](const FMemoryConfig& config) -> MemoryTypes::Either<FString, FMemoryConfig> {
+                if (config.MaxMemories < 1) {
+                    return MemoryTypes::make_left(FString(TEXT("Max memories must be at least 1")));
+                }
+                return MemoryTypes::make_right(config);
+            })
+            .add([](const FMemoryConfig& config) -> MemoryTypes::Either<FString, FMemoryConfig> {
+                if (config.VectorDimension != 384) {
+                    return MemoryTypes::make_left(FString(TEXT("Vector dimension must be 384")));
+                }
+                return MemoryTypes::make_right(config);
+            })
+            .add([](const FMemoryConfig& config) -> MemoryTypes::Either<FString, FMemoryConfig> {
+                if (config.MaxRecallResults < 1) {
+                    return MemoryTypes::make_left(FString(TEXT("Max recall results must be at least 1")));
+                }
+                return MemoryTypes::make_right(config);
+            });
+    }
+    
+    // Implementation of memory store creation pipeline
+    MemoryTypes::Pipeline<FMemoryStore> memoryStoreCreationPipeline(const FMemoryStore& store) {
+        return func::pipe(store);
+    }
+    
+    // Implementation of curried memory store creation
+    MemoryTypes::Curried<1, std::function<MemoryTypes::MemoryStoreCreationResult(FMemoryConfig)>> curriedMemoryStoreCreation() {
+        return func::curry<1>([](FMemoryConfig config) -> MemoryTypes::MemoryStoreCreationResult {
+            try {
+                FMemoryStore store = MemoryFactory::CreateStore(config);
+                return MemoryTypes::make_right(FString(), store);
+            } catch (const std::exception& e) {
+                return MemoryTypes::make_left(FString(e.what()));
+            }
+        });
+    }
 }

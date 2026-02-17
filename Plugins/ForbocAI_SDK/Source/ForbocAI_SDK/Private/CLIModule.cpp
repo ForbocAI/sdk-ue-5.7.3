@@ -4,6 +4,7 @@
 #include "Interfaces/IHttpRequest.h"
 #include "Interfaces/IHttpResponse.h"
 #include "Serialization/JsonSerializer.h"
+#include "Core/functional_core.hpp"
 
 // Sends an HTTP request and pumps the HTTP tick loop until
 // the response arrives or timeout is reached. This is required
@@ -33,7 +34,7 @@ void SendRequestAndWait(
   // Pump the HTTP module tick loop until complete or timeout
   const double StartTime = FPlatformTime::Seconds();
   while (!bCompleted &&
-         (FPlatformTime::Seconds() - StartTime) < TimeoutSeconds) {
+al      (FPlatformTime::Seconds() - StartTime) < TimeoutSeconds) {
     FHttpModule::Get().GetHttpManager().Tick(0.05f);
     FPlatformProcess::Sleep(0.05f);
   }
@@ -44,62 +45,113 @@ void SendRequestAndWait(
 }
 
 namespace CLIOps {
-void Doctor(const FString &ApiUrl) {
+
+// Functional implementation of CLI commands
+CLITypes::TestResult<void> Doctor(const FString &ApiUrl) {
   UE_LOG(LogTemp, Display, TEXT("Running Doctor check on %s..."), *ApiUrl);
 
-  SendRequestAndWait(
-      ApiUrl + TEXT("/status"), TEXT("GET"), TEXT(""),
-      [](FHttpRequestPtr Req, FHttpResponsePtr Res, bool bSuccess) {
-        if (bSuccess && Res.IsValid() && Res->GetResponseCode() == 200) {
-          UE_LOG(LogTemp, Display, TEXT("API Status: ONLINE"));
-          UE_LOG(LogTemp, Display, TEXT("Response: %s"),
-                 *Res->GetContentAsString());
-        } else if (bSuccess && Res.IsValid()) {
-          UE_LOG(LogTemp, Warning, TEXT("API Status: HTTP %d"),
-                 Res->GetResponseCode());
-          UE_LOG(LogTemp, Warning, TEXT("Response: %s"),
-                 *Res->GetContentAsString());
-        } else {
-          UE_LOG(LogTemp, Error, TEXT("API Status: OFFLINE or Error"));
-        }
-      });
+  // Use functional pipeline for request processing
+  auto requestPipeline = func::pipe(ApiUrl + TEXT("/status"))
+      | [](const FString& url) {
+          return func::lazy([url]() {
+              FString result;
+              SendRequestAndWait(
+                  url, TEXT("GET"), TEXT(""),
+                  [&result](FHttpRequestPtr Req, FHttpResponsePtr Res, bool bSuccess) {
+                      if (bSuccess && Res.IsValid() && Res->GetResponseCode() == 200) {
+                          result = FString::Printf(TEXT("API Status: ONLINE\nResponse: %s"), *Res->GetContentAsString());
+                      } else if (bSuccess && Res.IsValid()) {
+                          result = FString::Printf(TEXT("API Status: HTTP %d\nResponse: %s"),
+                                                 Res->GetResponseCode(),
+                                                 *Res->GetContentAsString());
+                      } else {
+                          result = FString(TEXT("API Status: OFFLINE or Error"));
+                      }
+                  });
+              return result;
+          });
+      };
+
+  FString result = func::eval(requestPipeline);
+  
+  if (result.Contains(TEXT("ONLINE"))) {
+      UE_LOG(LogTemp, Display, TEXT("%s"), *result);
+      return CLITypes::TestResult<void>::success(TEXT("Doctor check completed successfully"));
+  } else {
+      UE_LOG(LogTemp, Error, TEXT("%s"), *result);
+      return CLITypes::TestResult<void>::failure(result);
+  }
 }
 
-void ListAgents(const FString &ApiUrl) {
+CLITypes::TestResult<void> ListAgents(const FString &ApiUrl) {
   UE_LOG(LogTemp, Display, TEXT("Listing Agents..."));
 
-  SendRequestAndWait(
-      ApiUrl + TEXT("/agents"), TEXT("GET"), TEXT(""),
-      [](FHttpRequestPtr Req, FHttpResponsePtr Res, bool bSuccess) {
-        if (bSuccess && Res.IsValid()) {
-          UE_LOG(LogTemp, Display, TEXT("Agents: %s"),
-                 *Res->GetContentAsString());
-        } else {
-          UE_LOG(LogTemp, Error, TEXT("Failed to list agents"));
-        }
-      });
+  // Use functional pipeline for request processing
+  auto requestPipeline = func::pipe(ApiUrl + TEXT("/agents"))
+      | [](const FString& url) {
+          return func::lazy([url]() {
+              FString result;
+              SendRequestAndWait(
+                  url, TEXT("GET"), TEXT(""),
+                  [&result](FHttpRequestPtr Req, FHttpResponsePtr Res, bool bSuccess) {
+                      if (bSuccess && Res.IsValid()) {
+                          result = FString::Printf(TEXT("Agents: %s"), *Res->GetContentAsString());
+                      } else {
+                          result = FString(TEXT("Failed to list agents"));
+                      }
+                  });
+              return result;
+          });
+      };
+
+  FString result = func::eval(requestPipeline);
+  
+  if (result.Contains(TEXT("Agents:"))) {
+      UE_LOG(LogTemp, Display, TEXT("%s"), *result);
+      return CLITypes::TestResult<void>::success(TEXT("Agent listing completed successfully"));
+  } else {
+      UE_LOG(LogTemp, Error, TEXT("%s"), *result);
+      return CLITypes::TestResult<void>::failure(result);
+  }
 }
 
-void CreateAgent(const FString &ApiUrl, const FString &Persona) {
+CLITypes::TestResult<void> CreateAgent(const FString &ApiUrl, const FString &Persona) {
   UE_LOG(LogTemp, Display, TEXT("Creating Agent with Persona: %s"), *Persona);
 
   FString JsonPayload = FString::Printf(
       TEXT("{\"createPersona\": \"%s\", \"cortexRef\": \"ue-cli\"}"), *Persona);
 
-  SendRequestAndWait(
-      ApiUrl + TEXT("/agents"), TEXT("POST"), JsonPayload,
-      [](FHttpRequestPtr Req, FHttpResponsePtr Res, bool bSuccess) {
-        if (bSuccess && Res.IsValid()) {
-          UE_LOG(LogTemp, Display, TEXT("Created: %s"),
-                 *Res->GetContentAsString());
-        } else {
-          UE_LOG(LogTemp, Error, TEXT("Failed to create agent"));
-        }
-      });
+  // Use functional pipeline for request processing
+  auto requestPipeline = func::pipe(ApiUrl + TEXT("/agents"))
+      | [JsonPayload](const FString& url) {
+          return func::lazy([url, JsonPayload]() {
+              FString result;
+              SendRequestAndWait(
+                  url, TEXT("POST"), JsonPayload,
+                  [&result](FHttpRequestPtr Req, FHttpResponsePtr Res, bool bSuccess) {
+                      if (bSuccess && Res.IsValid()) {
+                          result = FString::Printf(TEXT("Created: %s"), *Res->GetContentAsString());
+                      } else {
+                          result = FString(TEXT("Failed to create agent"));
+                      }
+                  });
+              return result;
+          });
+      };
+
+  FString result = func::eval(requestPipeline);
+  
+  if (result.Contains(TEXT("Created:"))) {
+      UE_LOG(LogTemp, Display, TEXT("%s"), *result);
+      return CLITypes::TestResult<void>::success(TEXT("Agent created successfully"));
+  } else {
+      UE_LOG(LogTemp, Error, TEXT("%s"), *result);
+      return CLITypes::TestResult<void>::failure(result);
+  }
 }
 
-void ProcessAgent(const FString &ApiUrl, const FString &AgentId,
-                  const FString &Input) {
+CLITypes::TestResult<void> ProcessAgent(const FString &ApiUrl, const FString &AgentId,
+                                          const FString &Input) {
   UE_LOG(LogTemp, Display, TEXT("Processing Agent %s Input: %s"), *AgentId,
          *Input);
 
@@ -107,35 +159,68 @@ void ProcessAgent(const FString &ApiUrl, const FString &AgentId,
       TEXT("{\"input\": \"%s\", \"context\": [[\"source\", \"ue-cli\"]] }"),
       *Input);
 
-  SendRequestAndWait(
-      ApiUrl + TEXT("/agents/") + AgentId + TEXT("/process"), TEXT("POST"),
-      JsonPayload,
-      [](FHttpRequestPtr Req, FHttpResponsePtr Res, bool bSuccess) {
-        if (bSuccess && Res.IsValid()) {
-          UE_LOG(LogTemp, Display, TEXT("Response: %s"),
-                 *Res->GetContentAsString());
-        } else {
-          UE_LOG(LogTemp, Error, TEXT("Failed to process agent"));
-        }
-      });
+  // Use functional pipeline for request processing
+  auto requestPipeline = func::pipe(ApiUrl + TEXT("/agents/") + AgentId + TEXT("/process"))
+      | [JsonPayload](const FString& url) {
+          return func::lazy([url, JsonPayload]() {
+              FString result;
+              SendRequestAndWait(
+                  url, TEXT("POST"), JsonPayload,
+                  [&result](FHttpRequestPtr Req, FHttpResponsePtr Res, bool bSuccess) {
+                      if (bSuccess && Res.IsValid()) {
+                          result = FString::Printf(TEXT("Response: %s"), *Res->GetContentAsString());
+                      } else {
+                          result = FString(TEXT("Failed to process agent"));
+                      }
+                  });
+              return result;
+          });
+      };
+
+  FString result = func::eval(requestPipeline);
+  
+  if (result.Contains(TEXT("Response:"))) {
+      UE_LOG(LogTemp, Display, TEXT("%s"), *result);
+      return CLITypes::TestResult<void>::success(TEXT("Agent processed successfully"));
+  } else {
+      UE_LOG(LogTemp, Error, TEXT("%s"), *result);
+      return CLITypes::TestResult<void>::failure(result);
+  }
 }
 
-void ExportSoul(const FString &ApiUrl, const FString &AgentId) {
+CLITypes::TestResult<void> ExportSoul(const FString &ApiUrl, const FString &AgentId) {
   UE_LOG(LogTemp, Display, TEXT("Exporting Soul for Agent %s"), *AgentId);
 
   FString JsonPayload =
       FString::Printf(TEXT("{\"agentIdRef\": \"%s\"}"), *AgentId);
 
-  SendRequestAndWait(
-      ApiUrl + TEXT("/agents/") + AgentId + TEXT("/soul/export"), TEXT("POST"),
-      JsonPayload,
-      [](FHttpRequestPtr Req, FHttpResponsePtr Res, bool bSuccess) {
-        if (bSuccess && Res.IsValid()) {
-          UE_LOG(LogTemp, Display, TEXT("Exported: %s"),
-                 *Res->GetContentAsString());
-        } else {
-          UE_LOG(LogTemp, Error, TEXT("Failed to export soul"));
-        }
-      });
+  // Use functional pipeline for request processing
+  auto requestPipeline = func::pipe(ApiUrl + TEXT("/agents/") + AgentId + TEXT("/soul/export"))
+      | [JsonPayload](const FString& url) {
+          return func::lazy([url, JsonPayload]() {
+              FString result;
+              SendRequestAndWait(
+                  url, TEXT("POST"), JsonPayload,
+                  [&result](FHttpRequestPtr Req, FHttpResponsePtr Res, bool bSuccess) {
+                      if (bSuccess && Res.IsValid()) {
+                          result = FString::Printf(TEXT("Exported: %s"), *Res->GetContentAsString());
+                      } else {
+                          result = FString(TEXT("Failed to export soul"));
+                      }
+                  });
+              return result;
+          });
+      };
+
+  FString result = func::eval(requestPipeline);
+  
+  if (result.Contains(TEXT("Exported:"))) {
+      UE_LOG(LogTemp, Display, TEXT("%s"), *result);
+      return CLITypes::TestResult<void>::success(TEXT("Soul exported successfully"));
+  } else {
+      UE_LOG(LogTemp, Error, TEXT("%s"), *result);
+      return CLITypes::TestResult<void>::failure(result);
+  }
 }
+
 } // namespace CLIOps

@@ -3,6 +3,7 @@
 #include "CoreMinimal.h"
 #include "Commandlets/Commandlet.h"
 #include "ForbocAI_SDK_Commandlet.generated.h"
+#include "Core/functional_core.hpp"
 
 /**
  * ForbocAI SDK Commandlet.
@@ -26,4 +27,21 @@ public:
   //~ Begin UCommandlet Interface
   virtual int32 Main(const FString &Params) override;
   //~ End UCommandlet Interface
+
+  // Functional Core Type Aliases for Commandlet operations
+  using CommandResult = CLITypes::TestResult<void>;
+  using CommandExecution = CLITypes::AsyncResult<void>;
+
+  // Command execution helpers
+  CommandResult executeDoctor(const FString& apiUrl);
+  CommandResult executeAgentList(const FString& apiUrl);
+  CommandResult executeAgentCreate(const FString& apiUrl, const FString& persona);
+  CommandResult executeAgentProcess(const FString& apiUrl, const FString& id, const FString& input);
+  CommandResult executeSoulExport(const FString& apiUrl, const FString& id);
+
+  // Command pipeline helpers
+  CommandExecution createCommandPipeline(const FString& command, const FString& apiUrl, const FString& param1 = TEXT(""), const FString& param2 = TEXT(""));
+
+  // Command validation helpers
+  CLITypes::ValidationPipeline<FString> commandValidationPipeline();
 };

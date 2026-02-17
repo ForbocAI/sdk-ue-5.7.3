@@ -2,9 +2,10 @@
 
 #include "CoreMinimal.h"
 #include "ForbocAI_SDK_Types.generated.h" // UHT generated
+#include "Core/functional_core.hpp"
 
 // ==========================================================
-// ForbocAI SDK — Data Types (Strict FP)
+// ForbocAI SDK — Data Types (Strict FP with Enhanced Functional Patterns)
 // ==========================================================
 //
 // All types are plain data structs. NO parameterized
@@ -17,6 +18,29 @@
 // Plain structs (non-USTRUCT) use aggregate initialization
 // directly or via factory functions.
 // ==========================================================
+
+// Functional Core Type Aliases for SDK types
+namespace SDKTypes {
+    using func::Maybe;
+    using func::Either;
+    using func::Pipeline;
+    using func::Curried;
+    using func::Lazy;
+    using func::ValidationPipeline;
+    using func::ConfigBuilder;
+    using func::TestResult;
+    using func::AsyncResult;
+    
+    // Type aliases for SDK operations
+    using AgentCreationResult = Either<FString, FAgent>;
+    using AgentValidationResult = Either<FString, FAgentState>;
+    using AgentProcessResult = Either<FString, FAgentResponse>;
+    using AgentExportResult = Either<FString, FSoul>;
+    using MemoryStoreResult = Either<FString, FMemoryStore>;
+    using CortexCreationResult = Either<FString, FCortex>;
+    using GhostTestResult = TestResult<FGhostTestResult>;
+    using BridgeValidationResult = Either<FString, FValidationResult>;
+}
 
 /**
  * Agent State — Immutable data.
@@ -165,6 +189,224 @@ struct FAgentConfig {
   FAgentState InitialState;
 };
 
+/**
+ * Memory Configuration — Immutable data.
+ */
+USTRUCT()
+struct FMemoryConfig {
+  GENERATED_BODY()
+
+  /** The database file path. */
+  UPROPERTY()
+  FString DatabasePath;
+  
+  /** Maximum number of memories to store. */
+  UPROPERTY()
+  int32 MaxMemories;
+  
+  /** Vector dimension size. */
+  UPROPERTY()
+  int32 VectorDimension;
+  
+  /** Whether to use GPU acceleration if available. */
+  UPROPERTY()
+  bool UseGPU;
+  
+  /** Maximum results to return from recall. */
+  UPROPERTY()
+  int32 MaxRecallResults;
+
+  FMemoryConfig()
+      : DatabasePath(TEXT("ForbocAI_Memory.db")), MaxMemories(10000),
+        VectorDimension(384), UseGPU(false), MaxRecallResults(10) {}
+};
+
+/**
+ * Memory Store — Immutable data.
+ */
+USTRUCT()
+struct FMemoryStore {
+  GENERATED_BODY()
+
+  /** Configuration for the memory store. */
+  UPROPERTY()
+  FMemoryConfig Config;
+
+  /** List of immutable memory items. */
+  UPROPERTY()
+  TArray<FMemoryItem> Items;
+
+  /** Database connection handle. */
+  void *DatabaseHandle;
+
+  /** Whether the store is initialized. */
+  UPROPERTY()
+  bool bInitialized;
+
+  FMemoryStore() : DatabaseHandle(nullptr), bInitialized(false) {}
+};
+
+/**
+ * Cortex Configuration — Immutable data.
+ */
+struct FCortexConfig {
+  /** The model identifier to use. */
+  const FString Model;
+  /** Whether to use GPU acceleration if available. */
+  const bool UseGPU;
+  /** Maximum tokens to generate per request. */
+  const int32 MaxTokens;
+  /** Temperature for generation (0.0 - 1.0). */
+  const float Temperature;
+  /** Top-k sampling parameter. */
+  const int32 TopK;
+  /** Top-p sampling parameter. */
+  const float TopP;
+
+  FCortexConfig()
+      : Model(TEXT("smalll2-135m")), UseGPU(false), MaxTokens(512),
+        Temperature(0.7f), TopK(40), TopP(0.9f) {}
+};
+
+/**
+ * Cortex Response — Immutable data.
+ */
+USTRUCT()
+struct FCortexResponse {
+  GENERATED_BODY()
+
+  /** The generated text response. */
+  UPROPERTY()
+  FString Text;
+
+  /** The estimated token count. */
+  UPROPERTY()
+  int32 TokenCount;
+
+  /** Whether the generation completed successfully. */
+  UPROPERTY()
+  bool bSuccess;
+
+  /** Error message if generation failed. */
+  UPROPERTY()
+  FString ErrorMessage;
+
+  FCortexResponse() : TokenCount(0), bSuccess(false), ErrorMessage(TEXT("")) {}
+};
+
+/**
+ * Ghost Test Configuration — Immutable data.
+ */
+struct FGhostConfig {
+  /** The agent to test. */
+  FAgent Agent;
+  /** Test scenarios to run. */
+  TArray<FString> Scenarios;
+  /** Maximum number of test iterations. */
+  int32 MaxIterations;
+  /** Expected response patterns. */
+  TMap<FString, FString> ExpectedResponses;
+  /** Whether to run in verbose mode. */
+  bool bVerbose;
+  /** API URL for the agent. */
+  FString ApiUrl;
+
+  FGhostConfig() : MaxIterations(100), bVerbose(false) {}
+};
+
+/**
+ * Ghost Test Result — Immutable data.
+ */
+USTRUCT()
+struct FGhostTestResult {
+  GENERATED_BODY()
+
+  /** The test scenario that was run. */
+  UPROPERTY()
+  FString Scenario;
+
+  /** Whether the test passed. */
+  UPROPERTY()
+  bool bPassed;
+
+  /** The actual response from the agent. */
+  UPROPERTY()
+  FString ActualResponse;
+
+  /** The expected response. */
+  UPROPERTY()
+  FString ExpectedResponse;
+
+  /** Any error messages encountered. */
+  UPROPERTY()
+  FString ErrorMessage;
+
+  /** The iteration number when the test completed. */
+  UPROPERTY()
+  int32 Iteration;
+
+  FGhostTestResult() : bPassed(false), Iteration(0) {}
+};
+
+/**
+ * Ghost Test Report — Immutable data.
+ */
+USTRUCT()
+struct FGhostTestReport {
+  GENERATED_BODY()
+
+  /** The overall test configuration. */
+  FGhostConfig Config;
+
+  /** All test results. */
+  UPROPERTY()
+  TArray<FGhostTestResult> Results;
+
+  /** The total number of tests run. */
+  UPROPERTY()
+  int32 TotalTests;
+
+  /** The number of tests that passed. */
+  UPROPERTY()
+  int32 PassedTests;
+
+  /** The number of tests that failed. */
+  UPROPERTY()
+  int32 FailedTests;
+
+  /** The overall success rate. */
+  UPROPERTY()
+  float SuccessRate;
+
+  /** Any summary messages. */
+  UPROPERTY()
+  FString Summary;
+
+  FGhostTestReport()
+      : TotalTests(0), PassedTests(0), FailedTests(0), SuccessRate(0.0f) {}
+};
+
+/**
+ * Ghost Test Engine — Immutable data.
+ */
+struct FGhost {
+  /** The configuration for this test engine. */
+  FGhostConfig Config;
+  /** Whether this ghost has been initialized. */
+  bool bInitialized;
+
+  FGhost() : bInitialized(false) {}
+};
+
+/**
+ * Cortex Engine Handle — Opaque handle to the inference engine.
+ * Note: Not a USTRUCT because void* is not supported by reflection.
+ */
+struct FCortex {
+  void *EngineHandle;
+  FCortex() : EngineHandle(nullptr) {}
+};
+
 // ==========================================================
 // TypeFactory — Factory functions for USTRUCTs
 // ==========================================================
@@ -230,6 +472,55 @@ inline FSoul Soul(FString Id, FString Version, FString Name, FString Persona,
   S.State = MoveTemp(State);
   S.Memories = MoveTemp(Memories);
   return S;
+}
+
+// --- FMemoryConfig ---
+inline FMemoryConfig MemoryConfig(FString DatabasePath = TEXT("ForbocAI_Memory.db"),
+                                 int32 MaxMemories = 10000,
+                                 int32 VectorDimension = 384,
+                                 bool UseGPU = false,
+                                 int32 MaxRecallResults = 10) {
+  FMemoryConfig C;
+  C.DatabasePath = MoveTemp(DatabasePath);
+  C.MaxMemories = MaxMemories;
+  C.VectorDimension = VectorDimension;
+  C.UseGPU = UseGPU;
+  C.MaxRecallResults = MaxRecallResults;
+  return C;
+}
+
+// --- FCortexConfig ---
+inline FCortexConfig CortexConfig(FString Model = TEXT("smalll2-135m"),
+                                 bool UseGPU = false,
+                                 int32 MaxTokens = 512,
+                                 float Temperature = 0.7f,
+                                 int32 TopK = 40,
+                                 float TopP = 0.9f) {
+  FCortexConfig C;
+  C.Model = MoveTemp(Model);
+  C.UseGPU = UseGPU;
+  C.MaxTokens = MaxTokens;
+  C.Temperature = Temperature;
+  C.TopK = TopK;
+  C.TopP = TopP;
+  return C;
+}
+
+// --- FGhostConfig ---
+inline FGhostConfig GhostConfig(FAgent Agent,
+                               TArray<FString> Scenarios = {},
+                               int32 MaxIterations = 100,
+                               TMap<FString, FString> ExpectedResponses = {},
+                               bool bVerbose = false,
+                               FString ApiUrl = TEXT("")) {
+  FGhostConfig C;
+  C.Agent = MoveTemp(Agent);
+  C.Scenarios = MoveTemp(Scenarios);
+  C.MaxIterations = MaxIterations;
+  C.ExpectedResponses = MoveTemp(ExpectedResponses);
+  C.bVerbose = bVerbose;
+  C.ApiUrl = MoveTemp(ApiUrl);
+  return C;
 }
 
 } // namespace TypeFactory

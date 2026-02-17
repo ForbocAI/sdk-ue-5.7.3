@@ -11,22 +11,123 @@
 // Strict functional programming implementation for
 // persistent, semantic recall using sqlite-vss for vector search.
 // All operations are pure free functions.
+// Enhanced with functional core patterns for better
+// error handling and composition.
+// ==========================================================
+
+// Functional Core Type Aliases for Memory operations
+namespace MemoryTypes {
+    using func::Maybe;
+    using func::Either;
+    using func::Pipeline;
+    using func::Curried;
+    using func::Lazy;
+    using func::ValidationPipeline;
+    using func::ConfigBuilder;
+    using func::TestResult;
+    using func::AsyncResult;
+    
+    // Type aliases for Memory operations
+    using MemoryStoreResult = Either<FString, FMemoryStore>;
+    using MemoryStoreCreationResult = Either<FString, FMemoryStore>;
+    using MemoryStoreInitializationResult = Either<FString, bool>;
+    using MemoryStoreAddResult = Either<FString, FMemoryStore>;
+    using MemoryStoreRecallResult = Either<FString, TArray<FMemoryItem>>;
+    using MemoryStoreEmbeddingResult = Either<FString, TArray<float>>;
+}
+
+// Functional Core Helper Functions for Memory operations
+namespace MemoryHelpers {
+    // Helper to create a lazy memory store
+    inline MemoryTypes::Lazy<FMemoryStore> createLazyMemoryStore(const FMemoryConfig& config) {
+        return func::lazy([config]() -> FMemoryStore {
+            return MemoryFactory::CreateStore(config);
+        });
+    }
+    
+    // Helper to create a validation pipeline for memory configuration
+    inline MemoryTypes::ValidationPipeline<FMemoryConfig> memoryConfigValidationPipeline() {
+        return func::validationPipeline<FMemoryConfig>()
+            .add([](const FMemoryConfig& config) -> MemoryTypes::Either<FString, FMemoryConfig> {
+                if (config.DatabasePath.IsEmpty()) {
+                    return MemoryTypes::make_left(FString(TEXT("Database path cannot be empty")));
+                }
+                return MemoryTypes::make_right(config);
+            })
+            .add([](const FMemoryConfig& config) -> MemoryTypes::Either<FString, FMemoryConfig> {
+                if (config.MaxMemories < 1) {
+                    return MemoryTypes::make_left(FString(TEXT("Max memories must be at least 1")));
+                }
+                return MemoryTypes::make_right(config);
+            })
+            .add([](const FMemoryConfig& config) -> MemoryTypes::Either<FString, FMemoryConfig> {
+                if (config.VectorDimension != 384) {
+                    return MemoryTypes::make_left(FString(TEXT("Vector dimension must be 384")));
+                }
+                return MemoryTypes::make_right(config);
+            })
+            .add([](const FMemoryConfig& config) -> MemoryTypes::Either<FString, FMemoryConfig> {
+                if (config.MaxRecallResults < 1) {
+                    return MemoryTypes::make_left(FString(TEXT("Max recall results must be at least 1")));
+                }
+                return MemoryTypes::make_right(config);
+            });
+    }
+    
+    // Helper to create a pipeline for memory store creation
+    inline MemoryTypes::Pipeline<FMemoryStore> memoryStoreCreationPipeline(const FMemoryStore& store) {
+        return func::pipe(store);
+    }
+    
+    // Helper to create a curried memory store creation function
+    inline MemoryTypes::Curried<1, std::function<MemoryTypes::MemoryStoreCreationResult(FMemoryConfig)>> curriedMemoryStoreCreation() {
+        return func::curry<1>([](FMemoryConfig config) -> MemoryTypes::MemoryStoreCreationResult {
+            try {
+                FMemoryStore store = MemoryFactory::CreateStore(config);
+                return MemoryTypes::make_right(FString(), store);
+            } catch (const std::exception& e) {
+                return MemoryTypes::make_left(FString(e.what()));
+            }
+        });
+    }
+}
+
+// ==========================================================
+// Memory Module — Full Embedding-Based Memory (UE SDK)
+// ==========================================================
+// Strict functional programming implementation for
+// persistent, semantic recall using sqlite-vss for vector search.
+// All operations are pure free functions.
+// Enhanced with functional core patterns for better
+// error handling and composition.
 // ==========================================================
 
 /**
  * Memory Configuration — Immutable data.
  */
+USTRUCT()
 struct FMemoryConfig {
+  GENERATED_BODY()
+
   /** The database file path. */
-  const FString DatabasePath;
+  UPROPERTY()
+  FString DatabasePath;
+  
   /** Maximum number of memories to store. */
-  const int32 MaxMemories;
+  UPROPERTY()
+  int32 MaxMemories;
+  
   /** Vector dimension size. */
-  const int32 VectorDimension;
+  UPROPERTY()
+  int32 VectorDimension;
+  
   /** Whether to use GPU acceleration if available. */
-  const bool UseGPU;
+  UPROPERTY()
+  bool UseGPU;
+  
   /** Maximum results to return from recall. */
-  const int32 MaxRecallResults;
+  UPROPERTY()
+  int32 MaxRecallResults;
 
   FMemoryConfig()
       : DatabasePath(TEXT("ForbocAI_Memory.db")), MaxMemories(10000),
@@ -77,7 +178,7 @@ FORBOCAI_SDK_API FMemoryStore CreateStore(const FMemoryConfig &Config);
  * @param Store The memory store to initialize.
  * @return A validation result indicating success or failure.
  */
-FORBOCAI_SDK_API FValidationResult Initialize(FMemoryStore &Store);
+FORBOCAI_SDK_API MemoryTypes::MemoryStoreInitializationResult Initialize(FMemoryStore &Store);
 
 /**
  * Stores a new memory.
@@ -88,9 +189,9 @@ FORBOCAI_SDK_API FValidationResult Initialize(FMemoryStore &Store);
  * @param Importance The importance score.
  * @return A new memory store with the memory added.
  */
-FORBOCAI_SDK_API FMemoryStore Store(const FMemoryStore &Store,
-                                    const FString &Text, const FString &Type,
-                                    float Importance);
+FORBOCAI_SDK_API MemoryTypes::MemoryStoreAddResult Store(const FMemoryStore &Store,
+                                                        const FString &Text, const FString &Type,
+                                                        float Importance);
 
 /**
  * Stores a pre-built memory item.
@@ -99,8 +200,8 @@ FORBOCAI_SDK_API FMemoryStore Store(const FMemoryStore &Store,
  * @param Item The memory item to add.
  * @return A new memory store with the item added.
  */
-FORBOCAI_SDK_API FMemoryStore Add(const FMemoryStore &Store,
-                                  const FMemoryItem &Item);
+FORBOCAI_SDK_API MemoryTypes::MemoryStoreAddResult Add(const FMemoryStore &Store,
+                                                      const FMemoryItem &Item);
 
 /**
  * Performs semantic recall using vector search.
@@ -110,7 +211,7 @@ FORBOCAI_SDK_API FMemoryStore Add(const FMemoryStore &Store,
  * @param Limit The maximum number of results to return.
  * @return The ranked memory results.
  */
-FORBOCAI_SDK_API TArray<FMemoryItem>
+FORBOCAI_SDK_API MemoryTypes::MemoryStoreRecallResult
 Recall(const FMemoryStore &Store, const FString &Query, int32 Limit = -1);
 
 /**
@@ -120,8 +221,8 @@ Recall(const FMemoryStore &Store, const FString &Query, int32 Limit = -1);
  * @param Text The text to embed.
  * @return The vector embedding.
  */
-FORBOCAI_SDK_API TArray<float> GenerateEmbedding(const FMemoryStore &Store,
-                                                 const FString &Text);
+FORBOCAI_SDK_API MemoryTypes::MemoryStoreEmbeddingResult GenerateEmbedding(const FMemoryStore &Store,
+                                                                         const FString &Text);
 
 /**
  * Gets the current memory statistics.

@@ -6,44 +6,47 @@
 #include "Misc/Guid.h"
 #include "Policies/CondensedJsonPrintPolicy.h"
 #include "Serialization/JsonSerializer.h"
+#include "Core/functional_core.hpp"
 
 // ==========================================
 // AGENT FACTORY — Pure construction functions
 // ==========================================
 
-FAgent AgentFactory::Create(const FAgentConfig &Config) {
-  const FString NewId =
-      FString::Printf(TEXT("agent_%s"), *FGuid::NewGuid().ToString());
-  const FString Url =
-      Config.ApiUrl.IsEmpty() ? TEXT("http://localhost:8080") : Config.ApiUrl;
+AgentTypes::AgentCreationResult AgentFactory::Create(const FAgentConfig &Config) {
+  try {
+    const FString NewId =
+        FString::Printf(TEXT("agent_%s"), *FGuid::NewGuid().ToString());
+    const FString Url =
+        Config.ApiUrl.IsEmpty() ? TEXT("http://localhost:8080") : Config.ApiUrl;
 
-  return FAgent{NewId, Config.Persona, Config.InitialState,
-                TArray<FMemoryItem>(), Url};
+    FAgent agent{NewId, Config.Persona, FAgentState(), TArray<FMemoryItem>(), Url};
+    return AgentTypes::make_right(FString(), agent);
+  } catch (const std::exception& e) {
+    return AgentTypes::make_left(FString(e.what()));
+  }
 }
 
-FAgent AgentFactory::FromSoul(const FSoul &Soul, const FString &ApiUrl) {
-  const FString Url = ApiUrl.IsEmpty() ? TEXT("http://localhost:8080") : ApiUrl;
-
-  return FAgent{Soul.Id, Soul.Persona, Soul.State, Soul.Memories, Url};
+AgentTypes::AgentCreationResult AgentFactory::FromSoul(const FSoul &Soul, const FString &ApiUrl) {
+  try {
+    const FString Url = ApiUrl.IsEmpty() ? TEXT("http://localhost:8080") : ApiUrl;
+    FAgent agent{Soul.Id, Soul.Persona, Soul.State, Soul.Memories, Url};
+    return AgentTypes::make_right(FString(), agent);
+  } catch (const std::exception& e) {
+    return AgentTypes::make_left(FString(e.what()));
+  }
 }
 
 // ==========================================
 // AGENT OPERATIONS — Pure free functions
 // ==========================================
 
-// ==========================================
-// AGENT OPS implementation
-// ==========================================
-
 FAgent AgentOps::WithState(const FAgent &Agent, const FAgentState &NewState) {
-  return FAgent{Agent.Id, Agent.Persona, NewState, Agent.Memories,
-                Agent.ApiUrl};
+  return FAgent{Agent.Id, Agent.Persona, NewState, Agent.Memories, Agent.ApiUrl};
 }
 
 FAgent AgentOps::WithMemories(const FAgent &Agent,
                               const TArray<FMemoryItem> &NewMemories) {
-  return FAgent{Agent.Id, Agent.Persona, Agent.State, NewMemories,
-                Agent.ApiUrl};
+  return FAgent{Agent.Id, Agent.Persona, Agent.State, NewMemories, Agent.ApiUrl};
 }
 
 FAgentState AgentOps::CalculateNewState(const FAgentState &Current,
@@ -69,20 +72,6 @@ void AgentOps::Process(const FAgent &Agent, const FString &Input,
   // =========================================================
 
   // 1. OBSERVE: Pack Context into JSON
-  // API expects context as Maybe [(Text, Text)] -> Array of [Key, Value] arrays
-  // or Array of Objects.
-  // Let's use Array of Objects for clarity: [{"key": "k", "val": "v"}]
-  // Actually, Haskell Aeson for `[(Text, Text)]` expects `[[ "key", "val" ], [
-  // "key2", "val2" ]]` by default. Let's try simpler object serialization
-  // first, assuming API can handle Map or we adjust API.
-  // Correction: Haskell `FromJSON` for `[(Text, Text)]` usually expects an
-  // Array of Arrays [[k,v]]. Let's stick to `object` in API if possible, but
-  // `Types.hs` defines `context :: Maybe [(Text, Text)]`.
-  // To be safe and compatible with standard JSON object `{"key": "value"}`, the
-  // API type should probably be `Map Text Text` or `Object`.
-  // For now, let's send a standard JSON Object and assume the API handles it
-  // (Aeson `Map` support).
-
   TSharedPtr<FJsonObject> ContextJson = MakeShareable(new FJsonObject);
   for (const auto &Elem : Context) {
     ContextJson->SetStringField(Elem.Key, Elem.Value);
@@ -90,8 +79,6 @@ void AgentOps::Process(const FAgent &Agent, const FString &Input,
 
   // Wrap in Directive Request structure
   TSharedPtr<FJsonObject> DirectiveReq = MakeShareable(new FJsonObject);
-  // Note: API field is `dirContext`
-  // We will serialize as an Array of Arrays to be safe for `[(Text, Text)]`
   TArray<TSharedPtr<FJsonValue>> ContextArray;
   for (const auto &Elem : Context) {
     TArray<TSharedPtr<FJsonValue>> Pair;
@@ -146,8 +133,6 @@ void AgentOps::Process(const FAgent &Agent, const FString &Input,
         }
 
         // 3. GENERATE (Local SLM Simulation) (Step 3)
-        // Ideally: Call local LLM here using the Directive.
-        // For now, we simulate the SLM adhering to the instruction.
         FString GeneratedDialogue = FString::Printf(
             TEXT("I will %s because %s."), *Instruction, *DirectiveReason);
         FAgentAction Action = TypeFactory::Action(Instruction, Target);
@@ -164,8 +149,6 @@ void AgentOps::Process(const FAgent &Agent, const FString &Input,
         TSharedPtr<FJsonObject> ActionJson = MakeShareable(new FJsonObject);
         ActionJson->SetStringField(TEXT("gaType"), Action.Type);
         ActionJson->SetStringField(TEXT("actionTarget"), Action.Target);
-        // Note: Field names must match Types.hs `GenericAction`
-        // `data GenericAction = { gaType :: Text ... }`
 
         VerdictReq->SetObjectField(TEXT("verAction"), ActionJson);
         VerdictReq->SetStringField(TEXT("verThought"), GeneratedDialogue);
@@ -228,4 +211,46 @@ void AgentOps::Process(const FAgent &Agent, const FString &Input,
 FSoul AgentOps::Export(const FAgent &Agent) {
   return TypeFactory::Soul(Agent.Id, TEXT("1.0.0"), TEXT("Agent"),
                            Agent.Persona, Agent.State, Agent.Memories);
+}
+
+// Functional helper implementations
+namespace AgentHelpers {
+    // Implementation of lazy agent creation
+    AgentTypes::Lazy<FAgent> createLazyAgent(const FAgentConfig& config) {
+        return func::lazy([config]() -> FAgent {
+            return AgentFactory::Create(config);
+        });
+    }
+    
+    // Implementation of agent state validation pipeline
+    AgentTypes::ValidationPipeline<FAgentState> agentStateValidationPipeline() {
+        return func::validationPipeline<FAgentState>()
+            .add([](const FAgentState& state) -> AgentTypes::Either<FString, FAgentState> {
+                if (state.JsonData.IsEmpty() || state.JsonData == TEXT("{}")) {
+                    return AgentTypes::make_left(FString(TEXT("Empty agent state")));
+                }
+                return AgentTypes::make_right(state);
+            })
+            .add([](const FAgentState& state) -> AgentTypes::Either<FString, FAgentState> {
+                // Add more validation rules here
+                return AgentTypes::make_right(state);
+            });
+    }
+    
+    // Implementation of agent processing pipeline
+    AgentTypes::Pipeline<FAgent> agentProcessingPipeline(const FAgent& agent) {
+        return func::pipe(agent);
+    }
+    
+    // Implementation of curried agent creation
+    AgentTypes::Curried<1, std::function<AgentTypes::AgentCreationResult(FAgentConfig)>> curriedAgentCreation() {
+        return func::curry<1>([](FAgentConfig config) -> AgentTypes::AgentCreationResult {
+            try {
+                FAgent agent = AgentFactory::Create(config);
+                return AgentTypes::make_right(FString(), agent);
+            } catch (const std::exception& e) {
+                return AgentTypes::make_left(FString(e.what()));
+            }
+        });
+    }
 }

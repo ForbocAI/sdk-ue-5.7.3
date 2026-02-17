@@ -5,7 +5,6 @@
 // ==========================================================
 // Functional Core Library — Strict C++11
 // ==========================================================
-//
 // Pure C++11 functional programming primitives.
 // No C++14, C++17, or later features are used.
 //
@@ -31,6 +30,10 @@
 //   9. fmap                 — Functor map (Maybe, Either, vector)
 //  10. mbind / ebind        — Monadic bind for Maybe / Either
 //  11. or_else / match      — Extraction / pattern matching
+//  12. ValidationPipeline   — Functional validation chain
+//  13. ConfigBuilder        — Functional configuration builder
+//  14. TestResult           — Functional testing result
+//  15. AsyncResult          — Functional async result handling
 //
 // REQUIREMENTS:
 //   Maybe<T> and Either<E,T> require T and E to be default-
@@ -47,6 +50,8 @@
 #include <type_traits>
 #include <utility>
 #include <vector>
+#include <unordered_map>
+#include <string>
 
 namespace func {
 
@@ -129,7 +134,7 @@ Maybe<T> nothing() {
 }
 
 // ==========================================
-// 4. DATA: Either (Result / Error Monad)
+// 4. DATA: Either (Result/Error Monad)
 // ==========================================
 // A sum type for computations that can fail.
 // Convention: Left = error, Right = success.
@@ -417,6 +422,274 @@ auto ematch(const Either<E, T> &e, FLeft onLeft, FRight onRight)
     return onLeft(e.left);
   return onRight(e.right);
 }
+
+// ==========================================
+// 12. ValidationPipeline (Functional Validation Chain)
+// ==========================================
+// A pipeline for chaining validation functions.
+// Each validation function takes input and returns
+// Either<Error, Result>. The pipeline short-circuits
+// on first error.
+//
+// Usage:
+//   auto pipeline = ValidationPipeline<int>()
+//       .add(validatePositive)
+//       .add(validateRange)
+//       .add(validateEven);
+//   auto result = pipeline.run(42);
+// ==========================================
+
+template <typename T> class ValidationPipeline {
+  std::vector<std::function<Either<std::string, T>(T)>> validators;
+
+public:
+  ValidationPipeline() = default;
+
+  // Add a validation function to the pipeline
+  ValidationPipeline &add(std::function<Either<std::string, T>(T)> validator) {
+    validators.push_back(std::move(validator));
+    return *this;
+  }
+
+  // Run the validation pipeline
+  Either<std::string, T> run(T value) const {
+    for (const auto &validator : validators) {
+      auto result = validator(value);
+      if (result.isLeft) {
+        return result; // Short-circuit on first error
+      }
+      value = result.right;
+    }
+    return make_right(std::string{}, value);
+  }
+};
+
+// Factory function for ValidationPipeline
+template <typename T>
+ValidationPipeline<T> validationPipeline() {
+  return ValidationPipeline<T>();
+}
+
+// ==========================================
+// 13. ConfigBuilder (Functional Configuration Builder)
+// ==========================================
+// A builder pattern for creating immutable
+// configuration objects using functional composition.
+//
+// Usage:
+//   auto config = ConfigBuilder<MyConfig>()
+//       .set("name", "MyApp")
+//       .set("port", 8080)
+//       .build();
+// ==========================================
+
+template <typename Config> class ConfigBuilder {
+  std::unordered_map<std::string, std::function<void(Config &)>> setters;
+
+public:
+  ConfigBuilder() = default;
+
+  // Add a setter function
+  template <typename T>
+  ConfigBuilder &set(const std::string &key, T value) {
+    setters[key] = [value](Config &config) mutable {
+      // Use reflection or manual mapping to set the value
+      // For simplicity, we'll assume Config has a set method
+      config.set(key, std::move(value));
+    };
+    return *this;
+  }
+
+  // Build the configuration object
+  Config build() const {
+    Config config;
+    for (const auto &pair : setters) {
+      pair.second(config);
+    }
+    return config;
+  }
+};
+
+// Factory function for ConfigBuilder
+template <typename Config>
+ConfigBuilder<Config> configBuilder() {
+  return ConfigBuilder<Config>();
+}
+
+// ==========================================
+// 14. TestResult (Functional Testing Result)
+// ==========================================
+// A result type for functional testing that
+// includes success/failure, messages, and
+// optional detailed information.
+//
+// Usage:
+//   auto result = TestResult<bool>::success(true);
+//   auto failure = TestResult<void>::failure("Test failed");
+// ==========================================
+
+template <typename T> struct TestResult {
+  bool success;
+  T value;
+  std::string message;
+  std::unordered_map<std::string, std::string> details;
+
+  // Factory functions
+  static TestResult<T> success(T value, std::string message = "") {
+    return TestResult<T>{true, std::move(value), std::move(message), {}};
+  }
+
+  static TestResult<T> failure(std::string message) {
+    return TestResult<T>{false, T{}, std::move(message), {}};
+  }
+
+  // Add details
+  TestResult &withDetail(const std::string &key, const std::string &value) {
+    details[key] = value;
+    return *this;
+  }
+
+  // Check if successful
+  bool isSuccessful() const {
+    return success;
+  }
+
+  // Get value or throw if failure
+  T getValue() const {
+    if (!success) {
+      throw std::runtime_error("TestResult: Cannot get value from failure");
+    }
+    return value;
+  }
+};
+
+// Specialization for void
+
+template <> struct TestResult<void> {
+  bool success;
+  std::string message;
+  std::unordered_map<std::string, std::string> details;
+
+  static TestResult<void> success(std::string message = "") {
+    return TestResult<void>{true, std::move(message), {}};
+  }
+
+  static TestResult<void> failure(std::string message) {
+    return TestResult<void>{false, std::move(message), {}};
+  }
+
+  TestResult &withDetail(const std::string &key, const std::string &value) {
+    details[key] = value;
+    return *this;
+  }
+
+  bool isSuccessful() const {
+    return success;
+  }
+};
+
+// ==========================================
+// 15. AsyncResult (Functional Async Result Handling)
+// ==========================================
+// A type for handling async operations that
+// can succeed or fail, with support for
+// chaining and error handling.
+//
+// Usage:
+//   auto result = AsyncResult<int>::create([](auto resolve, auto reject) {
+//       // async operation
+//   });
+//
+//   result.then([](int value) {
+//       // success
+//   }).catch_([](std::string error) {
+//       // failure
+//   });
+// ==========================================
+
+template <typename T> class AsyncResult {
+  std::function<void(std::function<void(T)>, std::function<void(std::string)>)> executor;
+  std::vector<std::function<void(T)>> successHandlers;
+  std::vector<std::function<void(std::string)>> errorHandlers;
+
+public:
+  // Create an async result from an executor
+  static AsyncResult<T> create(std::function<void(std::function<void(T)>, std::function<void(std::string)>)> executor) {
+    return AsyncResult<T>{std::move(executor)};
+  }
+
+  AsyncResult(std::function<void(std::function<void(T)>, std::function<void(std::string)>)> executor)
+      : executor(std::move(executor)) {}
+
+  // Add success handler
+  AsyncResult<T> &then(std::function<void(T)> handler) {
+    successHandlers.push_back(std::move(handler));
+    return *this;
+  }
+
+  // Add error handler
+  AsyncResult<T> &catch_(std::function<void(std::string)> handler) {
+    errorHandlers.push_back(std::move(handler));
+    return *this;
+  }
+
+  // Execute the async operation
+  void execute() {
+    executor(
+      [this](T value) {
+        for (const auto &handler : successHandlers) {
+          handler(value);
+        }
+      },
+      [this](std::string error) {
+        for (const auto &handler : errorHandlers) {
+          handler(error);
+        }
+      }
+    );
+  }
+};
+
+// Specialization for void
+
+template <> class AsyncResult<void> {
+  std::function<void(std::function<void()>, std::function<void(std::string)>)> executor;
+  std::vector<std::function<void()>> successHandlers;
+  std::vector<std::function<void(std::string)>> errorHandlers;
+
+public:
+  static AsyncResult<void> create(std::function<void(std::function<void()>, std::function<void(std::string)>)> executor) {
+    return AsyncResult<void>{std::move(executor)};
+  }
+
+  AsyncResult(std::function<void(std::function<void()>, std::function<void(std::string)>)> executor)
+      : executor(std::move(executor)) {}
+
+  AsyncResult<void> &then(std::function<void()> handler) {
+    successHandlers.push_back(std::move(handler));
+    return *this;
+  }
+
+  AsyncResult<void> &catch_(std::function<void(std::string)> handler) {
+    errorHandlers.push_back(std::move(handler));
+    return *this;
+  }
+
+  void execute() {
+    executor(
+      [this]() {
+        for (const auto &handler : successHandlers) {
+          handler();
+        }
+      },
+      [this](std::string error) {
+        for (const auto &handler : errorHandlers) {
+          handler(error);
+        }
+      }
+    );
+  }
+};
 
 } // namespace func
 

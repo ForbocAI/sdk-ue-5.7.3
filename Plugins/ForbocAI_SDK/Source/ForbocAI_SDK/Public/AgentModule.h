@@ -3,14 +3,91 @@
 #include "Core/functional_core.hpp" // C++11 Functional Core Library
 #include "CoreMinimal.h"
 #include "ForbocAI_SDK_Types.h"
+#include "Templates/TFunction.h"
+#include "Containers/UnrealString.h"
+#include "Containers/Map.h"
 
 // ==========================================================
-// Agent Module — Strict FP
+// Agent Module — Strict FP with Enhanced Functional Patterns
 // ==========================================================
 // FAgent is a pure data struct with const members (immutable).
 // NO constructors, NO member functions.
 // Construction via AgentFactory namespace (factory functions).
 // Operations via AgentOps namespace (free functions).
+// Enhanced with functional core patterns for better error handling
+// and composition.
+// ==========================================================
+
+// Functional Core Type Aliases for Agent operations
+namespace AgentTypes {
+    using func::Maybe;
+    using func::Either;
+    using func::Pipeline;
+    using func::Curried;
+    using func::Lazy;
+    using func::ValidationPipeline;
+    using func::ConfigBuilder;
+    using func::TestResult;
+    using func::AsyncResult;
+    
+    // Type aliases for Agent operations
+    using AgentCreationResult = Either<FString, FAgent>;
+    using AgentValidationResult = Either<FString, FAgentState>;
+    using AgentProcessResult = Either<FString, FAgentResponse>;
+    using AgentExportResult = Either<FString, FSoul>;
+}
+
+// Functional Core Helper Functions for Agent operations
+namespace AgentHelpers {
+    // Helper to create a lazy agent
+    inline AgentTypes::Lazy<FAgent> createLazyAgent(const FAgentConfig& config) {
+        return func::lazy([config]() -> FAgent {
+            return AgentFactory::Create(config);
+        });
+    }
+    
+    // Helper to create a validation pipeline for agent state
+    inline AgentTypes::ValidationPipeline<FAgentState> agentStateValidationPipeline() {
+        return func::validationPipeline<FAgentState>()
+            .add([](const FAgentState& state) -> AgentTypes::Either<FString, FAgentState> {
+                if (state.JsonData.IsEmpty() || state.JsonData == TEXT("{}")) {
+                    return AgentTypes::make_left(FString(TEXT("Empty agent state")));
+                }
+                return AgentTypes::make_right(state);
+            })
+            .add([](const FAgentState& state) -> AgentTypes::Either<FString, FAgentState> {
+                // Add more validation rules here
+                return AgentTypes::make_right(state);
+            });
+    }
+    
+    // Helper to create a pipeline for agent processing
+    inline AgentTypes::Pipeline<FAgent> agentProcessingPipeline(const FAgent& agent) {
+        return func::pipe(agent);
+    }
+    
+    // Helper to create a curried agent creation function
+    inline AgentTypes::Curried<1, std::function<AgentTypes::AgentCreationResult(FAgentConfig)>> curriedAgentCreation() {
+        return func::curry<1>([](FAgentConfig config) -> AgentTypes::AgentCreationResult {
+            try {
+                FAgent agent = AgentFactory::Create(config);
+                return AgentTypes::make_right(FString(), agent);
+            } catch (const std::exception& e) {
+                return AgentTypes::make_left(FString(e.what()));
+            }
+        });
+    }
+}
+
+// ==========================================================
+// Agent Module — Strict FP (Enhanced)
+// ==========================================================
+// FAgent is a pure data struct with const members (immutable).
+// NO constructors, NO member functions.
+// Construction via AgentFactory namespace (factory functions).
+// Operations via AgentOps namespace (free functions).
+// Enhanced with functional core patterns for better error handling
+// and composition.
 // ==========================================================
 
 /**
@@ -21,15 +98,15 @@
  */
 struct FAgent {
   /** Unique identifier for the agent. */
-  const FString Id;
+  FString Id;
   /** The persona or description of the agent. */
-  const FString Persona;
+  FString Persona;
   /** The current state of the agent. */
-  const FAgentState State;
+  FAgentState State;
   /** The list of memories associated with the agent. */
-  const TArray<FMemoryItem> Memories;
+  TArray<FMemoryItem> Memories;
   /** The API URL this agent communicates with. */
-  const FString ApiUrl;
+  FString ApiUrl;
 };
 
 /**
