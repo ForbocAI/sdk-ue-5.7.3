@@ -48,3 +48,4 @@ __pycache__/
 # Other
 *.log
 *.tmp
+dist_ForbocAI_SDK/
