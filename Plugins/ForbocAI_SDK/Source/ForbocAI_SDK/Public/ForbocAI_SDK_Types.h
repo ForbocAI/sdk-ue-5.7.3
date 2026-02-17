@@ -26,6 +26,7 @@ USTRUCT()
 struct FAgentState {
   GENERATED_BODY()
 
+  /** JSON-serialized state data. */
   UPROPERTY()
   FString JsonData;
 
@@ -39,18 +40,23 @@ USTRUCT()
 struct FMemoryItem {
   GENERATED_BODY()
 
+  /** Unique identifier for the memory. */
   UPROPERTY()
   FString Id;
 
+  /** The content of the memory. */
   UPROPERTY()
   FString Text;
 
+  /** The type of memory (e.g. observation). */
   UPROPERTY()
   FString Type;
 
+  /** Importance score (0.0 - 1.0). */
   UPROPERTY()
   float Importance;
 
+  /** Timestamp of creation. */
   UPROPERTY()
   int64 Timestamp;
 
@@ -64,15 +70,19 @@ USTRUCT()
 struct FAgentAction {
   GENERATED_BODY()
 
+  /** The type of action to perform. */
   UPROPERTY()
   FString Type;
 
+  /** The target entity or object for the action. */
   UPROPERTY()
   FString Target;
 
+  /** The reasoning behind the action. */
   UPROPERTY()
   FString Reason;
 
+  /** Additional JSON payload for the action. */
   UPROPERTY()
   FString PayloadJson;
 
@@ -86,9 +96,11 @@ USTRUCT()
 struct FValidationResult {
   GENERATED_BODY()
 
+  /** Whether the action is valid. */
   UPROPERTY()
   bool bValid;
 
+  /** Reason for invalidity, if applicable. */
   UPROPERTY()
   FString Reason;
 
@@ -102,21 +114,27 @@ USTRUCT()
 struct FSoul {
   GENERATED_BODY()
 
+  /** Unique identifier for the soul. */
   UPROPERTY()
   FString Id;
 
+  /** Version of the soul format. */
   UPROPERTY()
   FString Version;
 
+  /** Name of the entity. */
   UPROPERTY()
   FString Name;
 
+  /** Persona description. */
   UPROPERTY()
   FString Persona;
 
+  /** Current state snapshot. */
   UPROPERTY()
   FAgentState State;
 
+  /** List of memories. */
   UPROPERTY()
   TArray<FMemoryItem> Memories;
 
@@ -127,8 +145,11 @@ struct FSoul {
  * Agent Response — Plain data (aggregate-initializable).
  */
 struct FAgentResponse {
+  /** The agent's spoken dialogue. */
   FString Dialogue;
+  /** The action the agent decided to take. */
   FAgentAction Action;
+  /** The agent's internal thought process. */
   FString Thought;
 };
 
@@ -136,8 +157,11 @@ struct FAgentResponse {
  * Agent Configuration — Plain data (aggregate-initializable).
  */
 struct FAgentConfig {
+  /** The persona description. */
   FString Persona;
+  /** The API URL to use. */
   FString ApiUrl;
+  /** The initial state of the agent. */
   FAgentState InitialState;
 };
 
