@@ -181,9 +181,9 @@ ForbocAI enforces **strict Functional Programming** in C++11. The entire SDK con
 
 ---
 
-## Legal
+## License
 
 `Légal_Státus // Ríghts`
 
-All rights reserved. © 2026 ForbocAI
+All rights reserved. © 2026 ForbocAI. See [LICENSE](./LICENSE) for full details.
 <!-- T̸h̴e̶ ̶v̶o̶i̶d̴ ̷c̸o̶n̷s̶u̶m̸e̸s̶ ̸a̶l̷l̵. -->
