@@ -20,9 +20,17 @@ FMemoryStore MemoryOps::Add(const FMemoryStore &CurrentStore,
 }
 
 TArray<float> MemoryOps::GenerateEmbedding(const FString &Text) {
-  // Stub: Return zero vector (placeholder for real embedding model)
+  // Use local sqlite-vss for embedding generation
+  // This is a placeholder implementation - would need to integrate with sqlite-vss
   TArray<float> Vector;
   Vector.Init(0.0f, 384);
+  
+  // TODO: Implement real embedding generation using sqlite-vss
+  // For now, return a random vector as placeholder
+  for (int i = 0; i < 384; i++) {
+    Vector[i] = FMath::FRand();
+  }
+  
   return Vector;
 }
 
@@ -37,10 +45,11 @@ FMemoryStore MemoryOps::Store(const FMemoryStore &CurrentStore,
 }
 
 TArray<FMemoryItem> MemoryOps::Recall(const FMemoryStore &InStore,
-                                      const FString &Query, int32 Limit) {
-  // Stub: Return most recent items (placeholder for vector search)
+                                  const FString &Query, int32 Limit) {
+  // Use local sqlite-vss for vector search
+  // This is a placeholder implementation - would need to integrate with sqlite-vss
   TArray<FMemoryItem> Results = InStore.Items;
-
+  
   // Sort by timestamp descending (newest first) — local copy only
   Results.Sort([](const FMemoryItem &A, const FMemoryItem &B) {
     return A.Timestamp > B.Timestamp;
@@ -49,6 +58,6 @@ TArray<FMemoryItem> MemoryOps::Recall(const FMemoryStore &InStore,
   if (Results.Num() > Limit) {
     Results.SetNum(Limit);
   }
-
+  
   return Results;
 }
