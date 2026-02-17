@@ -40,6 +40,10 @@ USTRUCT()
 struct FMemoryStore {
   GENERATED_BODY()
 
+  /** Configuration for the memory store. */
+  UPROPERTY()
+  FMemoryConfig Config;
+
   /** List of immutable memory items. */
   UPROPERTY()
   TArray<FMemoryItem> Items;

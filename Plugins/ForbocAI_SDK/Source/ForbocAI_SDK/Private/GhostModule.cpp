@@ -33,14 +33,12 @@ FGhostTestResult RunScenarioTest(const FAgent &Agent, const FString &Scenario) {
   FString TestInput = FString::Printf(TEXT("Test scenario: %s"), *Scenario);
   
   // Process the input through the agent
-  const FAgentResponse Response = AgentOps::Process(Agent, TestInput, TMap<FString, FString>());
-  
-  Result.ActualResponse = Response.Dialogue;
-  Result.Iteration = 1; // Single iteration for now
-  
-  // TODO: Implement actual validation logic
-  // For now, mark as passed if response is not empty
-  Result.bPassed = !Response.Dialogue.IsEmpty();
+  AgentOps::Process(Agent, TestInput, TMap<FString, FString>(), 
+                   [&Result](const FAgentResponse &Response) {
+    Result.ActualResponse = Response.Dialogue;
+    Result.Iteration = 1; // Single iteration for now
+    Result.bPassed = !Response.Dialogue.IsEmpty();
+  });
   
   return Result;
 }
@@ -159,9 +157,9 @@ FString ExportResultsToCsv(const FGhostTestReport &Report) {
     CsvString += FString::Printf(TEXT("\"%s\",%s,\"%s\",\"%s\",\"%s\",%d\n"),
       *Result.Scenario,
       Result.bPassed ? TEXT("true") : TEXT("false"),
-      *Result.ActualResponse.Replace(TEXT("\"'), TEXT("\"\""),
-      *Result.ExpectedResponse.Replace(TEXT("\"'), TEXT("\"\"")),
-      *Result.ErrorMessage.Replace(TEXT("\"'), TEXT("\"\"")),
+      *Result.ActualResponse.Replace(TEXT("\""), TEXT("\"\""),
+      *Result.ExpectedResponse.Replace(TEXT("\""), TEXT("\"\"")),
+      *Result.ErrorMessage.Replace(TEXT("\""), TEXT("\"\"")),
       Result.Iteration
     );
   }
@@ -174,18 +172,21 @@ FString ExportResultsToCsv(const FGhostTestReport &Report) {
 } // namespace
 
 // Factory function implementation
-FGhost GhostFactory::Create(const FGhostConfig &Config) {
-  FGhost Ghost;
-  Ghost.Config = Config;
-  Ghost.bInitialized = false;
+FAgent AgentFactory::Create(const FGhostConfig &Config) {
+  FAgent Agent;
+  Agent.Id = Config.Id;
+  Agent.Persona = Config.Persona;
+  Agent.State = FAgentState::Idle;
+  Agent.Memories = TArray<FMemoryItem>();
+  Agent.ApiUrl = Config.ApiUrl;
   
   // Validate configuration
   const FValidationResult Validation = GhostOps::ValidateConfig(Config);
   if (Validation.bValid) {
-    Ghost.bInitialized = true;
+    Agent.State = FAgentState::Ready;
   }
   
-  return Ghost;
+  return Agent;
 }
 
 // Single test implementation
@@ -204,21 +205,27 @@ FGhostTestResult GhostOps::RunTest(const FGhost &Ghost, const FString &Scenario)
     return Result;
   }
   
+  // Create agent from configuration
+  FAgent Agent = AgentFactory::Create(Ghost.Config);
+  
   // Run the scenario test
-  Result = Internal::RunScenarioTest(Ghost.Config.Agent, Scenario);
+  Result = Internal::RunScenarioTest(Agent, Scenario);
   
   return Result;
 }
 
 // All tests implementation
 FGhostTestReport GhostOps::RunAllTests(const FGhost &Ghost) {
+  // Create agent from configuration
+  FAgent Agent = AgentFactory::Create(Ghost.Config);
+  
+  // Initialize report
   FGhostTestReport Report;
   Report.Config = Ghost.Config;
-  
-  if (!Ghost.bInitialized) {
-    Report.Summary = TEXT("Ghost not initialized");
-    return Report;
-  }
+  Report.TotalTests = Ghost.Config.Scenarios.Num();
+  Report.PassedTests = 0;
+  Report.FailedTests = 0;
+  Report.SuccessRate = 0.0f;
   
   // Run each scenario
   for (const FString &Scenario : Ghost.Config.Scenarios) {

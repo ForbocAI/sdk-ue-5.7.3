@@ -15,7 +15,7 @@
 
 namespace {
 
-namespace Internal {
+namespace SQLiteVSSInternal {
 
 // SQLite-vss integration functions
 namespace SQLiteVSS {
@@ -158,6 +158,10 @@ FString GetMemoryStatistics(const FMemoryStore &Store) {
   Statistics += FString::Printf(TEXT("  Database: %s\n"), Store.bInitialized ? TEXT("Connected") : TEXT("Disconnected"));
   Statistics += FString::Printf(TEXT("  Max Memories: %d\n"), Store.Config.MaxMemories);
   Statistics += FString::Printf(TEXT("  Vector Dimension: %d\n"), Store.Config.VectorDimension);
+  Statistics += FString::Printf(TEXT("  Use GPU: %s\n"), Store.Config.UseGPU ? TEXT("Yes") : TEXT("No"));
+  Statistics += FString::Printf(TEXT("  Max Recall Results: %d\n"), Store.Config.MaxRecallResults);
+  
+  return Statistics;
   
   return Statistics;
 }
@@ -183,24 +187,24 @@ FValidationResult MemoryOps::Initialize(FMemoryStore &Store) {
   }
   
   // Validate configuration
-  const FValidationResult ConfigValidation = Internal::ValidateConfig(Store.Config);
+  const FValidationResult ConfigValidation = SQLiteVSSInternal::ValidateConfig(Store.Config);
   if (!ConfigValidation.bValid) {
     return ConfigValidation;
   }
   
   // Get database path
-  const FString DatabasePath = Internal::GetDatabasePath(Store.Config);
+  const FString DatabasePath = SQLiteVSSInternal::GetDatabasePath(Store.Config);
   
   // Open database connection
-  Store.DatabaseHandle = Internal::SQLiteVSS::OpenDatabase(DatabasePath);
+  Store.DatabaseHandle = SQLiteVSSInternal::SQLiteVSS::OpenDatabase(DatabasePath);
   if (Store.DatabaseHandle == nullptr) {
     return TypeFactory::Invalid(FString::Printf(TEXT("Failed to open database: %s"), *DatabasePath));
   }
   
   // Create tables
-  const FValidationResult TableValidation = Internal::SQLiteVSS::CreateTables(Store.DatabaseHandle);
+  const FValidationResult TableValidation = SQLiteVSSInternal::SQLiteVSS::CreateTables(Store.DatabaseHandle);
   if (!TableValidation.bValid) {
-    Internal::SQLiteVSS::CloseDatabase(Store.DatabaseHandle);
+    SQLiteVSSInternal::SQLiteVSS::CloseDatabase(Store.DatabaseHandle);
     Store.DatabaseHandle = nullptr;
     return TableValidation;
   }
@@ -233,7 +237,7 @@ FMemoryStore MemoryOps::Store(const FMemoryStore &Store,
   const TArray<float> Embedding = MemoryOps::GenerateEmbedding(Store, Text);
   
   // Insert into database
-  const FValidationResult InsertValidation = Internal::SQLiteVSS::InsertMemory(Store.DatabaseHandle, Item);
+  const FValidationResult InsertValidation = SQLiteVSSInternal::SQLiteVSS::InsertMemory(Store.DatabaseHandle, Item);
   if (!InsertValidation.bValid) {
     // Return original store if insertion fails
     return Store;
@@ -255,7 +259,7 @@ FMemoryStore MemoryOps::Add(const FMemoryStore &Store, const FMemoryItem &Item) 
   }
   
   // Insert into database
-  const FValidationResult InsertValidation = Internal::SQLiteVSS::InsertMemory(Store.DatabaseHandle, Item);
+  const FValidationResult InsertValidation = SQLiteVSSInternal::SQLiteVSS::InsertMemory(Store.DatabaseHandle, Item);
   if (!InsertValidation.bValid) {
     // Return original store if insertion fails
     return Store;
@@ -308,7 +312,7 @@ FString MemoryOps::GetStatistics(const FMemoryStore &Store) {
 // Cleanup implementation
 void MemoryOps::Cleanup(FMemoryStore &Store) {
   if (Store.bInitialized && Store.DatabaseHandle != nullptr) {
-    Internal::SQLiteVSS::CloseDatabase(Store.DatabaseHandle);
+    SQLiteVSSInternal::SQLiteVSS::CloseDatabase(Store.DatabaseHandle);
     Store.DatabaseHandle = nullptr;
     Store.bInitialized = false;
   }

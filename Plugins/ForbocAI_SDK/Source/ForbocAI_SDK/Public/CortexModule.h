@@ -2,8 +2,8 @@
 
 #include "Core/functional_core.hpp"
 #include "CoreMinimal.h"
-#include "CortexModule.generated.h"
 #include "ForbocAI_SDK_Types.h"
+#include "CortexModule.generated.h"
 
 // ==========================================================
 // Cortex Module — Local SLM Inference (UE SDK)

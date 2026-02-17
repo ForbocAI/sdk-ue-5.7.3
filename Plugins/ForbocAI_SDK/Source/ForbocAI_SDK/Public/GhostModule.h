@@ -28,6 +28,8 @@ struct FGhostConfig {
   const TMap<FString, FString> ExpectedResponses;
   /** Whether to run in verbose mode. */
   const bool bVerbose;
+  /** API URL for the agent. */
+  const FString ApiUrl;
 
   FGhostConfig() : MaxIterations(100), bVerbose(false) {}
 };
