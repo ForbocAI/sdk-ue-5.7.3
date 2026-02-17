@@ -25,6 +25,8 @@ Autonomous AI for Unreal Engine 5.7.
 
 The **ForbocAI SDK for Unreal Engine 5.7** drives hyper-realistic NPC behavior through a neuro-symbolic AI architecture, written in strict **Functional C++11**.
 
+> **⚠️ Status**: Currently running in **Simulated Mode** (Mock Inference). Native Embedded Inference (`llama.cpp`) and Vector DB (`sqlite-vss`) are in development for upcoming releases.
+
 ### Modules
 
 | Module | Purpose |
@@ -77,8 +79,13 @@ Config.ApiUrl = TEXT("https://api.forboc.ai");
 const FAgent Merchant = AgentFactory::Create(Config);
 
 // 2. Process input via free function
-const FAgentResponse Response = AgentOps::Process(
-    Merchant, TEXT("What wares do you have?"), {});
+// 2. Process input via async pipeline
+AgentOps::Process(
+    Merchant, TEXT("What wares do you have?"), {},
+    [](FAgentResponse Response) {
+        // Handle response asynchronously
+        UE_LOG(LogTemp, Log, TEXT("Response: %s"), *Response.Dialogue);
+    });
 
 // 3. Functional update — returns a NEW agent (original unchanged)
 const FAgentState NewState = TypeFactory::AgentState(TEXT("Suspicious"));
