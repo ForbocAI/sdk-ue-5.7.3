@@ -20,74 +20,92 @@
 
 // Functional Core Type Aliases for Bridge operations
 namespace BridgeTypes {
-    using func::Maybe;
-    using func::Either;
-    using func::Pipeline;
-    using func::Curried;
-    using func::Lazy;
-    using func::ValidationPipeline;
-    using func::ConfigBuilder;
-    using func::TestResult;
-    using func::AsyncResult;
-    
-    // Type aliases for Bridge operations
-    using ValidationResult = Either<FString, FValidationResult>;
-    using ValidationContext = Maybe<FBridgeValidationContext>;
-    using RuleRegistrationResult = Either<FString, bool>;
-    using BridgeProcessResult = Either<FString, bool>;
-}
+using func::AsyncResult;
+using func::ConfigBuilder;
+using func::Curried;
+using func::Either;
+using func::Lazy;
+using func::Maybe;
+using func::Pipeline;
+using func::TestResult;
+using func::ValidationPipeline;
+
+using func::just;
+using func::make_left;
+using func::make_right;
+using func::nothing;
+
+// Type aliases for Bridge operations
+using ValidationResult = Either<FString, FValidationResult>;
+using ValidationContext = Maybe<FBridgeValidationContext>;
+using RuleRegistrationResult = Either<FString, bool>;
+using BridgeProcessResult = Either<FString, bool>;
+} // namespace BridgeTypes
 
 // Functional Core Helper Functions for Bridge operations
 namespace BridgeHelpers {
-    // Helper to create a lazy HTTP request
-    inline BridgeTypes::Lazy<IHttpRequest*> createLazyHttpRequest(const FString& url) {
-        return func::lazy([url]() -> IHttpRequest* {
-            FHttpModule* HttpModule = &FHttpModule::Get();
-            IHttpRequest* Request = HttpModule->CreateRequest();
-            Request->SetURL(url);
-            return Request;
-        });
-    }
-    
-    // Helper to create a validation pipeline for bridge operations
-    inline BridgeTypes::ValidationPipeline<FAgentAction> bridgeValidationPipeline() {
-        return func::validationPipeline<FAgentAction>()
-            .add([](const FAgentAction& action) -> BridgeTypes::Either<FString, FAgentAction> {
-                if (action.Type.IsEmpty()) {
-                    return BridgeTypes::make_left(FString(TEXT("Action type cannot be empty")));
-                }
-                return BridgeTypes::make_right(action);
-            })
-            .add([](const FAgentAction& action) -> BridgeTypes::Either<FString, FAgentAction> {
-                if (action.Target.IsEmpty()) {
-                    return BridgeTypes::make_left(FString(TEXT("Action target cannot be empty")));
-                }
-                return BridgeTypes::make_right(action);
-            });
-    }
-    
-    // Helper to create a pipeline for bridge processing
-    inline BridgeTypes::Pipeline<FAgentAction> bridgeProcessingPipeline(const FAgentAction& action) {
-        return func::pipe(action);
-    }
-    
-    // Helper to create a curried bridge validation function
-    inline BridgeTypes::Curried<2, std::function<BridgeTypes::ValidationResult(FAgentAction, FBridgeValidationContext)>> curriedBridgeValidation() {
-        return func::curry<2>([](FAgentAction action, FBridgeValidationContext context) -> BridgeTypes::ValidationResult {
-            try {
-                FValidationResult result = BridgeOps::Validate(action, TArray<FValidationRule>(), context);
-                return BridgeTypes::make_right(FString(), result);
-            } catch (const std::exception& e) {
-                return BridgeTypes::make_left(FString(e.what()));
-            }
-        });
-    }
-    
-    // Helper to create a pipeline for rule registration
-    inline BridgeTypes::Pipeline<FValidationRule> ruleRegistrationPipeline(const FValidationRule& rule) {
-        return func::pipe(rule);
-    }
+// Helper to create a lazy HTTP request
+inline BridgeTypes::Lazy<IHttpRequest *>
+createLazyHttpRequest(const FString &url) {
+  return func::lazy([url]() -> IHttpRequest * {
+    FHttpModule *HttpModule = &FHttpModule::Get();
+    IHttpRequest *Request = HttpModule->CreateRequest();
+    Request->SetURL(url);
+    return Request;
+  });
 }
+
+// Helper to create a validation pipeline for bridge operations
+inline BridgeTypes::ValidationPipeline<FAgentAction>
+bridgeValidationPipeline() {
+  return func::validationPipeline<FAgentAction>()
+      .add([](const FAgentAction &action)
+               -> BridgeTypes::Either<FString, FAgentAction> {
+        if (action.Type.IsEmpty()) {
+          return BridgeTypes::make_left(
+              FString(TEXT("Action type cannot be empty")));
+        }
+        return BridgeTypes::make_right(action);
+      })
+      .add([](const FAgentAction &action)
+               -> BridgeTypes::Either<FString, FAgentAction> {
+        if (action.Target.IsEmpty()) {
+          return BridgeTypes::make_left(
+              FString(TEXT("Action target cannot be empty")));
+        }
+        return BridgeTypes::make_right(action);
+      });
+}
+
+// Helper to create a pipeline for bridge processing
+inline BridgeTypes::Pipeline<FAgentAction>
+bridgeProcessingPipeline(const FAgentAction &action) {
+  return func::pipe(action);
+}
+
+// Helper to create a curried bridge validation function
+inline BridgeTypes::Curried<2, std::function<BridgeTypes::ValidationResult(
+                                   FAgentAction, FBridgeValidationContext)>>
+curriedBridgeValidation() {
+  return func::curry<2>(
+      [](FAgentAction action,
+         FBridgeValidationContext context) -> BridgeTypes::ValidationResult {
+        try {
+          FValidationResult result =
+              BridgeOps::Validate(action, TArray<FValidationRule>(), context);
+          return BridgeTypes::make_right(FString(), result);
+        } catch (const std::exception &e) {
+          return BridgeTypes::make_left(FString(e.what()));
+        }
+      });
+}
+
+// Helper to create a pipeline for rule registration
+inline BridgeTypes::Pipeline<FValidationRule>
+ruleRegistrationPipeline(const FValidationRule &rule) {
+  return func::pipe(rule);
+}
+} // namespace BridgeHelpers
 
 // ==========================================================
 // Bridge Module — Strict FP (Enhanced)
@@ -197,11 +215,12 @@ Validate(const FAgentAction &Action, const TArray<FValidationRule> &Rules,
 
 /**
  * Registers a rule with the API.
- * Fire-and-forget async operation.
+ * Fire-and-forget async operation wrapped in AsyncResult.
  * @param Rule The rule to register.
  * @param ApiUrl The API endpoint.
+ * @return An AsyncResult indicating success/failure.
  */
-FORBOCAI_SDK_API void RegisterRule(const FValidationRule &Rule,
-                                   const FString &ApiUrl);
+FORBOCAI_SDK_API BridgeTypes::AsyncResult<void>
+RegisterRule(const FValidationRule &Rule, const FString &ApiUrl);
 
 } // namespace BridgeOps

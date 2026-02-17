@@ -46,12 +46,12 @@
 
 #include <functional>
 #include <memory>
+#include <string>
 #include <tuple>
 #include <type_traits>
+#include <unordered_map>
 #include <utility>
 #include <vector>
-#include <unordered_map>
-#include <string>
 
 namespace func {
 
@@ -71,8 +71,7 @@ template <size_t... Is> struct seq {};
 template <size_t N, size_t... Is>
 struct gen_seq : gen_seq<N - 1, N - 1, Is...> {};
 
-template <size_t... Is>
-struct gen_seq<0, Is...> : seq<Is...> {};
+template <size_t... Is> struct gen_seq<0, Is...> : seq<Is...> {};
 
 // ==========================================
 // 2. HELPER: Tuple Application (C++17 backport)
@@ -87,10 +86,8 @@ struct gen_seq<0, Is...> : seq<Is...> {};
 
 template <typename F, typename Tuple, size_t... Is>
 auto apply_impl(F &&f, Tuple &&t, seq<Is...>)
-    -> decltype(std::forward<F>(f)(
-           std::get<Is>(std::forward<Tuple>(t))...)) {
-  return std::forward<F>(f)(
-      std::get<Is>(std::forward<Tuple>(t))...);
+    -> decltype(std::forward<F>(f)(std::get<Is>(std::forward<Tuple>(t))...)) {
+  return std::forward<F>(f)(std::get<Is>(std::forward<Tuple>(t))...);
 }
 
 template <typename F, typename Tuple>
@@ -98,10 +95,9 @@ auto apply(F &&f, Tuple &&t) -> decltype(apply_impl(
     std::forward<F>(f), std::forward<Tuple>(t),
     gen_seq<std::tuple_size<
         typename std::remove_reference<Tuple>::type>::value>())) {
-  return apply_impl(
-      std::forward<F>(f), std::forward<Tuple>(t),
-      gen_seq<std::tuple_size<
-          typename std::remove_reference<Tuple>::type>::value>());
+  return apply_impl(std::forward<F>(f), std::forward<Tuple>(t),
+                    gen_seq<std::tuple_size<
+                        typename std::remove_reference<Tuple>::type>::value>());
 }
 
 // ==========================================
@@ -123,15 +119,11 @@ template <typename T> struct Maybe {
 
 // --- Factory Functions ---
 
-template <typename T>
-Maybe<T> just(T v) {
+template <typename T> Maybe<T> just(T v) {
   return Maybe<T>{true, std::move(v)};
 }
 
-template <typename T>
-Maybe<T> nothing() {
-  return Maybe<T>{false, T{}};
-}
+template <typename T> Maybe<T> nothing() { return Maybe<T>{false, T{}}; }
 
 // ==========================================
 // 4. DATA: Either (Result/Error Monad)
@@ -154,14 +146,20 @@ template <typename E, typename T> struct Either {
 
 // --- Factory Functions ---
 
-template <typename E, typename T>
-Either<E, T> make_left(E e) {
+template <typename E, typename T> Either<E, T> make_left(E e) {
   return Either<E, T>{true, std::move(e), T{}};
 }
 
-template <typename E, typename T>
-Either<E, T> make_right(T v) {
+template <typename E, typename T> Either<E, T> make_left(E e, T dummy) {
+  return Either<E, T>{true, std::move(e), std::move(dummy)};
+}
+
+template <typename E, typename T> Either<E, T> make_right(T v) {
   return Either<E, T>{false, E{}, std::move(v)};
+}
+
+template <typename E, typename T> Either<E, T> make_right(E dummy, T v) {
+  return Either<E, T>{false, std::move(dummy), std::move(v)};
 }
 
 // ==========================================
@@ -191,10 +189,9 @@ struct Curried {
   auto operator()(NewArgs &&...new_args) const -> typename std::enable_if<
       (std::tuple_size<CapturedArgs>::value + sizeof...(NewArgs) < Arity),
       Curried<Arity, Func,
-              decltype(std::tuple_cat(
-                  args,
-                  std::make_tuple(
-                      std::forward<NewArgs>(new_args)...)))>>::type {
+              decltype(std::tuple_cat(args,
+                                      std::make_tuple(std::forward<NewArgs>(
+                                          new_args)...)))>>::type {
     auto merged = std::tuple_cat(
         args, std::make_tuple(std::forward<NewArgs>(new_args)...));
     return Curried<Arity, Func, decltype(merged)>{func, merged};
@@ -204,23 +201,17 @@ struct Curried {
   template <typename... NewArgs>
   auto operator()(NewArgs &&...new_args) const -> typename std::enable_if<
       (std::tuple_size<CapturedArgs>::value + sizeof...(NewArgs) >= Arity),
-      decltype(apply(
-          func,
-          std::tuple_cat(
-              args,
-              std::make_tuple(
-                  std::forward<NewArgs>(new_args)...))))>::type {
+      decltype(apply(func,
+                     std::tuple_cat(args, std::make_tuple(std::forward<NewArgs>(
+                                              new_args)...))))>::type {
     return apply(
-        func,
-        std::tuple_cat(
-            args,
-            std::make_tuple(std::forward<NewArgs>(new_args)...)));
+        func, std::tuple_cat(
+                  args, std::make_tuple(std::forward<NewArgs>(new_args)...)));
   }
 };
 
 // Factory function: curry<Arity>(f)
-template <size_t Arity, typename Func>
-Curried<Arity, Func> curry(Func f) {
+template <size_t Arity, typename Func> Curried<Arity, Func> curry(Func f) {
   return Curried<Arity, Func>{f, std::tuple<>{}};
 }
 
@@ -243,14 +234,12 @@ template <typename T> struct Lazy {
 };
 
 // Factory function: lazy(thunk)
-template <typename F>
-auto lazy(F &&f) -> Lazy<decltype(f())> {
+template <typename F> auto lazy(F &&f) -> Lazy<decltype(f())> {
   return Lazy<decltype(f())>{std::forward<F>(f), nullptr};
 }
 
 // Free function: eval(lazy_val) — forces evaluation, caches result
-template <typename T>
-const T &eval(const Lazy<T> &lz) {
+template <typename T> const T &eval(const Lazy<T> &lz) {
   if (!lz.cached) {
     lz.cached = std::make_shared<T>(lz.thunk());
   }
@@ -279,8 +268,7 @@ template <typename T> struct Pipeline {
 };
 
 // Factory function: pipe(value)
-template <typename T>
-Pipeline<T> pipe(T v) {
+template <typename T> Pipeline<T> pipe(T v) {
   return Pipeline<T>{std::move(v)};
 }
 
@@ -317,8 +305,7 @@ template <typename F, typename G> struct Composed {
 };
 
 // Factory function: compose(f, g) -> h  where h(x) = f(g(x))
-template <typename F, typename G>
-Composed<F, G> compose(F f, G g) {
+template <typename F, typename G> Composed<F, G> compose(F f, G g) {
   return Composed<F, G>{f, g};
 }
 
@@ -345,8 +332,7 @@ auto fmap(const Maybe<T> &m, Func f) -> Maybe<decltype(f(m.value))> {
 
 // fmap for Either: Either<E,T> -> (T -> U) -> Either<E,U>
 template <typename E, typename T, typename Func>
-auto fmap(const Either<E, T> &e, Func f)
-    -> Either<E, decltype(f(e.right))> {
+auto fmap(const Either<E, T> &e, Func f) -> Either<E, decltype(f(e.right))> {
   typedef decltype(f(e.right)) U;
   if (e.isLeft)
     return Either<E, U>{true, e.left, U{}};
@@ -400,8 +386,7 @@ auto ebind(const Either<E, T> &e, Func f) -> decltype(f(e.right)) {
 // ==========================================
 
 // or_else: Maybe<T> -> T -> T
-template <typename T>
-T or_else(const Maybe<T> &m, const T &def) {
+template <typename T> T or_else(const Maybe<T> &m, const T &def) {
   return m.hasValue ? m.value : def;
 }
 
@@ -465,8 +450,7 @@ public:
 };
 
 // Factory function for ValidationPipeline
-template <typename T>
-ValidationPipeline<T> validationPipeline() {
+template <typename T> ValidationPipeline<T> validationPipeline() {
   return ValidationPipeline<T>();
 }
 
@@ -490,9 +474,8 @@ public:
   ConfigBuilder() = default;
 
   // Add a setter function
-  template <typename T>
-  ConfigBuilder &set(const std::string &key, T value) {
-    setters[key] = [value](Config &config) mutable {
+  template <typename T> ConfigBuilder &set(const std::string &key, T value) {
+    setters[key] = [key, value](Config &config) mutable {
       // Use reflection or manual mapping to set the value
       // For simplicity, we'll assume Config has a set method
       config.set(key, std::move(value));
@@ -511,8 +494,7 @@ public:
 };
 
 // Factory function for ConfigBuilder
-template <typename Config>
-ConfigBuilder<Config> configBuilder() {
+template <typename Config> ConfigBuilder<Config> configBuilder() {
   return ConfigBuilder<Config>();
 }
 
@@ -524,22 +506,22 @@ ConfigBuilder<Config> configBuilder() {
 // optional detailed information.
 //
 // Usage:
-//   auto result = TestResult<bool>::success(true);
-//   auto failure = TestResult<void>::failure("Test failed");
+//   auto result = TestResult<bool>::Success(true);
+//   auto failure = TestResult<void>::Failure("Test failed");
 // ==========================================
 
 template <typename T> struct TestResult {
-  bool success;
+  bool bSuccess;
   T value;
   std::string message;
   std::unordered_map<std::string, std::string> details;
 
   // Factory functions
-  static TestResult<T> success(T value, std::string message = "") {
+  static TestResult<T> Success(T value, std::string message = "") {
     return TestResult<T>{true, std::move(value), std::move(message), {}};
   }
 
-  static TestResult<T> failure(std::string message) {
+  static TestResult<T> Failure(std::string message) {
     return TestResult<T>{false, T{}, std::move(message), {}};
   }
 
@@ -550,13 +532,11 @@ template <typename T> struct TestResult {
   }
 
   // Check if successful
-  bool isSuccessful() const {
-    return success;
-  }
+  bool isSuccessful() const { return bSuccess; }
 
   // Get value or throw if failure
   T getValue() const {
-    if (!success) {
+    if (!bSuccess) {
       throw std::runtime_error("TestResult: Cannot get value from failure");
     }
     return value;
@@ -566,15 +546,15 @@ template <typename T> struct TestResult {
 // Specialization for void
 
 template <> struct TestResult<void> {
-  bool success;
+  bool bSuccess;
   std::string message;
   std::unordered_map<std::string, std::string> details;
 
-  static TestResult<void> success(std::string message = "") {
+  static TestResult<void> Success(std::string message = "") {
     return TestResult<void>{true, std::move(message), {}};
   }
 
-  static TestResult<void> failure(std::string message) {
+  static TestResult<void> Failure(std::string message) {
     return TestResult<void>{false, std::move(message), {}};
   }
 
@@ -583,9 +563,7 @@ template <> struct TestResult<void> {
     return *this;
   }
 
-  bool isSuccessful() const {
-    return success;
-  }
+  bool isSuccessful() const { return bSuccess; }
 };
 
 // ==========================================
@@ -594,6 +572,7 @@ template <> struct TestResult<void> {
 // A type for handling async operations that
 // can succeed or fail, with support for
 // chaining and error handling.
+// Safe for async callbacks via shared state.
 //
 // Usage:
 //   auto result = AsyncResult<int>::create([](auto resolve, auto reject) {
@@ -608,86 +587,109 @@ template <> struct TestResult<void> {
 // ==========================================
 
 template <typename T> class AsyncResult {
-  std::function<void(std::function<void(T)>, std::function<void(std::string)>)> executor;
-  std::vector<std::function<void(T)>> successHandlers;
-  std::vector<std::function<void(std::string)>> errorHandlers;
+  struct State {
+    std::function<void(std::function<void(T)>,
+                       std::function<void(std::string)>)>
+        executor;
+    std::vector<std::function<void(T)>> successHandlers;
+    std::vector<std::function<void(std::string)>> errorHandlers;
+  };
+  std::shared_ptr<State> state;
 
 public:
-  // Create an async result from an executor
-  static AsyncResult<T> create(std::function<void(std::function<void(T)>, std::function<void(std::string)>)> executor) {
-    return AsyncResult<T>{std::move(executor)};
+  static AsyncResult<T>
+  create(std::function<void(std::function<void(T)>,
+                            std::function<void(std::string)>)>
+             executor) {
+    auto res = AsyncResult<T>();
+    res.state->executor = std::move(executor);
+    return res;
   }
 
-  AsyncResult(std::function<void(std::function<void(T)>, std::function<void(std::string)>)> executor)
-      : executor(std::move(executor)) {}
+  AsyncResult() : state(std::make_shared<State>()) {}
 
   // Add success handler
   AsyncResult<T> &then(std::function<void(T)> handler) {
-    successHandlers.push_back(std::move(handler));
+    state->successHandlers.push_back(std::move(handler));
     return *this;
   }
 
   // Add error handler
   AsyncResult<T> &catch_(std::function<void(std::string)> handler) {
-    errorHandlers.push_back(std::move(handler));
+    state->errorHandlers.push_back(std::move(handler));
     return *this;
   }
 
   // Execute the async operation
-  void execute() {
-    executor(
-      [this](T value) {
-        for (const auto &handler : successHandlers) {
-          handler(value);
-        }
-      },
-      [this](std::string error) {
-        for (const auto &handler : errorHandlers) {
-          handler(error);
-        }
-      }
-    );
+  void execute() const {
+    if (!state || !state->executor)
+      return;
+
+    // Capture state in lambda to keep it alive
+    auto capturedState = state;
+    state->executor(
+        [capturedState](T value) {
+          for (const auto &handler : capturedState->successHandlers) {
+            handler(value);
+          }
+        },
+        [capturedState](std::string error) {
+          for (const auto &handler : capturedState->errorHandlers) {
+            handler(error);
+          }
+        });
   }
 };
 
 // Specialization for void
 
 template <> class AsyncResult<void> {
-  std::function<void(std::function<void()>, std::function<void(std::string)>)> executor;
-  std::vector<std::function<void()>> successHandlers;
-  std::vector<std::function<void(std::string)>> errorHandlers;
+  struct State {
+    std::function<void(std::function<void()>, std::function<void(std::string)>)>
+        executor;
+    std::vector<std::function<void()>> successHandlers;
+    std::vector<std::function<void(std::string)>> errorHandlers;
+  };
+  std::shared_ptr<State> state;
 
 public:
-  static AsyncResult<void> create(std::function<void(std::function<void()>, std::function<void(std::string)>)> executor) {
-    return AsyncResult<void>{std::move(executor)};
+  static AsyncResult<void>
+  create(std::function<void(std::function<void()>,
+                            std::function<void(std::string)>)>
+             executor) {
+    auto res = AsyncResult<void>();
+    res.state->executor = std::move(executor);
+    return res;
   }
 
-  AsyncResult(std::function<void(std::function<void()>, std::function<void(std::string)>)> executor)
-      : executor(std::move(executor)) {}
+  AsyncResult() : state(std::make_shared<State>()) {}
 
   AsyncResult<void> &then(std::function<void()> handler) {
-    successHandlers.push_back(std::move(handler));
+    state->successHandlers.push_back(std::move(handler));
     return *this;
   }
 
   AsyncResult<void> &catch_(std::function<void(std::string)> handler) {
-    errorHandlers.push_back(std::move(handler));
+    state->errorHandlers.push_back(std::move(handler));
     return *this;
   }
 
-  void execute() {
-    executor(
-      [this]() {
-        for (const auto &handler : successHandlers) {
-          handler();
-        }
-      },
-      [this](std::string error) {
-        for (const auto &handler : errorHandlers) {
-          handler(error);
-        }
-      }
-    );
+  void execute() const {
+    if (!state || !state->executor)
+      return;
+
+    auto capturedState = state;
+    state->executor(
+        [capturedState]() {
+          for (const auto &handler : capturedState->successHandlers) {
+            handler();
+          }
+        },
+        [capturedState](std::string error) {
+          for (const auto &handler : capturedState->errorHandlers) {
+            handler(error);
+          }
+        });
   }
 };
 

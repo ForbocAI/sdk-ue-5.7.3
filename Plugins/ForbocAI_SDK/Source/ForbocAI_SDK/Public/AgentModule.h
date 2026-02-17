@@ -1,11 +1,11 @@
 #pragma once
 
+#include "Containers/Map.h"
+#include "Containers/UnrealString.h"
 #include "Core/functional_core.hpp" // C++11 Functional Core Library
 #include "CoreMinimal.h"
 #include "ForbocAI_SDK_Types.h"
 #include "Templates/TFunction.h"
-#include "Containers/UnrealString.h"
-#include "Containers/Map.h"
 
 // ==========================================================
 // Agent Module — Strict FP with Enhanced Functional Patterns
@@ -20,64 +20,75 @@
 
 // Functional Core Type Aliases for Agent operations
 namespace AgentTypes {
-    using func::Maybe;
-    using func::Either;
-    using func::Pipeline;
-    using func::Curried;
-    using func::Lazy;
-    using func::ValidationPipeline;
-    using func::ConfigBuilder;
-    using func::TestResult;
-    using func::AsyncResult;
-    
-    // Type aliases for Agent operations
-    using AgentCreationResult = Either<FString, FAgent>;
-    using AgentValidationResult = Either<FString, FAgentState>;
-    using AgentProcessResult = Either<FString, FAgentResponse>;
-    using AgentExportResult = Either<FString, FSoul>;
-}
+using func::AsyncResult;
+using func::ConfigBuilder;
+using func::Curried;
+using func::Either;
+using func::Lazy;
+using func::Maybe;
+using func::Pipeline;
+using func::TestResult;
+using func::ValidationPipeline;
+
+using func::just;
+using func::make_left;
+using func::make_right;
+using func::nothing;
+
+// Type aliases for Agent operations
+using AgentCreationResult = Either<FString, FAgent>;
+using AgentValidationResult = Either<FString, FAgentState>;
+using AgentProcessResult = Either<FString, FAgentResponse>;
+using AgentExportResult = Either<FString, FSoul>;
+} // namespace AgentTypes
 
 // Functional Core Helper Functions for Agent operations
 namespace AgentHelpers {
-    // Helper to create a lazy agent
-    inline AgentTypes::Lazy<FAgent> createLazyAgent(const FAgentConfig& config) {
-        return func::lazy([config]() -> FAgent {
-            return AgentFactory::Create(config);
-        });
-    }
-    
-    // Helper to create a validation pipeline for agent state
-    inline AgentTypes::ValidationPipeline<FAgentState> agentStateValidationPipeline() {
-        return func::validationPipeline<FAgentState>()
-            .add([](const FAgentState& state) -> AgentTypes::Either<FString, FAgentState> {
-                if (state.JsonData.IsEmpty() || state.JsonData == TEXT("{}")) {
-                    return AgentTypes::make_left(FString(TEXT("Empty agent state")));
-                }
-                return AgentTypes::make_right(state);
-            })
-            .add([](const FAgentState& state) -> AgentTypes::Either<FString, FAgentState> {
-                // Add more validation rules here
-                return AgentTypes::make_right(state);
-            });
-    }
-    
-    // Helper to create a pipeline for agent processing
-    inline AgentTypes::Pipeline<FAgent> agentProcessingPipeline(const FAgent& agent) {
-        return func::pipe(agent);
-    }
-    
-    // Helper to create a curried agent creation function
-    inline AgentTypes::Curried<1, std::function<AgentTypes::AgentCreationResult(FAgentConfig)>> curriedAgentCreation() {
-        return func::curry<1>([](FAgentConfig config) -> AgentTypes::AgentCreationResult {
-            try {
-                FAgent agent = AgentFactory::Create(config);
-                return AgentTypes::make_right(FString(), agent);
-            } catch (const std::exception& e) {
-                return AgentTypes::make_left(FString(e.what()));
-            }
-        });
-    }
+// Helper to create a lazy agent
+inline AgentTypes::Lazy<FAgent> createLazyAgent(const FAgentConfig &config) {
+  return func::lazy(
+      [config]() -> FAgent { return AgentFactory::Create(config); });
 }
+
+// Helper to create a validation pipeline for agent state
+inline AgentTypes::ValidationPipeline<FAgentState>
+agentStateValidationPipeline() {
+  return func::validationPipeline<FAgentState>()
+      .add([](const FAgentState &state)
+               -> AgentTypes::Either<FString, FAgentState> {
+        if (state.JsonData.IsEmpty() || state.JsonData == TEXT("{}")) {
+          return AgentTypes::make_left(FString(TEXT("Empty agent state")));
+        }
+        return AgentTypes::make_right(state);
+      })
+      .add([](const FAgentState &state)
+               -> AgentTypes::Either<FString, FAgentState> {
+        // Add more validation rules here
+        return AgentTypes::make_right(state);
+      });
+}
+
+// Helper to create a pipeline for agent processing
+inline AgentTypes::Pipeline<FAgent>
+agentProcessingPipeline(const FAgent &agent) {
+  return func::pipe(agent);
+}
+
+// Helper to create a curried agent creation function
+inline AgentTypes::Curried<
+    1, std::function<AgentTypes::AgentCreationResult(FAgentConfig)>>
+curriedAgentCreation() {
+  return func::curry<1>(
+      [](FAgentConfig config) -> AgentTypes::AgentCreationResult {
+        try {
+          FAgent agent = AgentFactory::Create(config);
+          return AgentTypes::make_right(FString(), agent);
+        } catch (const std::exception &e) {
+          return AgentTypes::make_left(FString(e.what()));
+        }
+      });
+}
+} // namespace AgentHelpers
 
 // ==========================================================
 // Agent Module — Strict FP (Enhanced)
@@ -174,11 +185,11 @@ FORBOCAI_SDK_API FAgentState CalculateNewState(const FAgentState &Current,
  * @param Agent The agent to process the input.
  * @param Input The input string from the user/world.
  * @param Context Additional context for the processing.
- * @return The response including dialogue and action.
+ * @return An AsyncResult containing the response.
  */
-FORBOCAI_SDK_API void Process(const FAgent &Agent, const FString &Input,
-                              const TMap<FString, FString> &Context,
-                              TFunction<void(FAgentResponse)> Callback);
+FORBOCAI_SDK_API AgentTypes::AsyncResult<FAgentResponse>
+Process(const FAgent &Agent, const FString &Input,
+        const TMap<FString, FString> &Context);
 
 /**
  * Pure: Exports Agent data to a Soul.

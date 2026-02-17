@@ -17,80 +17,32 @@
 
 // Functional Core Type Aliases for Memory operations
 namespace MemoryTypes {
-    using func::Maybe;
-    using func::Either;
-    using func::Pipeline;
-    using func::Curried;
-    using func::Lazy;
-    using func::ValidationPipeline;
-    using func::ConfigBuilder;
-    using func::TestResult;
-    using func::AsyncResult;
-    
-    // Type aliases for Memory operations
-    using MemoryStoreResult = Either<FString, FMemoryStore>;
-    using MemoryStoreCreationResult = Either<FString, FMemoryStore>;
-    using MemoryStoreInitializationResult = Either<FString, bool>;
-    using MemoryStoreAddResult = Either<FString, FMemoryStore>;
-    using MemoryStoreRecallResult = Either<FString, TArray<FMemoryItem>>;
-    using MemoryStoreEmbeddingResult = Either<FString, TArray<float>>;
-}
+using func::AsyncResult;
+using func::ConfigBuilder;
+using func::Curried;
+using func::Either;
+using func::Lazy;
+using func::Maybe;
+using func::Pipeline;
+using func::TestResult;
+using func::ValidationPipeline;
+
+using func::just;
+using func::make_left;
+using func::make_right;
+using func::nothing;
+
+// Type aliases for Memory operations
+using MemoryStoreResult = Either<FString, FMemoryStore>;
+using MemoryStoreCreationResult = Either<FString, FMemoryStore>;
+using MemoryStoreInitializationResult = Either<FString, bool>;
+using MemoryStoreAddResult = Either<FString, FMemoryStore>;
+using MemoryStoreRecallResult = Either<FString, TArray<FMemoryItem>>;
+using MemoryStoreEmbeddingResult = Either<FString, TArray<float>>;
+} // namespace MemoryTypes
 
 // Functional Core Helper Functions for Memory operations
-namespace MemoryHelpers {
-    // Helper to create a lazy memory store
-    inline MemoryTypes::Lazy<FMemoryStore> createLazyMemoryStore(const FMemoryConfig& config) {
-        return func::lazy([config]() -> FMemoryStore {
-            return MemoryFactory::CreateStore(config);
-        });
-    }
-    
-    // Helper to create a validation pipeline for memory configuration
-    inline MemoryTypes::ValidationPipeline<FMemoryConfig> memoryConfigValidationPipeline() {
-        return func::validationPipeline<FMemoryConfig>()
-            .add([](const FMemoryConfig& config) -> MemoryTypes::Either<FString, FMemoryConfig> {
-                if (config.DatabasePath.IsEmpty()) {
-                    return MemoryTypes::make_left(FString(TEXT("Database path cannot be empty")));
-                }
-                return MemoryTypes::make_right(config);
-            })
-            .add([](const FMemoryConfig& config) -> MemoryTypes::Either<FString, FMemoryConfig> {
-                if (config.MaxMemories < 1) {
-                    return MemoryTypes::make_left(FString(TEXT("Max memories must be at least 1")));
-                }
-                return MemoryTypes::make_right(config);
-            })
-            .add([](const FMemoryConfig& config) -> MemoryTypes::Either<FString, FMemoryConfig> {
-                if (config.VectorDimension != 384) {
-                    return MemoryTypes::make_left(FString(TEXT("Vector dimension must be 384")));
-                }
-                return MemoryTypes::make_right(config);
-            })
-            .add([](const FMemoryConfig& config) -> MemoryTypes::Either<FString, FMemoryConfig> {
-                if (config.MaxRecallResults < 1) {
-                    return MemoryTypes::make_left(FString(TEXT("Max recall results must be at least 1")));
-                }
-                return MemoryTypes::make_right(config);
-            });
-    }
-    
-    // Helper to create a pipeline for memory store creation
-    inline MemoryTypes::Pipeline<FMemoryStore> memoryStoreCreationPipeline(const FMemoryStore& store) {
-        return func::pipe(store);
-    }
-    
-    // Helper to create a curried memory store creation function
-    inline MemoryTypes::Curried<1, std::function<MemoryTypes::MemoryStoreCreationResult(FMemoryConfig)>> curriedMemoryStoreCreation() {
-        return func::curry<1>([](FMemoryConfig config) -> MemoryTypes::MemoryStoreCreationResult {
-            try {
-                FMemoryStore store = MemoryFactory::CreateStore(config);
-                return MemoryTypes::make_right(FString(), store);
-            } catch (const std::exception& e) {
-                return MemoryTypes::make_left(FString(e.what()));
-            }
-        });
-    }
-}
+// MemoryHelpers moved to end of file to ensure type visibility
 
 // ==========================================================
 // Memory Module — Full Embedding-Based Memory (UE SDK)
@@ -112,19 +64,19 @@ struct FMemoryConfig {
   /** The database file path. */
   UPROPERTY()
   FString DatabasePath;
-  
+
   /** Maximum number of memories to store. */
   UPROPERTY()
   int32 MaxMemories;
-  
+
   /** Vector dimension size. */
   UPROPERTY()
   int32 VectorDimension;
-  
+
   /** Whether to use GPU acceleration if available. */
   UPROPERTY()
   bool UseGPU;
-  
+
   /** Maximum results to return from recall. */
   UPROPERTY()
   int32 MaxRecallResults;
@@ -164,13 +116,7 @@ struct FMemoryStore {
  */
 namespace MemoryOps {
 
-/**
- * Factory: Creates a memory store.
- * Pure function: Config -> Store
- * @param Config The memory configuration.
- * @return A new memory store.
- */
-FORBOCAI_SDK_API FMemoryStore CreateStore(const FMemoryConfig &Config);
+// MemoryOps::CreateStore removed in favor of MemoryFactory::CreateStore
 
 /**
  * Initializes the memory store and database.
@@ -178,7 +124,8 @@ FORBOCAI_SDK_API FMemoryStore CreateStore(const FMemoryConfig &Config);
  * @param Store The memory store to initialize.
  * @return A validation result indicating success or failure.
  */
-FORBOCAI_SDK_API MemoryTypes::MemoryStoreInitializationResult Initialize(FMemoryStore &Store);
+FORBOCAI_SDK_API MemoryTypes::MemoryStoreInitializationResult
+Initialize(FMemoryStore &Store);
 
 /**
  * Stores a new memory.
@@ -189,9 +136,9 @@ FORBOCAI_SDK_API MemoryTypes::MemoryStoreInitializationResult Initialize(FMemory
  * @param Importance The importance score.
  * @return A new memory store with the memory added.
  */
-FORBOCAI_SDK_API MemoryTypes::MemoryStoreAddResult Store(const FMemoryStore &Store,
-                                                        const FString &Text, const FString &Type,
-                                                        float Importance);
+FORBOCAI_SDK_API MemoryTypes::MemoryStoreAddResult
+Store(const FMemoryStore &Store, const FString &Text, const FString &Type,
+      float Importance);
 
 /**
  * Stores a pre-built memory item.
@@ -200,8 +147,8 @@ FORBOCAI_SDK_API MemoryTypes::MemoryStoreAddResult Store(const FMemoryStore &Sto
  * @param Item The memory item to add.
  * @return A new memory store with the item added.
  */
-FORBOCAI_SDK_API MemoryTypes::MemoryStoreAddResult Add(const FMemoryStore &Store,
-                                                      const FMemoryItem &Item);
+FORBOCAI_SDK_API MemoryTypes::MemoryStoreAddResult
+Add(const FMemoryStore &Store, const FMemoryItem &Item);
 
 /**
  * Performs semantic recall using vector search.
@@ -221,8 +168,8 @@ Recall(const FMemoryStore &Store, const FString &Query, int32 Limit = -1);
  * @param Text The text to embed.
  * @return The vector embedding.
  */
-FORBOCAI_SDK_API MemoryTypes::MemoryStoreEmbeddingResult GenerateEmbedding(const FMemoryStore &Store,
-                                                                         const FString &Text);
+FORBOCAI_SDK_API MemoryTypes::MemoryStoreEmbeddingResult
+GenerateEmbedding(const FMemoryStore &Store, const FString &Text);
 
 /**
  * Gets the current memory statistics.
@@ -240,3 +187,84 @@ FORBOCAI_SDK_API FString GetStatistics(const FMemoryStore &Store);
 FORBOCAI_SDK_API void Cleanup(FMemoryStore &Store);
 
 } // namespace MemoryOps
+
+// Memory Factory
+namespace MemoryFactory {
+/**
+ * Factory: Creates a memory store.
+ * Pure function: Config -> Store
+ * @param Config The memory configuration.
+ * @return A new memory store.
+ */
+FORBOCAI_SDK_API FMemoryStore CreateStore(const FMemoryConfig &Config);
+} // namespace MemoryFactory
+
+// Memory Helpers (Functional)
+namespace MemoryHelpers {
+// Helper to create a lazy memory store
+inline MemoryTypes::Lazy<FMemoryStore>
+createLazyMemoryStore(const FMemoryConfig &config) {
+  return func::lazy([config]() -> FMemoryStore {
+    return MemoryFactory::CreateStore(config);
+  });
+}
+
+// Helper to create a validation pipeline for memory configuration
+inline MemoryTypes::ValidationPipeline<FMemoryConfig>
+memoryConfigValidationPipeline() {
+  return func::validationPipeline<FMemoryConfig>()
+      .add([](const FMemoryConfig &config)
+               -> MemoryTypes::Either<FString, FMemoryConfig> {
+        if (config.DatabasePath.IsEmpty()) {
+          return MemoryTypes::make_left(
+              FString(TEXT("Database path cannot be empty")));
+        }
+        return MemoryTypes::make_right(config);
+      })
+      .add([](const FMemoryConfig &config)
+               -> MemoryTypes::Either<FString, FMemoryConfig> {
+        if (config.MaxMemories < 1) {
+          return MemoryTypes::make_left(
+              FString(TEXT("Max memories must be at least 1")));
+        }
+        return MemoryTypes::make_right(config);
+      })
+      .add([](const FMemoryConfig &config)
+               -> MemoryTypes::Either<FString, FMemoryConfig> {
+        if (config.VectorDimension != 384) {
+          return MemoryTypes::make_left(
+              FString(TEXT("Vector dimension must be 384")));
+        }
+        return MemoryTypes::make_right(config);
+      })
+      .add([](const FMemoryConfig &config)
+               -> MemoryTypes::Either<FString, FMemoryConfig> {
+        if (config.MaxRecallResults < 1) {
+          return MemoryTypes::make_left(
+              FString(TEXT("Max recall results must be at least 1")));
+        }
+        return MemoryTypes::make_right(config);
+      });
+}
+
+// Helper to create a pipeline for memory store creation
+inline MemoryTypes::Pipeline<FMemoryStore>
+memoryStoreCreationPipeline(const FMemoryStore &store) {
+  return func::pipe(store);
+}
+
+// Helper to create a curried memory store creation function
+inline MemoryTypes::Curried<
+    1, std::function<MemoryTypes::MemoryStoreCreationResult(FMemoryConfig)>>
+curriedMemoryStoreCreation() {
+  return func::curry<1>(
+      [](FMemoryConfig config) -> MemoryTypes::MemoryStoreCreationResult {
+        try {
+          FMemoryStore store = MemoryFactory::CreateStore(config);
+          return MemoryTypes::make_right(FString(), store);
+        } catch (const std::exception &e) {
+          return MemoryTypes::make_left(FString(e.what()));
+        }
+      });
+}
+} // namespace MemoryHelpers
