@@ -2,6 +2,9 @@
 
 #include "CoreMinimal.h"
 #include "ForbocAI_SDK_Types.h"
+#include "HttpModule.h"
+#include "Interfaces/IHttpRequest.h"
+#include "Interfaces/IHttpResponse.h"
 #include <functional>
 
 // ==========================================================
@@ -43,7 +46,7 @@ namespace BridgeFactory {
  */
 inline FBridgeValidationContext
 CreateContext(const FAgentState *State = nullptr,
-             TMap<FString, FString> World = {}) {
+              TMap<FString, FString> World = {}) {
   return FBridgeValidationContext{State, MoveTemp(World)};
 }
 
@@ -52,8 +55,8 @@ CreateContext(const FAgentState *State = nullptr,
  */
 inline FValidationRule
 CreateRule(FString Id, FString Name, TArray<FString> Types,
-           std::function<FValidationResult(
-               const FAgentAction &, const FBridgeValidationContext &)>
+           std::function<FValidationResult(const FAgentAction &,
+                                           const FBridgeValidationContext &)>
                InValidator) {
   FValidationRule R;
   R.Id = MoveTemp(Id);
@@ -82,5 +85,12 @@ FORBOCAI_SDK_API TArray<FValidationRule> CreateDefaultRules();
 FORBOCAI_SDK_API FValidationResult
 Validate(const FAgentAction &Action, const TArray<FValidationRule> &Rules,
          const FBridgeValidationContext &Context);
+
+/**
+ * Registers a rule with the API.
+ * Fire-and-forget async operation.
+ */
+FORBOCAI_SDK_API void RegisterRule(const FValidationRule &Rule,
+                                   const FString &ApiUrl);
 
 } // namespace BridgeOps
