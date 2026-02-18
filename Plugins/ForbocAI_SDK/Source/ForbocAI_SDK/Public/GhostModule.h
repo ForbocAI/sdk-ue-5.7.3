@@ -40,178 +40,7 @@ using GhostTestRunAllResult = Either<FString, FGhostTestReport>;
 using GhostValidationResult = Either<FString, FGhostConfig>;
 } // namespace GhostTypes
 
-// Functional Core Helper Functions for Ghost operations
-namespace GhostHelpers {
-// Helper to create a lazy ghost
-inline GhostTypes::Lazy<FGhost> createLazyGhost(const FGhostConfig &config) {
-  return func::lazy(
-      [config]() -> FGhost { return GhostFactory::Create(config); });
-}
-
-// Helper to create a validation pipeline for ghost configuration
-inline GhostTypes::ValidationPipeline<FGhostConfig>
-ghostConfigValidationPipeline() {
-  return func::validationPipeline<FGhostConfig>()
-      .add([](const FGhostConfig &config)
-               -> GhostTypes::Either<FString, FGhostConfig> {
-        if (config.Agent.Id.IsEmpty() || config.Agent.Persona.IsEmpty()) {
-          return GhostTypes::make_left(
-              FString(TEXT("Agent must have valid Id and Persona")));
-        }
-        return GhostTypes::make_right(config);
-      })
-      .add([](const FGhostConfig &config)
-               -> GhostTypes::Either<FString, FGhostConfig> {
-        if (config.Scenarios.Num() == 0) {
-          return GhostTypes::make_left(
-              FString(TEXT("At least one test scenario must be provided")));
-        }
-        return GhostTypes::make_right(config);
-      })
-      .add([](const FGhostConfig &config)
-               -> GhostTypes::Either<FString, FGhostConfig> {
-        if (config.MaxIterations < 1) {
-          return GhostTypes::make_left(
-              FString(TEXT("Max iterations must be at least 1")));
-        }
-        return GhostTypes::make_right(config);
-      });
-}
-
-// Helper to create a pipeline for ghost test execution
-inline GhostTypes::Pipeline<FGhost> ghostTestPipeline(const FGhost &ghost) {
-  return func::pipe(ghost);
-}
-
-// Helper to create a curried ghost creation function
-inline GhostTypes::Curried<
-    1, std::function<GhostTypes::GhostCreationResult(FGhostConfig)>>
-curriedGhostCreation() {
-  return func::curry<1>(
-      [](FGhostConfig config) -> GhostTypes::GhostCreationResult {
-        try {
-          FGhost ghost = GhostFactory::Create(config);
-          return GhostTypes::make_right(FString(), ghost);
-        } catch (const std::exception &e) {
-          return GhostTypes::make_left(FString(e.what()));
-        }
-      });
-}
-} // namespace GhostHelpers
-
-// ==========================================================
-// Ghost Module — Automated QA Testing (UE SDK)
-// ==========================================================
-// Strict functional programming implementation for automated
-// testing of agent behavior and responses.
-// All operations are pure free functions.
-// Enhanced with functional core patterns for better
-// error handling and composition.
-// ==========================================================
-
-/**
- * Ghost Test Configuration — Immutable data.
- */
-struct FGhostConfig {
-  /** The agent to test. */
-  FAgent Agent;
-  /** Test scenarios to run. */
-  TArray<FString> Scenarios;
-  /** Maximum number of test iterations. */
-  int32 MaxIterations;
-  /** Expected response patterns. */
-  TMap<FString, FString> ExpectedResponses;
-  /** Whether to run in verbose mode. */
-  bool bVerbose;
-  /** API URL for the agent. */
-  FString ApiUrl;
-
-  FGhostConfig() : MaxIterations(100), bVerbose(false) {}
-};
-
-/**
- * Ghost Test Result — Immutable data.
- */
-USTRUCT()
-struct FGhostTestResult {
-  GENERATED_BODY()
-
-  /** The test scenario that was run. */
-  UPROPERTY()
-  FString Scenario;
-
-  /** Whether the test passed. */
-  UPROPERTY()
-  bool bPassed;
-
-  /** The actual response from the agent. */
-  UPROPERTY()
-  FString ActualResponse;
-
-  /** The expected response. */
-  UPROPERTY()
-  FString ExpectedResponse;
-
-  /** Any error messages encountered. */
-  UPROPERTY()
-  FString ErrorMessage;
-
-  /** The iteration number when the test completed. */
-  UPROPERTY()
-  int32 Iteration;
-
-  FGhostTestResult() : bPassed(false), Iteration(0) {}
-};
-
-/**
- * Ghost Test Report — Immutable data.
- */
-USTRUCT()
-struct FGhostTestReport {
-  GENERATED_BODY()
-
-  /** The overall test configuration. */
-  FGhostConfig Config;
-
-  /** All test results. */
-  UPROPERTY()
-  TArray<FGhostTestResult> Results;
-
-  /** The total number of tests run. */
-  UPROPERTY()
-  int32 TotalTests;
-
-  /** The number of tests that passed. */
-  UPROPERTY()
-  int32 PassedTests;
-
-  /** The number of tests that failed. */
-  UPROPERTY()
-  int32 FailedTests;
-
-  /** The overall success rate. */
-  UPROPERTY()
-  float SuccessRate;
-
-  /** Any summary messages. */
-  UPROPERTY()
-  FString Summary;
-
-  FGhostTestReport()
-      : TotalTests(0), PassedTests(0), FailedTests(0), SuccessRate(0.0f) {}
-};
-
-/**
- * Ghost Test Engine — Immutable data.
- */
-struct FGhost {
-  /** The configuration for this test engine. */
-  FGhostConfig Config;
-  /** Whether this ghost has been initialized. */
-  bool bInitialized;
-
-  FGhost() : bInitialized(false) {}
-};
+// Types (FGhostConfig, FGhostTestResult, FGhostTestReport, FGhost) are defined in ForbocAI_SDK_Types.h
 
 /**
  * Ghost Operations — Stateless free functions.
@@ -233,7 +62,7 @@ FORBOCAI_SDK_API FGhost Create(const FGhostConfig &Config);
  * @param Scenario The scenario to test.
  * @return The async test result.
  */
-FORBOCAI_SDK_API GhostTypes::GhostRunTestResult
+FORBOCAI_SDK_API GhostTypes::GhostTestRunResult
 RunTest(const FGhost &Ghost, const FString &Scenario);
 
 /**
@@ -242,7 +71,7 @@ RunTest(const FGhost &Ghost, const FString &Scenario);
  * @param Ghost The Ghost test instance.
  * @return The complete test report (async).
  */
-FORBOCAI_SDK_API GhostTypes::GhostRunAllTestsResult
+FORBOCAI_SDK_API GhostTypes::GhostTestRunAllResult
 RunAllTests(const FGhost &Ghost);
 
 /**
@@ -299,9 +128,9 @@ inline GhostTypes::Lazy<FGhost> createLazyGhost(const FGhostConfig &config) {
 }
 
 // Helper to create a validation pipeline for ghost configuration
-inline GhostTypes::ValidationPipeline<FGhostConfig>
+inline GhostTypes::ValidationPipeline<FGhostConfig, FString>
 ghostConfigValidationPipeline() {
-  return func::validationPipeline<FGhostConfig>()
+  return func::validationPipeline<FGhostConfig, FString>()
       .add([](const FGhostConfig &config)
                -> GhostTypes::Either<FString, FGhostConfig> {
         if (config.Agent.Id.IsEmpty() || config.Agent.Persona.IsEmpty()) {

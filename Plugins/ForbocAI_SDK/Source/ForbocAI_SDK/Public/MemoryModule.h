@@ -44,72 +44,7 @@ using MemoryStoreEmbeddingResult = Either<FString, TArray<float>>;
 // Functional Core Helper Functions for Memory operations
 // MemoryHelpers moved to end of file to ensure type visibility
 
-// ==========================================================
-// Memory Module — Full Embedding-Based Memory (UE SDK)
-// ==========================================================
-// Strict functional programming implementation for
-// persistent, semantic recall using sqlite-vss for vector search.
-// All operations are pure free functions.
-// Enhanced with functional core patterns for better
-// error handling and composition.
-// ==========================================================
-
-/**
- * Memory Configuration — Immutable data.
- */
-USTRUCT()
-struct FMemoryConfig {
-  GENERATED_BODY()
-
-  /** The database file path. */
-  UPROPERTY()
-  FString DatabasePath;
-
-  /** Maximum number of memories to store. */
-  UPROPERTY()
-  int32 MaxMemories;
-
-  /** Vector dimension size. */
-  UPROPERTY()
-  int32 VectorDimension;
-
-  /** Whether to use GPU acceleration if available. */
-  UPROPERTY()
-  bool UseGPU;
-
-  /** Maximum results to return from recall. */
-  UPROPERTY()
-  int32 MaxRecallResults;
-
-  FMemoryConfig()
-      : DatabasePath(TEXT("ForbocAI_Memory.db")), MaxMemories(10000),
-        VectorDimension(384), UseGPU(false), MaxRecallResults(10) {}
-};
-
-/**
- * Memory Store — Immutable data.
- */
-USTRUCT()
-struct FMemoryStore {
-  GENERATED_BODY()
-
-  /** Configuration for the memory store. */
-  UPROPERTY()
-  FMemoryConfig Config;
-
-  /** List of immutable memory items. */
-  UPROPERTY()
-  TArray<FMemoryItem> Items;
-
-  /** Database connection handle. */
-  void *DatabaseHandle;
-
-  /** Whether the store is initialized. */
-  UPROPERTY()
-  bool bInitialized;
-
-  FMemoryStore() : DatabaseHandle(nullptr), bInitialized(false) {}
-};
+// Types (FMemoryConfig, FMemoryStore) are defined in ForbocAI_SDK_Types.h
 
 /**
  * Memory Operations — Stateless free functions.
@@ -210,9 +145,9 @@ createLazyMemoryStore(const FMemoryConfig &config) {
 }
 
 // Helper to create a validation pipeline for memory configuration
-inline MemoryTypes::ValidationPipeline<FMemoryConfig>
+inline MemoryTypes::ValidationPipeline<FMemoryConfig, FString>
 memoryConfigValidationPipeline() {
-  return func::validationPipeline<FMemoryConfig>()
+  return func::validationPipeline<FMemoryConfig, FString>()
       .add([](const FMemoryConfig &config)
                -> MemoryTypes::Either<FString, FMemoryConfig> {
         if (config.DatabasePath.IsEmpty()) {

@@ -424,34 +424,35 @@ auto ematch(const Either<E, T> &e, FLeft onLeft, FRight onRight)
 //   auto result = pipeline.run(42);
 // ==========================================
 
-template <typename T> class ValidationPipeline {
-  std::vector<std::function<Either<std::string, T>(T)>> validators;
+template <typename T, typename E = std::string> class ValidationPipeline {
+  std::vector<std::function<Either<E, T>(T)>> validators;
 
 public:
   ValidationPipeline() = default;
 
   // Add a validation function to the pipeline
-  ValidationPipeline &add(std::function<Either<std::string, T>(T)> validator) {
+  ValidationPipeline &add(std::function<Either<E, T>(T)> validator) {
     validators.push_back(std::move(validator));
     return *this;
   }
 
   // Run the validation pipeline
-  Either<std::string, T> run(T value) const {
+  Either<E, T> run(T val) const {
+    T current = std::move(val);
     for (const auto &validator : validators) {
-      auto result = validator(value);
+      auto result = validator(current);
       if (result.isLeft) {
         return result; // Short-circuit on first error
       }
-      value = result.right;
+      current = result.right;
     }
-    return make_right(std::string{}, value);
+    return make_right(E{}, current);
   }
 };
 
 // Factory function for ValidationPipeline
-template <typename T> ValidationPipeline<T> validationPipeline() {
-  return ValidationPipeline<T>();
+template <typename T, typename E = std::string> ValidationPipeline<T, E> validationPipeline() {
+  return ValidationPipeline<T, E>();
 }
 
 // ==========================================
@@ -526,8 +527,8 @@ template <typename T> struct TestResult {
   }
 
   // Add details
-  TestResult &withDetail(const std::string &key, const std::string &value) {
-    details[key] = value;
+  TestResult &withDetail(const std::string &key, const std::string &val) {
+    details[key] = val;
     return *this;
   }
 
@@ -558,8 +559,8 @@ template <> struct TestResult<void> {
     return TestResult<void>{false, std::move(message), {}};
   }
 
-  TestResult &withDetail(const std::string &key, const std::string &value) {
-    details[key] = value;
+  TestResult &withDetail(const std::string &key, const std::string &val) {
+    details[key] = val;
     return *this;
   }
 

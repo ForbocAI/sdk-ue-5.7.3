@@ -16,7 +16,7 @@
 // ==========================================================
 
 // Single test implementation (Async)
-GhostTypes::GhostRunTestResult GhostOps::RunTest(const FGhost &Ghost,
+GhostTypes::GhostTestRunResult GhostOps::RunTest(const FGhost &Ghost,
                                                  const FString &Scenario) {
   return GhostTypes::AsyncResult<FGhostTestResult>::create(
       [Ghost, Scenario](std::function<void(FGhostTestResult)> resolve,
@@ -42,7 +42,7 @@ GhostTypes::GhostRunTestResult GhostOps::RunTest(const FGhost &Ghost,
 }
 
 // All tests implementation (Async)
-GhostTypes::GhostRunAllTestsResult GhostOps::RunAllTests(const FGhost &Ghost) {
+GhostTypes::GhostTestRunAllResult GhostOps::RunAllTests(const FGhost &Ghost) {
   return GhostTypes::AsyncResult<FGhostTestReport>::create(
       [Ghost](std::function<void(FGhostTestReport)> resolve,
               std::function<void(std::string)> reject) {
@@ -225,7 +225,7 @@ ExportResultsToCsv(const FGhostTestReport &Report) {
 } // namespace Internal
 
 // Re-implementation of RunAllTests using the helper
-GhostTypes::GhostRunAllTestsResult GhostOps::RunAllTests(const FGhost &Ghost) {
+GhostTypes::GhostTestRunAllResult GhostOps::RunAllTests(const FGhost &Ghost) {
   return GhostTypes::AsyncResult<FGhostTestReport>::create(
       [Ghost](std::function<void(FGhostTestReport)> resolve,
               std::function<void(std::string)> reject) {

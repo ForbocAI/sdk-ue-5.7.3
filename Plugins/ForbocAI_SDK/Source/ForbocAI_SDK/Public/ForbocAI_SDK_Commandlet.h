@@ -2,8 +2,8 @@
 
 #include "CoreMinimal.h"
 #include "Commandlets/Commandlet.h"
-#include "ForbocAI_SDK_Commandlet.generated.h"
 #include "Core/functional_core.hpp"
+#include "ForbocAI_SDK_Commandlet.generated.h"
 
 /**
  * ForbocAI SDK Commandlet.
@@ -43,5 +43,5 @@ public:
   CommandExecution createCommandPipeline(const FString& command, const FString& apiUrl, const FString& param1 = TEXT(""), const FString& param2 = TEXT(""));
 
   // Command validation helpers
-  CLITypes::ValidationPipeline<FString> commandValidationPipeline();
+  CLITypes::ValidationPipeline<FString, FString> commandValidationPipeline();
 };

@@ -1,9 +1,9 @@
 #pragma once
 
-#include "Core/functional_core.hpp"
 #include "CoreMinimal.h"
-#include "CortexModule.generated.h"
+#include "Core/functional_core.hpp"
 #include "ForbocAI_SDK_Types.h"
+#include "CortexModule.generated.h"
 
 // ==========================================================
 // Cortex Module — Local SLM Inference (UE SDK)
@@ -48,62 +48,7 @@ using CortexStreamResult = Either<FString, TArray<FString>>;
 // error handling and composition.
 // ==========================================================
 
-/**
- * Cortex Engine Handle — Opaque handle to the inference engine.
- * Note: Not a USTRUCT because void* is not supported by reflection.
- */
-struct FCortex {
-  void *EngineHandle;
-  FCortex() : EngineHandle(nullptr) {}
-};
-
-/**
- * Cortex Configuration — Immutable data.
- */
-struct FCortexConfig {
-  /** The model identifier to use. */
-  const FString Model;
-  /** Whether to use GPU acceleration if available. */
-  const bool UseGPU;
-  /** Maximum tokens to generate per request. */
-  const int32 MaxTokens;
-  /** Temperature for generation (0.0 - 1.0). */
-  const float Temperature;
-  /** Top-k sampling parameter. */
-  const int32 TopK;
-  /** Top-p sampling parameter. */
-  const float TopP;
-
-  FCortexConfig()
-      : Model(TEXT("smalll2-135m")), UseGPU(false), MaxTokens(512),
-        Temperature(0.7f), TopK(40), TopP(0.9f) {}
-};
-
-/**
- * Cortex Response — Immutable data.
- */
-USTRUCT()
-struct FCortexResponse {
-  GENERATED_BODY()
-
-  /** The generated text response. */
-  UPROPERTY()
-  FString Text;
-
-  /** The estimated token count. */
-  UPROPERTY()
-  int32 TokenCount;
-
-  /** Whether the generation completed successfully. */
-  UPROPERTY()
-  bool bSuccess;
-
-  /** Error message if generation failed. */
-  UPROPERTY()
-  FString ErrorMessage;
-
-  FCortexResponse() : TokenCount(0), bSuccess(false), ErrorMessage(TEXT("")) {}
-};
+// Types (FCortex, FCortexConfig, FCortexResponse) are defined in ForbocAI_SDK_Types.h
 
 /**
  * Cortex Operations — Stateless free functions.
@@ -177,9 +122,9 @@ createLazyCortex(const FCortexConfig &config) {
 }
 
 // Helper to create a validation pipeline for cortex configuration
-inline CortexTypes::ValidationPipeline<FCortexConfig>
+inline CortexTypes::ValidationPipeline<FCortexConfig, FString>
 cortexConfigValidationPipeline() {
-  return func::validationPipeline<FCortexConfig>()
+  return func::validationPipeline<FCortexConfig, FString>()
       .add([](const FCortexConfig &config)
                -> CortexTypes::Either<FString, FCortexConfig> {
         if (config.Model.IsEmpty()) {

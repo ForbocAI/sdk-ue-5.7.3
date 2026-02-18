@@ -4,6 +4,18 @@
 #include "ForbocAI_SDK_Types.h"
 #include "Core/functional_core.hpp"
 
+// Functional Core Type Aliases for CLI operations
+namespace CLITypes {
+using func::AsyncResult;
+using func::Either;
+using func::Maybe;
+using func::TestResult;
+using func::ValidationPipeline;
+
+using func::make_left;
+using func::make_right;
+} // namespace CLITypes
+
 /**
  * CLI Operations - Functional implementation of CLI commands.
  */

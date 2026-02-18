@@ -122,8 +122,8 @@ CLITypes::CommandExecution UForbocAI_SDKCommandlet::createCommandPipeline(const 
 }
 
 // Command validation helpers
-CLITypes::ValidationPipeline<FString> UForbocAI_SDKCommandlet::commandValidationPipeline() {
-    return CLITypes::ValidationPipeline<FString>()
+CLITypes::ValidationPipeline<FString, FString> UForbocAI_SDKCommandlet::commandValidationPipeline() {
+    return CLITypes::ValidationPipeline<FString, FString>()
         .add([](const FString& command) -> CLITypes::Either<FString, FString> {
             if (command.IsEmpty()) {
                 return CLITypes::make_left(FString(TEXT("Command cannot be empty")));

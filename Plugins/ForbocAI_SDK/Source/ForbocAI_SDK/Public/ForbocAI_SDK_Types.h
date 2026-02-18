@@ -1,8 +1,8 @@
 #pragma once
 
 #include "CoreMinimal.h"
-#include "ForbocAI_SDK_Types.generated.h" // UHT generated
 #include "Core/functional_core.hpp"
+#include "ForbocAI_SDK_Types.generated.h" // UHT generated
 
 // ==========================================================
 // ForbocAI SDK — Data Types (Strict FP with Enhanced Functional Patterns)
@@ -190,6 +190,24 @@ struct FAgentConfig {
 };
 
 /**
+ * Agent Entity — Pure immutable data.
+ * Construction via AgentFactory namespace (factory functions).
+ * Operations via AgentOps namespace (free functions).
+ */
+struct FAgent {
+  /** Unique identifier for the agent. */
+  FString Id;
+  /** The persona or description of the agent. */
+  FString Persona;
+  /** The current state of the agent. */
+  FAgentState State;
+  /** The list of memories associated with the agent. */
+  TArray<FMemoryItem> Memories;
+  /** The API URL this agent communicates with. */
+  FString ApiUrl;
+};
+
+/**
  * Memory Configuration — Immutable data.
  */
 USTRUCT()
@@ -251,17 +269,17 @@ struct FMemoryStore {
  */
 struct FCortexConfig {
   /** The model identifier to use. */
-  const FString Model;
+  FString Model;
   /** Whether to use GPU acceleration if available. */
-  const bool UseGPU;
+  bool UseGPU;
   /** Maximum tokens to generate per request. */
-  const int32 MaxTokens;
+  int32 MaxTokens;
   /** Temperature for generation (0.0 - 1.0). */
-  const float Temperature;
+  float Temperature;
   /** Top-k sampling parameter. */
-  const int32 TopK;
+  int32 TopK;
   /** Top-p sampling parameter. */
-  const float TopP;
+  float TopP;
 
   FCortexConfig()
       : Model(TEXT("smalll2-135m")), UseGPU(false), MaxTokens(512),

@@ -42,83 +42,7 @@ using AgentProcessResult = Either<FString, FAgentResponse>;
 using AgentExportResult = Either<FString, FSoul>;
 } // namespace AgentTypes
 
-// Functional Core Helper Functions for Agent operations
-namespace AgentHelpers {
-// Helper to create a lazy agent
-inline AgentTypes::Lazy<FAgent> createLazyAgent(const FAgentConfig &config) {
-  return func::lazy(
-      [config]() -> FAgent { return AgentFactory::Create(config); });
-}
-
-// Helper to create a validation pipeline for agent state
-inline AgentTypes::ValidationPipeline<FAgentState>
-agentStateValidationPipeline() {
-  return func::validationPipeline<FAgentState>()
-      .add([](const FAgentState &state)
-               -> AgentTypes::Either<FString, FAgentState> {
-        if (state.JsonData.IsEmpty() || state.JsonData == TEXT("{}")) {
-          return AgentTypes::make_left(FString(TEXT("Empty agent state")));
-        }
-        return AgentTypes::make_right(state);
-      })
-      .add([](const FAgentState &state)
-               -> AgentTypes::Either<FString, FAgentState> {
-        // Add more validation rules here
-        return AgentTypes::make_right(state);
-      });
-}
-
-// Helper to create a pipeline for agent processing
-inline AgentTypes::Pipeline<FAgent>
-agentProcessingPipeline(const FAgent &agent) {
-  return func::pipe(agent);
-}
-
-// Helper to create a curried agent creation function
-inline AgentTypes::Curried<
-    1, std::function<AgentTypes::AgentCreationResult(FAgentConfig)>>
-curriedAgentCreation() {
-  return func::curry<1>(
-      [](FAgentConfig config) -> AgentTypes::AgentCreationResult {
-        try {
-          FAgent agent = AgentFactory::Create(config);
-          return AgentTypes::make_right(FString(), agent);
-        } catch (const std::exception &e) {
-          return AgentTypes::make_left(FString(e.what()));
-        }
-      });
-}
-} // namespace AgentHelpers
-
-// ==========================================================
-// Agent Module — Strict FP (Enhanced)
-// ==========================================================
-// FAgent is a pure data struct with const members (immutable).
-// NO constructors, NO member functions.
-// Construction via AgentFactory namespace (factory functions).
-// Operations via AgentOps namespace (free functions).
-// Enhanced with functional core patterns for better error handling
-// and composition.
-// ==========================================================
-
-/**
- * Agent Entity — Pure immutable data.
- * All members are const: once created, an agent cannot be mutated.
- * Use AgentOps::WithState / AgentOps::WithMemories for
- * functional updates (returns a new FAgent).
- */
-struct FAgent {
-  /** Unique identifier for the agent. */
-  FString Id;
-  /** The persona or description of the agent. */
-  FString Persona;
-  /** The current state of the agent. */
-  FAgentState State;
-  /** The list of memories associated with the agent. */
-  TArray<FMemoryItem> Memories;
-  /** The API URL this agent communicates with. */
-  FString ApiUrl;
-};
+// FAgent is defined in ForbocAI_SDK_Types.h
 
 /**
  * Factory functions for creating Agents.
@@ -199,3 +123,50 @@ Process(const FAgent &Agent, const FString &Input,
 FORBOCAI_SDK_API FSoul Export(const FAgent &Agent);
 
 } // namespace AgentOps
+
+// Functional Core Helper Functions for Agent operations
+namespace AgentHelpers {
+// Helper to create a lazy agent
+inline AgentTypes::Lazy<FAgent> createLazyAgent(const FAgentConfig &config) {
+  return func::lazy(
+      [config]() -> FAgent { return AgentFactory::Create(config).right; });
+}
+
+// Helper to create a validation pipeline for agent state
+inline AgentTypes::ValidationPipeline<FAgentState, FString>
+agentStateValidationPipeline() {
+  return func::validationPipeline<FAgentState, FString>()
+      .add([](const FAgentState &state)
+               -> AgentTypes::Either<FString, FAgentState> {
+        if (state.JsonData.IsEmpty() || state.JsonData == TEXT("{}")) {
+          return AgentTypes::make_left(FString(TEXT("Empty agent state")), FAgentState{});
+        }
+        return AgentTypes::make_right(FString(), state);
+      })
+      .add([](const FAgentState &state)
+               -> AgentTypes::Either<FString, FAgentState> {
+        return AgentTypes::make_right(FString(), state);
+      });
+}
+
+// Helper to create a pipeline for agent processing
+inline AgentTypes::Pipeline<FAgent>
+agentProcessingPipeline(const FAgent &agent) {
+  return func::pipe(agent);
+}
+
+// Helper to create a curried agent creation function
+inline AgentTypes::Curried<
+    1, std::function<AgentTypes::AgentCreationResult(FAgentConfig)>>
+curriedAgentCreation() {
+  return func::curry<1>(
+      [](FAgentConfig config) -> AgentTypes::AgentCreationResult {
+        try {
+          auto result = AgentFactory::Create(config);
+          return result;
+        } catch (const std::exception &e) {
+          return AgentTypes::make_left(FString(e.what()), FAgent{});
+        }
+      });
+}
+} // namespace AgentHelpers

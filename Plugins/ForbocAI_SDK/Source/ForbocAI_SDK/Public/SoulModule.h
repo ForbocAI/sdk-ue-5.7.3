@@ -30,6 +30,9 @@ using func::Pipeline;
 using func::TestResult;
 using func::ValidationPipeline;
 
+using func::make_left;
+using func::make_right;
+
 // Type aliases for Soul operations
 using SoulCreationResult = Either<FString, FSoul>;
 using SoulSerializationResult = Either<FString, FString>;
@@ -37,52 +40,6 @@ using SoulDeserializationResult = Either<FString, FSoul>;
 using SoulValidationResult = Either<FString, FSoul>;
 using SoulExportResult = AsyncResult<FString>;
 } // namespace SoulTypes
-
-// Functional Core Helper Functions for Soul operations
-namespace SoulHelpers {
-// Helper to create a lazy soul from agent data
-inline SoulTypes::Lazy<FSoul>
-createLazySoul(const FAgentState &state, const TArray<FMemoryItem> &memories,
-               const FString &id, const FString &persona) {
-  return func::lazy([state, memories, id, persona]() -> FSoul {
-    return SoulOps::FromAgent(state, memories, id, persona).right;
-  });
-}
-
-// Helper to create a validation pipeline for Soul
-inline SoulTypes::ValidationPipeline<FSoul> soulValidationPipeline() {
-  return func::validationPipeline<FSoul>()
-      .add([](const FSoul &soul) -> SoulTypes::Either<FString, FSoul> {
-        if (soul.Id.IsEmpty()) {
-          return SoulTypes::make_left(FString(TEXT("Missing Soul ID")));
-        }
-        return SoulTypes::make_right(soul);
-      })
-      .add([](const FSoul &soul) -> SoulTypes::Either<FString, FSoul> {
-        if (soul.Persona.IsEmpty()) {
-          return SoulTypes::make_left(FString(TEXT("Missing Persona")));
-        }
-        return SoulTypes::make_right(soul);
-      });
-}
-
-// Helper to create a pipeline for soul serialization
-inline SoulTypes::Pipeline<FSoul> soulSerializationPipeline(const FSoul &soul) {
-  return func::pipe(soul);
-}
-
-// Helper to create a curried soul creation function
-inline SoulTypes::Curried<
-    4, std::function<SoulTypes::SoulCreationResult(
-           FAgentState, TArray<FMemoryItem>, FString, FString)>>
-curriedSoulCreation() {
-  return func::curry<4>([](FAgentState state, TArray<FMemoryItem> memories,
-                           FString id,
-                           FString persona) -> SoulTypes::SoulCreationResult {
-    return SoulOps::FromAgent(state, memories, id, persona);
-  });
-}
-} // namespace SoulHelpers
 
 /**
  * Soul Operations - IPFS/Serialization Logic.
@@ -139,3 +96,49 @@ FORBOCAI_SDK_API SoulTypes::SoulExportResult
 ExportToArweave(const FSoul &Soul, const FString &ApiUrl);
 
 } // namespace SoulOps
+
+// Functional Core Helper Functions for Soul operations
+namespace SoulHelpers {
+// Helper to create a lazy soul from agent data
+inline SoulTypes::Lazy<FSoul>
+createLazySoul(const FAgentState &state, const TArray<FMemoryItem> &memories,
+               const FString &id, const FString &persona) {
+  return func::lazy([state, memories, id, persona]() -> FSoul {
+    return SoulOps::FromAgent(state, memories, id, persona).right;
+  });
+}
+
+// Helper to create a validation pipeline for Soul
+inline SoulTypes::ValidationPipeline<FSoul, FString> soulValidationPipeline() {
+  return func::validationPipeline<FSoul, FString>()
+      .add([](const FSoul &soul) -> SoulTypes::Either<FString, FSoul> {
+        if (soul.Id.IsEmpty()) {
+          return SoulTypes::make_left(FString(TEXT("Missing Soul ID")), FSoul{});
+        }
+        return SoulTypes::make_right(FString(), soul);
+      })
+      .add([](const FSoul &soul) -> SoulTypes::Either<FString, FSoul> {
+        if (soul.Persona.IsEmpty()) {
+          return SoulTypes::make_left(FString(TEXT("Missing Persona")), FSoul{});
+        }
+        return SoulTypes::make_right(FString(), soul);
+      });
+}
+
+// Helper to create a pipeline for soul serialization
+inline SoulTypes::Pipeline<FSoul> soulSerializationPipeline(const FSoul &soul) {
+  return func::pipe(soul);
+}
+
+// Helper to create a curried soul creation function
+inline SoulTypes::Curried<
+    4, std::function<SoulTypes::SoulCreationResult(
+           FAgentState, TArray<FMemoryItem>, FString, FString)>>
+curriedSoulCreation() {
+  return func::curry<4>([](FAgentState state, TArray<FMemoryItem> memories,
+                           FString id,
+                           FString persona) -> SoulTypes::SoulCreationResult {
+    return SoulOps::FromAgent(state, memories, id, persona);
+  });
+}
+} // namespace SoulHelpers
