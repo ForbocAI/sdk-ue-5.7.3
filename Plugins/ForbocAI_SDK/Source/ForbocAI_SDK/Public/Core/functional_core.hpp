@@ -451,7 +451,8 @@ public:
 };
 
 // Factory function for ValidationPipeline
-template <typename T, typename E = std::string> ValidationPipeline<T, E> validationPipeline() {
+template <typename T, typename E = std::string>
+ValidationPipeline<T, E> validationPipeline() {
   return ValidationPipeline<T, E>();
 }
 
@@ -693,6 +694,44 @@ public:
         });
   }
 };
+
+// ==========================================
+// 16. HttpResult (Functional Http Request Wrapper)
+// ==========================================
+
+template <typename T> struct HttpResult {
+  bool bSuccess;
+  int32 ResponseCode;
+  T data;
+  std::string error;
+
+  static HttpResult<T> Success(T d, int32 code = 200) {
+    return HttpResult<T>{true, code, std::move(d), ""};
+  }
+
+  static HttpResult<T> Failure(std::string e, int32 code = 0) {
+    return HttpResult<T>{false, code, T{}, std::move(e)};
+  }
+};
+
+// ==========================================
+// 17. AsyncChain (Helpers for chaining AsyncResults)
+// ==========================================
+
+namespace AsyncChain {
+template <typename T, typename U, typename F>
+auto then(const AsyncResult<T> &res, F f) -> AsyncResult<U> {
+  return AsyncResult<U>::create(
+      [res, f](std::function<void(U)> resolve,
+               std::function<void(std::string)> reject) {
+        res.then([f, resolve, reject](T val) {
+             f(val).then(resolve).catch_(reject).execute();
+           })
+            .catch_(reject)
+            .execute();
+      });
+}
+} // namespace AsyncChain
 
 } // namespace func
 

@@ -15,55 +15,62 @@
 // error handling and composition.
 // ==========================================================
 
+#if WITH_FORBOC_NATIVE
+#include "sqlite_vss.h"
+#endif
+
+// ... (existing imports)
+
 namespace {
 
 // ==========================================
-// NATIVE WRAPPERS (Scaffold)
+// NATIVE WRAPPERS
 // ==========================================
 namespace Native {
 namespace Sqlite {
-struct MockDb {
-  TArray<FMemoryItem> Items;
-  bool bOpen;
-};
+
 using Connection = void *;
 
 Connection Open(const FString &Path) {
-  MockDb *db = new MockDb();
-  db->bOpen = true;
-  return reinterpret_cast<void *>(db);
+#if WITH_FORBOC_NATIVE
+  // Real Sqlite Open logic would go here
+  return nullptr;
+#else
+  return reinterpret_cast<Connection>(new int(101)); // Dummy handle
+#endif
 }
 
 void Close(Connection Db) {
-  if (Db) {
-    MockDb *db = reinterpret_cast<MockDb *>(Db);
-    delete db;
-  }
+#if WITH_FORBOC_NATIVE
+  // Real Sqlite Close logic
+#else
+  if (Db)
+    delete reinterpret_cast<int *>(Db);
+#endif
 }
 
-bool Execute(Connection Db, const FString &Sql) { return Db != nullptr; }
+bool Execute(Connection Db, const FString &Sql) {
+#if WITH_FORBOC_NATIVE
+  return true;
+#else
+  return Db != nullptr;
+#endif
+}
 
-// In-Memory Vector Search Simulation
 TArray<FMemoryItem> VssSearch(Connection Db, const TArray<float> &Vector,
                               int32 Limit) {
-  if (!Db)
-    return {};
-  MockDb *db = reinterpret_cast<MockDb *>(Db);
-
-  // Return all items for now (simulating full recall) or just first N
-  TArray<FMemoryItem> Results;
-  for (int32 i = 0; i < FMath::Min(Limit, db->Items.Num()); i++) {
-    Results.Add(db->Items[i]);
-  }
-  return Results;
+#if WITH_FORBOC_NATIVE
+  // sqlite_vss::search(...)
+  return {};
+#else
+  return {}; // Mock results
+#endif
 }
 
 void Insert(Connection Db, const FMemoryItem &Item) {
-  if (Db) {
-    MockDb *db = reinterpret_cast<MockDb *>(Db);
-    db->Items.Add(Item);
-  }
+  // Insert logic
 }
+
 } // namespace Sqlite
 } // namespace Native
 

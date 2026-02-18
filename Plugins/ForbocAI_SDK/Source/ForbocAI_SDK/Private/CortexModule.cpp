@@ -1,60 +1,59 @@
 #include "CortexModule.h"
 #include "Core/functional_core.hpp"
+#include "Misc/FileHelper.h"
+#include "Misc/Paths.h"
+
+#if WITH_FORBOC_NATIVE
+#include "llama.h"
+#endif
 
 // ==========================================
-// NATIVE WRAPPERS (Scaffold)
+// NATIVE WRAPPERS
 // ==========================================
-// These wrappers isolate the 3rd-party library dependencies (llama.cpp)
-// from the Functional Core. In a real build, these would call the actual C API.
+// Isolates the 3rd-party library dependencies from the Functional Core.
 
+namespace Native {
 namespace Llama {
-// Stateful simulation structure
-struct MockContext {
-  bool bLoaded;
-  FString ModelPath;
-};
 
 using Context = void *;
 
 Context LoadModel(const FString &Path) {
-  // Verify file existence (simulate strict check)
+#if WITH_FORBOC_NATIVE
+  return reinterpret_cast<Context>(llama::load_model(TCHAR_TO_UTF8(*Path)));
+#else
+  // Simulated Logic for CI/No-Native builds
   if (FPaths::FileExists(Path) || Path.Contains(TEXT("test_model.bin"))) {
-    MockContext *ctx = new MockContext();
-    ctx->bLoaded = true;
-    ctx->ModelPath = Path;
-    return reinterpret_cast<Context>(ctx);
+    return reinterpret_cast<Context>(new int(42)); // Dummy handle
   }
-  throw std::runtime_error("Failed to load model from path: " +
+  throw std::runtime_error("Failed to load model: " +
                            std::string(TCHAR_TO_UTF8(*Path)));
+#endif
 }
 
 void FreeModel(Context Ctx) {
-  if (Ctx) {
-    MockContext *ctx = reinterpret_cast<MockContext *>(Ctx);
-    delete ctx;
-  }
+#if WITH_FORBOC_NATIVE
+  if (Ctx)
+    llama::free_model(reinterpret_cast<llama::context *>(Ctx));
+#else
+  if (Ctx)
+    delete reinterpret_cast<int *>(Ctx);
+#endif
 }
 
 FString Infer(Context Ctx, const FString &Prompt, int32 MaxTokens) {
-  if (Ctx == nullptr) {
+  if (Ctx == nullptr)
     throw std::runtime_error("Invalid model context");
-  }
-  MockContext *ctx = reinterpret_cast<MockContext *>(Ctx);
-  if (!ctx->bLoaded)
-    throw std::runtime_error("Model not loaded");
-
-  // Heuristic Native Logic (Simulating Local SLM)
-  if (Prompt.Contains(TEXT("attack")))
-    return TEXT("Action: ATTACK. Target: Nearest Enemy.");
-  if (Prompt.Contains(TEXT("defend")))
-    return TEXT("Action: DEFEND. Maintain position.");
-  if (Prompt.Contains(TEXT("hello")))
-    return TEXT("Greetings. I am ready.");
-
-  return FString::Printf(TEXT("Processed [%s] via %s"), *Prompt.Left(20),
-                         *FPaths::GetCleanFilename(ctx->ModelPath));
+#if WITH_FORBOC_NATIVE
+  return FString(
+      UTF8_TO_TCHAR(llama::infer(reinterpret_cast<llama::context *>(Ctx),
+                                 TCHAR_TO_UTF8(*Prompt), MaxTokens)));
+#else
+  return FString::Printf(TEXT("Simulated Inference: %s"), *Prompt.Left(20));
+#endif
 }
+
 } // namespace Llama
+} // namespace Native
 
 // ==========================================
 // Cortex Operations — Stateless free functions
