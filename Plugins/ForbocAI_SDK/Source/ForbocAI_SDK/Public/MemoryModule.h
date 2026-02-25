@@ -1,5 +1,6 @@
 #pragma once
 
+#include "Async/Async.h"
 #include "Core/functional_core.hpp"
 #include "CoreMinimal.h"
 #include "ForbocAI_SDK_Types.h"
@@ -71,7 +72,7 @@ Initialize(FMemoryStore &Store);
  * @param Importance The importance score.
  * @return A new memory store with the memory added.
  */
-FORBOCAI_SDK_API MemoryTypes::MemoryStoreAddResult
+FORBOCAI_SDK_API TFuture<MemoryTypes::MemoryStoreAddResult>
 Store(const FMemoryStore &Store, const FString &Text, const FString &Type,
       float Importance);
 
@@ -82,7 +83,7 @@ Store(const FMemoryStore &Store, const FString &Text, const FString &Type,
  * @param Item The memory item to add.
  * @return A new memory store with the item added.
  */
-FORBOCAI_SDK_API MemoryTypes::MemoryStoreAddResult
+FORBOCAI_SDK_API TFuture<MemoryTypes::MemoryStoreAddResult>
 Add(const FMemoryStore &Store, const FMemoryItem &Item);
 
 /**
@@ -93,7 +94,7 @@ Add(const FMemoryStore &Store, const FMemoryItem &Item);
  * @param Limit The maximum number of results to return.
  * @return The ranked memory results.
  */
-FORBOCAI_SDK_API MemoryTypes::MemoryStoreRecallResult
+FORBOCAI_SDK_API TFuture<MemoryTypes::MemoryStoreRecallResult>
 Recall(const FMemoryStore &Store, const FString &Query, int32 Limit = -1);
 
 /**
@@ -103,7 +104,7 @@ Recall(const FMemoryStore &Store, const FString &Query, int32 Limit = -1);
  * @param Text The text to embed.
  * @return The vector embedding.
  */
-FORBOCAI_SDK_API MemoryTypes::MemoryStoreEmbeddingResult
+FORBOCAI_SDK_API TFuture<MemoryTypes::MemoryStoreEmbeddingResult>
 GenerateEmbedding(const FMemoryStore &Store, const FString &Text);
 
 /**

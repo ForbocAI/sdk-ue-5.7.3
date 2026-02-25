@@ -330,114 +330,130 @@ MemoryOps::Initialize(FMemoryStore &Store) {
 }
 
 // Store implementation
-MemoryTypes::MemoryStoreAddResult MemoryOps::Store(const FMemoryStore &Store,
-                                                   const FString &Text,
-                                                   const FString &Type,
-                                                   float Importance) {
-  try {
-    FMemoryStore NewStore = Store;
-
-    if (!Store.bInitialized) {
-      // Return original store if not initialized
-      return MemoryTypes::make_right(FString(), Store);
-    }
-
-    // Generate a new memory item
-    FMemoryItem Item;
-    Item.Id = FString::Printf(TEXT("mem_%s"), *FGuid::NewGuid().ToString());
-    Item.Text = Text;
-    Item.Type = Type;
-    Item.Importance = FMath::Clamp(Importance, 0.0f, 1.0f);
-    Item.Timestamp = FDateTime::Now().ToUnixTimestamp();
-
-    // Generate embedding
-    auto embeddingResult = MemoryOps::GenerateEmbedding(Store, Text);
-    if (embeddingResult.isLeft) {
-      return embeddingResult;
-    }
-
-    // Insert into database
-    auto insertResult =
-        Internal::SQLiteVSS::InsertMemory(Store.DatabaseHandle, Item);
-    if (insertResult.isLeft) {
-      return insertResult;
-    }
-
-    // Add to items array
-    NewStore.Items.Add(Item);
-
-    return MemoryTypes::make_right(FString(), NewStore);
-  } catch (const std::exception &e) {
-    return MemoryTypes::make_left(FString(e.what()));
+TFuture<MemoryTypes::MemoryStoreAddResult>
+MemoryOps::Store(const FMemoryStore &Store, const FString &Text,
+                 const FString &Type, float Importance) {
+  if (!Store.bInitialized) {
+    TPromise<MemoryTypes::MemoryStoreAddResult> Promise;
+    Promise.SetValue(MemoryTypes::make_right(FString(), Store));
+    return Promise.GetFuture();
   }
+
+  return Async(
+      EAsyncExecution::Thread,
+      [Store, Text, Type, Importance]() -> MemoryTypes::MemoryStoreAddResult {
+        try {
+          FMemoryStore NewStore = Store;
+
+          // Generate a new memory item
+          FMemoryItem Item;
+          Item.Id =
+              FString::Printf(TEXT("mem_%s"), *FGuid::NewGuid().ToString());
+          Item.Text = Text;
+          Item.Type = Type;
+          Item.Importance = FMath::Clamp(Importance, 0.0f, 1.0f);
+          Item.Timestamp = FDateTime::Now().ToUnixTimestamp();
+
+          // Generate embedding directly via internal call on this background
+          // thread
+          auto embeddingResult = Internal::SQLiteVSS::GenerateEmbedding(
+              Store.DatabaseHandle, Text);
+          if (embeddingResult.isLeft) {
+            return MemoryTypes::make_left(embeddingResult.left);
+          }
+
+          // Insert into database
+          auto insertResult =
+              Internal::SQLiteVSS::InsertMemory(Store.DatabaseHandle, Item);
+          if (insertResult.isLeft) {
+            return insertResult;
+          }
+
+          // Add to items array
+          NewStore.Items.Add(Item);
+
+          return MemoryTypes::make_right(FString(), NewStore);
+        } catch (const std::exception &e) {
+          return MemoryTypes::make_left(FString(e.what()));
+        }
+      });
 }
 
 // Add implementation
-MemoryTypes::MemoryStoreAddResult MemoryOps::Add(const FMemoryStore &Store,
-                                                 const FMemoryItem &Item) {
-  try {
-    FMemoryStore NewStore = Store;
-
-    if (!Store.bInitialized) {
-      // Return original store if not initialized
-      return MemoryTypes::make_right(FString(), Store);
-    }
-
-    // Insert into database
-    auto insertResult =
-        Internal::SQLiteVSS::InsertMemory(Store.DatabaseHandle, Item);
-    if (insertResult.isLeft) {
-      return insertResult;
-    }
-
-    // Add to items array
-    NewStore.Items.Add(Item);
-
-    return MemoryTypes::make_right(FString(), NewStore);
-  } catch (const std::exception &e) {
-    return MemoryTypes::make_left(FString(e.what()));
+TFuture<MemoryTypes::MemoryStoreAddResult>
+MemoryOps::Add(const FMemoryStore &Store, const FMemoryItem &Item) {
+  if (!Store.bInitialized) {
+    TPromise<MemoryTypes::MemoryStoreAddResult> Promise;
+    Promise.SetValue(MemoryTypes::make_right(FString(), Store));
+    return Promise.GetFuture();
   }
+
+  return Async(EAsyncExecution::Thread,
+               [Store, Item]() -> MemoryTypes::MemoryStoreAddResult {
+                 try {
+                   FMemoryStore NewStore = Store;
+
+                   // Insert into database
+                   auto insertResult = Internal::SQLiteVSS::InsertMemory(
+                       Store.DatabaseHandle, Item);
+                   if (insertResult.isLeft) {
+                     return insertResult;
+                   }
+
+                   // Add to items array
+                   NewStore.Items.Add(Item);
+
+                   return MemoryTypes::make_right(FString(), NewStore);
+                 } catch (const std::exception &e) {
+                   return MemoryTypes::make_left(FString(e.what()));
+                 }
+               });
 }
 
 // Recall implementation
-MemoryTypes::MemoryStoreRecallResult
+TFuture<MemoryTypes::MemoryStoreRecallResult>
 MemoryOps::Recall(const FMemoryStore &Store, const FString &Query,
                   int32 Limit) {
-  try {
-    TArray<FMemoryItem> Results;
-
-    if (!Store.bInitialized) {
-      return MemoryTypes::make_right(FString(), Results);
-    }
-
-    // Use default limit if not specified
-    int32 ActualLimit = (Limit > 0) ? Limit : Store.Config.MaxRecallResults;
-
-    // Perform vector search
-    return Internal::SQLiteVSS::VectorSearch(Store.DatabaseHandle, Query,
-                                             ActualLimit);
-  } catch (const std::exception &e) {
-    return MemoryTypes::make_left(FString(e.what()));
+  if (!Store.bInitialized) {
+    TPromise<MemoryTypes::MemoryStoreRecallResult> Promise;
+    Promise.SetValue(MemoryTypes::make_right(FString(), TArray<FMemoryItem>()));
+    return Promise.GetFuture();
   }
+
+  // Offload semantic vector search to prevent hitch
+  return Async(EAsyncExecution::Thread,
+               [Store, Query, Limit]() -> MemoryTypes::MemoryStoreRecallResult {
+                 try {
+                   int32 ActualLimit =
+                       (Limit > 0) ? Limit : Store.Config.MaxRecallResults;
+                   return Internal::SQLiteVSS::VectorSearch(
+                       Store.DatabaseHandle, Query, ActualLimit);
+                 } catch (const std::exception &e) {
+                   return MemoryTypes::make_left(FString(e.what()));
+                 }
+               });
 }
 
 // Embedding generation implementation
-MemoryTypes::MemoryStoreEmbeddingResult
+TFuture<MemoryTypes::MemoryStoreEmbeddingResult>
 MemoryOps::GenerateEmbedding(const FMemoryStore &Store, const FString &Text) {
-  try {
-    TArray<float> Vector;
-
-    if (!Store.bInitialized) {
-      // Return empty vector if not initialized
-      Vector.Init(0.0f, Store.Config.VectorDimension);
-      return MemoryTypes::make_right(FString(), Vector);
-    }
-
-    // Generate embedding using sqlite-vss
-    return Internal::SQLiteVSS::GenerateEmbedding(Store.DatabaseHandle, Text);
-  } catch (const std::exception &e) {
-    return MemoryTypes::make_left(FString(e.what()));
+  if (!Store.bInitialized) {
+    TPromise<MemoryTypes::MemoryStoreEmbeddingResult> Promise;
+    TArray<float> EmptyVector;
+    EmptyVector.Init(0.0f, Store.Config.VectorDimension);
+    Promise.SetValue(MemoryTypes::make_right(FString(), EmptyVector));
+    return Promise.GetFuture();
   }
+
+  return Async(EAsyncExecution::Thread,
+               [Store, Text]() -> MemoryTypes::MemoryStoreEmbeddingResult {
+                 try {
+                   return Internal::SQLiteVSS::GenerateEmbedding(
+                       Store.DatabaseHandle, Text);
+                 } catch (const std::exception &e) {
+                   return MemoryTypes::make_left(FString(e.what()));
+                 }
+               });
 }
 
 // Statistics implementation

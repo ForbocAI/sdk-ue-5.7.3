@@ -1,9 +1,10 @@
 #pragma once
 
-#include "CoreMinimal.h"
+#include "Async/Async.h"
 #include "Core/functional_core.hpp"
-#include "ForbocAI_SDK_Types.h"
+#include "CoreMinimal.h"
 #include "CortexModule.generated.h"
+#include "ForbocAI_SDK_Types.h"
 
 // ==========================================================
 // Cortex Module — Local SLM Inference (UE SDK)
@@ -48,7 +49,8 @@ using CortexStreamResult = Either<FString, TArray<FString>>;
 // error handling and composition.
 // ==========================================================
 
-// Types (FCortex, FCortexConfig, FCortexResponse) are defined in ForbocAI_SDK_Types.h
+// Types (FCortex, FCortexConfig, FCortexResponse) are defined in
+// ForbocAI_SDK_Types.h
 
 /**
  * Cortex Operations — Stateless free functions.
@@ -77,9 +79,9 @@ FORBOCAI_SDK_API CortexTypes::CortexInitResult Init(FCortex &Cortex);
  * @param Cortex The Cortex instance to use.
  * @param Prompt The input prompt text.
  * @param Context Optional context data.
- * @return The generated response.
+ * @return The generated response as a `TFuture`.
  */
-FORBOCAI_SDK_API CortexTypes::CortexCompletionResult
+FORBOCAI_SDK_API TFuture<CortexTypes::CortexCompletionResult>
 Complete(const FCortex &Cortex, const FString &Prompt,
          const TMap<FString, FString> &Context = TMap<FString, FString>());
 

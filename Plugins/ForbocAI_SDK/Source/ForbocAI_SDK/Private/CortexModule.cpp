@@ -19,7 +19,8 @@ using Context = void *;
 
 Context LoadModel(const FString &Path) {
 #if WITH_FORBOC_NATIVE
-  return reinterpret_cast<Context>(llama::load_model(TCHAR_TO_UTF8(*Path)));
+  auto utf8Path = StringCast<UTF8CHAR>(*Path);
+  return reinterpret_cast<Context>(llama::load_model(utf8Path.Get()));
 #else
   // Simulated Logic for CI/No-Native builds
   if (FPaths::FileExists(Path) || Path.Contains(TEXT("test_model.bin"))) {
@@ -44,9 +45,10 @@ FString Infer(Context Ctx, const FString &Prompt, int32 MaxTokens) {
   if (Ctx == nullptr)
     throw std::runtime_error("Invalid model context");
 #if WITH_FORBOC_NATIVE
+  auto utf8Prompt = StringCast<UTF8CHAR>(*Prompt);
   return FString(
       UTF8_TO_TCHAR(llama::infer(reinterpret_cast<llama::context *>(Ctx),
-                                 TCHAR_TO_UTF8(*Prompt), MaxTokens)));
+                                 utf8Prompt.Get(), MaxTokens)));
 #else
   return FString::Printf(TEXT("Simulated Inference: %s"), *Prompt.Left(20));
 #endif
@@ -81,31 +83,36 @@ CortexTypes::CortexInitResult CortexOps::Init(FCortex &Cortex) {
   }
 }
 
-CortexTypes::CortexCompletionResult
+TFuture<CortexTypes::CortexCompletionResult>
 CortexOps::Complete(const FCortex &Cortex, const FString &Prompt,
                     const TMap<FString, FString> &Context) {
-  try {
-    if (Cortex.EngineHandle == nullptr) {
-      return CortexTypes::make_left(
-          FString(TEXT("Cortex engine not initialized")));
-    }
-
-    // Native Interface Call
-    FString generatedText = Native::Llama::Infer(Cortex.EngineHandle, Prompt,
-                                                 128); // Default token limit
-
-    int32 tokenCount = generatedText.Len() / 4; // Approx
-
-    FCortexResponse response;
-    response.Text = generatedText;
-    response.TokenCount = tokenCount;
-    response.bSuccess = true;
-    response.ErrorMessage = TEXT("");
-
-    return CortexTypes::make_right(FString(), response);
-  } catch (const std::exception &e) {
-    return CortexTypes::make_left(FString(e.what()));
+  if (Cortex.EngineHandle == nullptr) {
+    TPromise<CortexTypes::CortexCompletionResult> Promise;
+    Promise.SetValue(CortexTypes::make_left(
+        FString(TEXT("Cortex engine not initialized"))));
+    return Promise.GetFuture();
   }
+
+  // Offload SLM inference to a background thread to prevent hitching
+  return Async(EAsyncExecution::Thread, [Cortex, Prompt]() -> CortexTypes::CortexCompletionResult {
+    try {
+      // Native Interface Call
+      FString generatedText = Native::Llama::Infer(Cortex.EngineHandle, Prompt,
+                                                   128); // Default token limit
+
+      int32 tokenCount = generatedText.Len() / 4; // Approx
+
+      FCortexResponse response;
+      response.Text = generatedText;
+      response.TokenCount = tokenCount;
+      response.bSuccess = true;
+      response.ErrorMessage = TEXT("");
+
+      return CortexTypes::make_right(FString(), response);
+    } catch (const std::exception &e) {
+      return CortexTypes::make_left(FString(e.what()));
+    }
+  });
 }
 
 CortexTypes::CortexStreamResult
