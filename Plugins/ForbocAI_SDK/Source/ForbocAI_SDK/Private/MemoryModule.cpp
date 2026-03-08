@@ -1,8 +1,10 @@
 #include "MemoryModule.h"
 #include "Core/functional_core.hpp"
 #include "HAL/PlatformFilemanager.h"
+#include "MemorySlice.h"
 #include "Misc/FileHelper.h"
 #include "Misc/Paths.h"
+#include "SDKStore.h"
 #include "Serialization/JsonSerializer.h"
 
 // ==========================================================
@@ -345,6 +347,10 @@ MemoryOps::Store(const FMemoryStore &Store, const FString &Text,
         try {
           FMemoryStore NewStore = Store;
 
+          // Dispatch Pending to Store
+          auto SDKStore = ConfigureSDKStore();
+          SDKStore.dispatch(MemorySlice::Actions::MemoryStorePending(Text));
+
           // Generate a new memory item
           FMemoryItem Item;
           Item.Id =
@@ -359,6 +365,8 @@ MemoryOps::Store(const FMemoryStore &Store, const FString &Text,
           auto embeddingResult = Internal::SQLiteVSS::GenerateEmbedding(
               Store.DatabaseHandle, Text);
           if (embeddingResult.isLeft) {
+            SDKStore.dispatch(
+                MemorySlice::Actions::MemoryStoreFailure(embeddingResult.left));
             return MemoryTypes::make_left(embeddingResult.left);
           }
 
@@ -366,11 +374,16 @@ MemoryOps::Store(const FMemoryStore &Store, const FString &Text,
           auto insertResult =
               Internal::SQLiteVSS::InsertMemory(Store.DatabaseHandle, Item);
           if (insertResult.isLeft) {
+            SDKStore.dispatch(
+                MemorySlice::Actions::MemoryStoreFailure(insertResult.left));
             return insertResult;
           }
 
           // Add to items array
           NewStore.Items.Add(Item);
+
+          // Dispatch Success to Store
+          SDKStore.dispatch(MemorySlice::Actions::MemoryStoreSuccess(Item));
 
           return MemoryTypes::make_right(FString(), NewStore);
         } catch (const std::exception &e) {
@@ -421,17 +434,32 @@ MemoryOps::Recall(const FMemoryStore &Store, const FString &Query,
   }
 
   // Offload semantic vector search to prevent hitch
-  return Async(EAsyncExecution::Thread,
-               [Store, Query, Limit]() -> MemoryTypes::MemoryStoreRecallResult {
-                 try {
-                   int32 ActualLimit =
-                       (Limit > 0) ? Limit : Store.Config.MaxRecallResults;
-                   return Internal::SQLiteVSS::VectorSearch(
-                       Store.DatabaseHandle, Query, ActualLimit);
-                 } catch (const std::exception &e) {
-                   return MemoryTypes::make_left(FString(e.what()));
-                 }
-               });
+  return Async(
+      EAsyncExecution::Thread,
+      [Store, Query, Limit]() -> MemoryTypes::MemoryStoreRecallResult {
+        try {
+          int32 ActualLimit =
+              (Limit > 0) ? Limit : Store.Config.MaxRecallResults;
+
+          auto SDKStore = ConfigureSDKStore();
+          SDKStore.dispatch(MemorySlice::Actions::MemoryRecallPending(Query));
+
+          auto SearchResult = Internal::SQLiteVSS::VectorSearch(
+              Store.DatabaseHandle, Query, ActualLimit);
+
+          if (SearchResult.isRight) {
+            SDKStore.dispatch(
+                MemorySlice::Actions::MemoryRecallSuccess(SearchResult.right));
+          } else {
+            SDKStore.dispatch(
+                MemorySlice::Actions::MemoryRecallFailure(SearchResult.left));
+          }
+
+          return SearchResult;
+        } catch (const std::exception &e) {
+          return MemoryTypes::make_left(FString(e.what()));
+        }
+      });
 }
 
 // Embedding generation implementation

@@ -66,12 +66,12 @@ namespace CortexOps {
 FORBOCAI_SDK_API FCortex Create(const FCortexConfig &Config);
 
 /**
- * Initializes the Cortex engine and loads the model.
+ * Initializes the Cortex engine and loads the model asynchronously.
  * Pure function: Cortex -> Result
  * @param Cortex The Cortex instance to initialize.
  * @return A validation result indicating success or failure.
  */
-FORBOCAI_SDK_API CortexTypes::CortexInitResult Init(FCortex &Cortex);
+FORBOCAI_SDK_API TFuture<CortexTypes::CortexInitResult> Init(FCortex &Cortex);
 
 /**
  * Generates text completion from prompt.

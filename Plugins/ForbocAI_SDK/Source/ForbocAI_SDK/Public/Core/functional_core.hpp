@@ -288,9 +288,8 @@ private:
   mutable std::shared_ptr<Result> lastResult;
 
   static Comparator defaultComparator() {
-    return Comparator([](const ArgsTuple &lhs, const ArgsTuple &rhs) {
-      return lhs == rhs;
-    });
+    return Comparator(
+        [](const ArgsTuple &lhs, const ArgsTuple &rhs) { return lhs == rhs; });
   }
 
 public:
@@ -591,8 +590,7 @@ public:
   }
 
   // Assign a known member without relying on reflection-like conventions.
-  template <typename T>
-  ConfigBuilder &setMember(T Config::*member, T value) {
+  template <typename T> ConfigBuilder &setMember(T Config::*member, T value) {
     return with([member, value](Config &config) mutable {
       config.*member = std::move(value);
     });
@@ -660,9 +658,7 @@ template <typename T> struct TestResult {
   bool isSuccessful() const { return bSuccess; }
 
   // Prefer this accessor in no-exception or UE-constrained builds.
-  Maybe<T> TryGetValue() const {
-    return bSuccess ? just(value) : nothing<T>();
-  }
+  Maybe<T> TryGetValue() const { return bSuccess ? just(value) : nothing<T>(); }
 
   // Get value or fail fast if the result is not successful.
   T getValue() const {
@@ -805,7 +801,8 @@ public:
     return *this;
   }
 
-  const AsyncResult<void> &catch_(std::function<void(std::string)> handler) const {
+  const AsyncResult<void> &
+  catch_(std::function<void(std::string)> handler) const {
     state->errorHandlers.push_back(std::move(handler));
     return *this;
   }
@@ -868,6 +865,119 @@ auto then(const AsyncResult<T> &res, F f) -> AsyncResult<U> {
       });
 }
 } // namespace AsyncChain
+
+// ==========================================
+// 19. AsyncHttp (UE HttpModule Functional Wrapper)
+// ==========================================
+
+namespace AsyncHttp {
+
+template <typename T>
+AsyncResult<HttpResult<T>> Post(const FString &Url, const FString &Payload,
+                                const FString &ApiKey = TEXT("")) {
+  return AsyncResult<HttpResult<T>>::create([Url, Payload, ApiKey](
+                                                auto resolve, auto reject) {
+    TSharedRef<IHttpRequest, ESPMode::ThreadSafe> Request =
+        FHttpModule::Get().CreateRequest();
+    Request->SetURL(Url);
+    Request->SetVerb(TEXT("POST"));
+    Request->SetHeader(TEXT("Content-Type"),
+                       TEXT("application/json; charset=utf-8"));
+    if (!ApiKey.IsEmpty()) {
+      Request->SetHeader(TEXT("Authorization"),
+                         FString::Printf(TEXT("Bearer %s"), *ApiKey));
+    }
+    Request->SetContentAsString(Payload);
+
+    Request->OnProcessRequestComplete().BindLambda(
+        [resolve, reject](FHttpRequestPtr Req, FHttpResponsePtr Res,
+                          bool bWasSuccessful) {
+          if (!bWasSuccessful || !Res.IsValid()) {
+            resolve(HttpResult<T>::Failure("Network failure", 0));
+            return;
+          }
+
+          HttpStatusCode Code = Res->GetResponseCode();
+          FString Content = Res->GetContentAsString();
+
+          if (Code >= 200 && Code < 300) {
+            TSharedPtr<FJsonObject> JsonObject;
+            TSharedRef<TJsonReader<>> Reader =
+                TJsonReaderFactory<>::Create(Content);
+            if (FJsonSerializer::Deserialize(Reader, JsonObject) &&
+                JsonObject.IsValid()) {
+              T ResultPayload;
+              if (FJsonObjectConverter::JsonObjectToUStruct(
+                      JsonObject.ToSharedRef(), T::StaticStruct(),
+                      &ResultPayload)) {
+                resolve(HttpResult<T>::Success(ResultPayload, Code));
+              } else {
+                resolve(HttpResult<T>::Failure("JSON Mapping failed", Code));
+              }
+            } else {
+              resolve(HttpResult<T>::Failure("JSON Parsing failed", Code));
+            }
+          } else {
+            resolve(HttpResult<T>::Failure(TCHAR_TO_UTF8(*Content), Code));
+          }
+        });
+
+    Request->ProcessRequest();
+  });
+}
+
+template <typename T>
+AsyncResult<HttpResult<T>> Get(const FString &Url,
+                               const FString &ApiKey = TEXT("")) {
+  return AsyncResult<HttpResult<T>>::create([Url, ApiKey](auto resolve,
+                                                          auto reject) {
+    TSharedRef<IHttpRequest, ESPMode::ThreadSafe> Request =
+        FHttpModule::Get().CreateRequest();
+    Request->SetURL(Url);
+    Request->SetVerb(TEXT("GET"));
+    if (!ApiKey.IsEmpty()) {
+      Request->SetHeader(TEXT("Authorization"),
+                         FString::Printf(TEXT("Bearer %s"), *ApiKey));
+    }
+
+    Request->OnProcessRequestComplete().BindLambda(
+        [resolve, reject](FHttpRequestPtr Req, FHttpResponsePtr Res,
+                          bool bWasSuccessful) {
+          if (!bWasSuccessful || !Res.IsValid()) {
+            resolve(HttpResult<T>::Failure("Network failure", 0));
+            return;
+          }
+
+          HttpStatusCode Code = Res->GetResponseCode();
+          FString Content = Res->GetContentAsString();
+
+          if (Code >= 200 && Code < 300) {
+            TSharedPtr<FJsonObject> JsonObject;
+            TSharedRef<TJsonReader<>> Reader =
+                TJsonReaderFactory<>::Create(Content);
+            if (FJsonSerializer::Deserialize(Reader, JsonObject) &&
+                JsonObject.IsValid()) {
+              T ResultPayload;
+              if (FJsonObjectConverter::JsonObjectToUStruct(
+                      JsonObject.ToSharedRef(), T::StaticStruct(),
+                      &ResultPayload)) {
+                resolve(HttpResult<T>::Success(ResultPayload, Code));
+              } else {
+                resolve(HttpResult<T>::Failure("JSON Mapping failed", Code));
+              }
+            } else {
+              resolve(HttpResult<T>::Failure("JSON Parsing failed", Code));
+            }
+          } else {
+            resolve(HttpResult<T>::Failure(TCHAR_TO_UTF8(*Content), Code));
+          }
+        });
+
+    Request->ProcessRequest();
+  });
+}
+
+} // namespace AsyncHttp
 
 } // namespace func
 

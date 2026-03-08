@@ -2,8 +2,8 @@
 #ifndef RTK_HPP
 #define RTK_HPP
 
-#include "Core/functional_core.hpp"
 #include "CoreMinimal.h"
+#include "functional_core.hpp"
 #include <functional>
 #include <memory>
 #include <vector>
@@ -103,8 +103,11 @@ public:
                                          const AnyAction &action) {
       const SliceState &prevSlice = prevState.*member;
       SliceState nextSlice = reducer(prevSlice, action);
-      nextState.*member = std::move(nextSlice);
-      return true;
+      bool changed = !(prevSlice == nextSlice);
+      if (changed) {
+        nextState.*member = std::move(nextSlice);
+      }
+      return changed;
     });
     return *this;
   }
@@ -353,14 +356,8 @@ template <typename T> struct EntityAdapterOps {
   EntityState<T> removeOne(const EntityState<T> &state,
                            const FString &id) const {
     EntityState<T> next = state;
-    if (next.entities.Find(id)) {
-      next.entities.Map.erase(id); // Using underlying std::map erase
-      for (auto it = next.ids.begin(); it != next.ids.end(); ++it) {
-        if (*it == id) {
-          next.ids.erase(it);
-          break;
-        }
-      }
+    if (next.entities.Remove(id) > 0) {
+      next.ids.Remove(id);
     }
     return next;
   }
@@ -369,15 +366,8 @@ template <typename T> struct EntityAdapterOps {
                             const TArray<FString> &removeIds) const {
     EntityState<T> next = state;
     for (const auto &id : removeIds) {
-      if (next.entities.Find(id)) {
-        next.entities.Map.erase(id);
-        for (auto it = next.ids.begin(); it != next.ids.end();) {
-          if (*it == id) {
-            it = next.ids.erase(it);
-          } else {
-            ++it;
-          }
-        }
+      if (next.entities.Remove(id) > 0) {
+        next.ids.Remove(id);
       }
     }
     return next;
@@ -591,6 +581,15 @@ template <typename State> struct ListenerMiddleware {
 
 namespace rtk {
 
+namespace detail {
+template <typename Result, typename State, typename Combiner,
+          typename InputTuple, size_t... Is>
+Result evaluateSelector(const State &state, Combiner &combiner,
+                        const InputTuple &inputs, func::seq<Is...>) {
+  return combiner(std::get<Is>(inputs)(state)...);
+}
+} // namespace detail
+
 template <typename State, typename Result, typename... InSelectors>
 std::function<Result(const State &)> createSelector(
     const std::tuple<InSelectors...> &inputSelectors,
@@ -603,14 +602,9 @@ std::function<Result(const State &)> createSelector(
 
   return
       [inputSelectors, memoizedCombiner](const State &state) mutable -> Result {
-        // Evaluate all upstream inputs
-        auto tupleOfResults =
-            func::tupleMap(inputSelectors, [&state](const auto &selector) {
-              return selector(state);
-            });
-
-        // Unpack tuple into memoizedCombiner arguments
-        return func::apply(memoizedCombiner, tupleOfResults);
+        return detail::evaluateSelector<Result>(
+            state, memoizedCombiner, inputSelectors,
+            func::gen_seq<sizeof...(InSelectors)>());
       };
 }
 
@@ -677,6 +671,48 @@ template <typename State> struct ApiSlice {
         });
   }
 };
+
+} // namespace rtk
+
+// ==========================================
+// Phase 8: Store Configuration
+// ==========================================
+
+namespace rtk {
+
+template <typename State> struct EnhancedStore {
+  std::shared_ptr<Store<State>> CoreStore;
+  std::function<AnyAction(const AnyAction &)> Dispatch;
+
+  const State &getState() const { return CoreStore->getState(); }
+
+  std::function<void()> subscribe(std::function<void()> Callback) {
+    return CoreStore->subscribe(std::move(Callback));
+  }
+
+  AnyAction dispatch(const AnyAction &action) const { return Dispatch(action); }
+};
+
+template <typename State>
+EnhancedStore<State>
+configureStore(CaseReducer<State> rootReducer, State preloadedState,
+               const std::vector<Middleware<State>> &middlewares) {
+  EnhancedStore<State> enhanced;
+  auto coreStore = std::make_shared<Store<State>>(std::move(preloadedState),
+                                                  std::move(rootReducer));
+  enhanced.CoreStore = coreStore;
+
+  auto coreDispatch = [coreStore](const AnyAction &action) -> AnyAction {
+    return coreStore->dispatch(action);
+  };
+
+  auto getState = [coreStore]() -> State { return coreStore->getState(); };
+
+  enhanced.Dispatch =
+      applyMiddleware<State>(coreDispatch, getState, middlewares);
+
+  return enhanced;
+}
 
 } // namespace rtk
 

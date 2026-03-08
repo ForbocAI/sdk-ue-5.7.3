@@ -1,9 +1,11 @@
 #include "BridgeModule.h"
 #include "AgentModule.h"
+#include "BridgeSlice.h"
 #include "Core/functional_core.hpp"
 #include "HAL/PlatformFilemanager.h"
 #include "Misc/FileHelper.h"
 #include "Misc/Paths.h"
+#include "SDKStore.h"
 #include "Serialization/JsonSerializer.h"
 
 // ==========================================
@@ -53,7 +55,11 @@ BridgeOps::Validate(const FAgentAction &Action,
   auto validationPipeline = BridgeHelpers::bridgeValidationPipeline();
   auto result = validationPipeline.run(Action);
 
+  auto SDKStore = ConfigureSDKStore();
+  SDKStore.dispatch(BridgeActions::BridgeValidationPending());
+
   if (result.isLeft) {
+    SDKStore.dispatch(BridgeActions::BridgeValidationFailure(result.left));
     return BridgeTypes::make_left(result.left);
   }
 
@@ -61,15 +67,20 @@ BridgeOps::Validate(const FAgentAction &Action,
 
   for (const FValidationRule &Rule : Rules) {
     if (Rule.ActionTypes.Contains(validatedAction.Type)) {
-      const FValidationResult Result = Rule.Validator(validatedAction, Context);
+      const FValidationResult RuleResult =
+          Rule.Validator(validatedAction, Context);
 
-      if (!Result.bValid) {
-        return BridgeTypes::make_left(Result.Reason);
+      if (!RuleResult.bValid) {
+        SDKStore.dispatch(
+            BridgeActions::BridgeValidationFailure(RuleResult.Reason));
+        return BridgeTypes::make_left(RuleResult.Reason);
       }
     }
   }
 
-  return BridgeTypes::make_right(TypeFactory::Valid(TEXT("All rules passed")));
+  FValidationResult FinalSuccess = TypeFactory::Valid(TEXT("All rules passed"));
+  SDKStore.dispatch(BridgeActions::BridgeValidationSuccess(FinalSuccess));
+  return BridgeTypes::make_right(FinalSuccess);
 }
 
 TArray<FValidationRule> BridgeOps::CreateRPGRules() {

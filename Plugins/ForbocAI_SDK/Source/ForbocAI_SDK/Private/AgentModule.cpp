@@ -70,159 +70,35 @@ FAgentState AgentOps::CalculateNewState(const FAgentState &Current,
   return TypeFactory::AgentState(Updates.JsonData);
 }
 
+#include "SDKStore.h"
+#include "Thunks.h"
+
 AgentTypes::AsyncResult<FAgentResponse>
 AgentOps::Process(const FAgent &Agent, const FString &Input,
                   const TMap<FString, FString> &Context) {
   return AgentTypes::AsyncResult<FAgentResponse>::create(
       [Agent, Input, Context](std::function<void(FAgentResponse)> resolve,
                               std::function<void(std::string)> reject) {
-        // =========================================================
-        // 7-Step Async Pipeline (Neuro-Symbolic Protocol)
-        // =========================================================
+        // Use the global SDK Store to dispatch the processNPC thunk
+        auto Store = ConfigureSDKStore();
 
-        // 1. OBSERVE: Pack Context into JSON
-        TSharedPtr<FJsonObject> ContextJson = MakeShareable(new FJsonObject);
-        for (const auto &Elem : Context) {
-          ContextJson->SetStringField(Elem.Key, Elem.Value);
-        }
+        // Dispatch the thunk
+        auto ThunkResult = processNPC(Agent.Id)(
+            [Store](const AnyAction &a) { return Store.dispatch(a); },
+            [Store]() { return Store.getState(); });
 
-        // Wrap in Directive Request structure
-        TSharedPtr<FJsonObject> DirectiveReq = MakeShareable(new FJsonObject);
-        TArray<TSharedPtr<FJsonValue>> ContextArray;
-        for (const auto &Elem : Context) {
-          TArray<TSharedPtr<FJsonValue>> Pair;
-          Pair.Add(MakeShareable(new FJsonValueString(Elem.Key)));
-          Pair.Add(MakeShareable(new FJsonValueString(Elem.Value)));
-          ContextArray.Add(MakeShareable(new FJsonValueArray(Pair)));
-        }
-        DirectiveReq->SetArrayField(TEXT("dirContext"), ContextArray);
-
-        FString DirectiveBody;
-        TSharedRef<TJsonWriter<>> Writer =
-            TJsonWriterFactory<>::Create(&DirectiveBody);
-        FJsonSerializer::Serialize(DirectiveReq.ToSharedRef(), Writer);
-
-        // 2. DIRECTIVE REQUEST (Step 2)
-        TSharedRef<IHttpRequest, ESPMode::ThreadSafe> DirRequest =
-            FHttpModule::Get().CreateRequest();
-        DirRequest->SetURL(Agent.ApiUrl + TEXT("/agents/") + Agent.Id +
-                           TEXT("/directive"));
-        DirRequest->SetVerb(TEXT("POST"));
-        DirRequest->SetHeader(TEXT("Content-Type"), TEXT("application/json"));
-        DirRequest->SetHeader(TEXT("Authorization"),
-                              TEXT("Bearer sk_test_key")); // Mock key
-        DirRequest->SetContentAsString(DirectiveBody);
-
-        DirRequest->OnProcessRequestComplete().BindLambda(
-            [Agent, Input, resolve, reject](FHttpRequestPtr Request,
-                                            FHttpResponsePtr Response,
-                                            bool bSuccess) {
-              if (!bSuccess || !Response.IsValid() ||
-                  Response->GetResponseCode() != 200) {
-                // Fallback / Error
-                // In functional style, we reject on protocol failure
-                reject("Error connecting to Mind or Network Error");
-                return;
-              }
-
-              // Parse Directive
-              TSharedPtr<FJsonObject> DirJson;
-              TSharedRef<TJsonReader<>> Reader =
-                  TJsonReaderFactory<>::Create(Response->GetContentAsString());
-
-              FString Instruction = TEXT("IDLE");
-              FString DirectiveReason = TEXT("No directive");
-              FString Target = TEXT("");
-
-              if (FJsonSerializer::Deserialize(Reader, DirJson)) {
-                Instruction = DirJson->GetStringField(TEXT("dirInstruction"));
-                DirectiveReason = DirJson->GetStringField(TEXT("dirReason"));
-                Target = DirJson->GetStringField(TEXT("dirTarget"));
-              }
-
-              // 3. GENERATE (Local SLM Simulation) (Step 3)
-              FString GeneratedDialogue =
-                  FString::Printf(TEXT("I will %s because %s."), *Instruction,
-                                  *DirectiveReason);
-              FAgentAction Action = TypeFactory::Action(Instruction, Target);
-
-              // 4. BUNDLE VERDICT REQUEST (Step 4)
-
-              // Prepare Verdict Payload
-              TSharedPtr<FJsonObject> VerdictReq =
-                  MakeShareable(new FJsonObject);
-
-              // Re-construct Directive Response inside (required by API
-              // signature)
-              VerdictReq->SetObjectField(TEXT("verDirective"), DirJson);
-
-              // Construct Action
-              TSharedPtr<FJsonObject> ActionJson =
-                  MakeShareable(new FJsonObject);
-              ActionJson->SetStringField(TEXT("gaType"), Action.Type);
-              ActionJson->SetStringField(TEXT("actionTarget"), Action.Target);
-
-              VerdictReq->SetObjectField(TEXT("verAction"), ActionJson);
-              VerdictReq->SetStringField(TEXT("verThought"), GeneratedDialogue);
-
-              FString VerdictBody;
-              TSharedRef<TJsonWriter<>> VWriter =
-                  TJsonWriterFactory<>::Create(&VerdictBody);
-              FJsonSerializer::Serialize(VerdictReq.ToSharedRef(), VWriter);
-
-              // 5. VERDICT REQUEST (Step 5)
-              TSharedRef<IHttpRequest, ESPMode::ThreadSafe> VerRequest =
-                  FHttpModule::Get().CreateRequest();
-              VerRequest->SetURL(Agent.ApiUrl + TEXT("/agents/") + Agent.Id +
-                                 TEXT("/verdict"));
-              VerRequest->SetVerb(TEXT("POST"));
-              VerRequest->SetHeader(TEXT("Content-Type"),
-                                    TEXT("application/json"));
-              VerRequest->SetHeader(TEXT("Authorization"),
-                                    TEXT("Bearer sk_test_key"));
-              VerRequest->SetContentAsString(VerdictBody);
-
-              VerRequest->OnProcessRequestComplete().BindLambda(
-                  [GeneratedDialogue, Action, resolve,
-                   reject](FHttpRequestPtr VReq, FHttpResponsePtr VRes,
-                           bool bVSuccess) {
-                    FString Signature = TEXT("unsigned");
-                    bool bValid = false;
-
-                    if (bVSuccess && VRes.IsValid() &&
-                        VRes->GetResponseCode() == 200) {
-                      TSharedPtr<FJsonObject> VerJson;
-                      TSharedRef<TJsonReader<>> VReader =
-                          TJsonReaderFactory<>::Create(
-                              VRes->GetContentAsString());
-
-                      if (FJsonSerializer::Deserialize(VReader, VerJson)) {
-                        bValid = VerJson->GetBoolField(TEXT("verValid"));
-                        Signature =
-                            VerJson->GetStringField(TEXT("verSignature"));
-                      }
-                    }
-
-                    // 6. SIGN & EXECUTE (Step 6 & 7)
-                    if (!bValid) {
-                      // If invalid, we return a BLOCKED response.
-                      resolve(
-                          FAgentResponse{TEXT("..."),
-                                         TypeFactory::Action(TEXT("BLOCKED"),
-                                                             TEXT("Protocol")),
-                                         TEXT("Blocked by Protocol")});
-                    } else {
-                      // Return Validated Action
-                      resolve(FAgentResponse{
-                          GeneratedDialogue, Action,
-                          FString::Printf(TEXT("Signed: %s"), *Signature)});
-                    }
-                  });
-
-              VerRequest->ProcessRequest();
-            });
-
-        DirRequest->ProcessRequest();
+        // Chain the result back to FAgentResponse
+        func::AsyncChain::then<FString, void>(
+            ThunkResult,
+            [resolve, Agent](FString FinalVerdict) {
+              FAgentResponse Res;
+              Res.GeneratedDialogue = FinalVerdict;
+              Res.Action =
+                  TypeFactory::Action(TEXT("Dialogue"), TEXT("Character"));
+              Res.Signature = TEXT("RTK_SIGNED");
+              resolve(Res);
+            })
+            .catch_([reject](std::string Error) { reject(Error); });
       });
 }
 

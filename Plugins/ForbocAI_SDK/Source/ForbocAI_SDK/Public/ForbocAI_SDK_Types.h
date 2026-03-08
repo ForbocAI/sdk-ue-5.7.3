@@ -1,7 +1,7 @@
 #pragma once
 
-#include "CoreMinimal.h"
 #include "Core/functional_core.hpp"
+#include "CoreMinimal.h"
 #include "ForbocAI_SDK_Types.generated.h" // UHT generated
 
 // ==========================================================
@@ -21,26 +21,142 @@
 
 // Functional Core Type Aliases for SDK types
 namespace SDKTypes {
-    using func::Maybe;
-    using func::Either;
-    using func::Pipeline;
-    using func::Curried;
-    using func::Lazy;
-    using func::ValidationPipeline;
-    using func::ConfigBuilder;
-    using func::TestResult;
-    using func::AsyncResult;
-    
-    // Type aliases for SDK operations
-    using AgentCreationResult = Either<FString, FAgent>;
-    using AgentValidationResult = Either<FString, FAgentState>;
-    using AgentProcessResult = Either<FString, FAgentResponse>;
-    using AgentExportResult = Either<FString, FSoul>;
-    using MemoryStoreResult = Either<FString, FMemoryStore>;
-    using CortexCreationResult = Either<FString, FCortex>;
-    using GhostTestResult = TestResult<FGhostTestResult>;
-    using BridgeValidationResult = Either<FString, FValidationResult>;
-}
+using func::AsyncResult;
+using func::ConfigBuilder;
+using func::Curried;
+using func::Either;
+using func::Lazy;
+using func::Maybe;
+using func::Pipeline;
+using func::TestResult;
+using func::ValidationPipeline;
+
+// Type aliases for SDK operations
+using AgentCreationResult = Either<FString, FAgent>;
+using AgentValidationResult = Either<FString, FAgentState>;
+using AgentProcessResult = Either<FString, FAgentResponse>;
+using AgentExportResult = Either<FString, FSoul>;
+using MemoryStoreResult = Either<FString, FMemoryStore>;
+using CortexCreationResult = Either<FString, FCortex>;
+using GhostTestResult = TestResult<FGhostTestResult>;
+using BridgeValidationResult = Either<FString, FValidationResult>;
+} // namespace SDKTypes
+
+/**
+ * Directive Status
+ */
+UENUM(BlueprintType)
+enum class EDirectiveStatus : uint8 { Idle, Running, Succeeded, Failed };
+
+/**
+ * Directive Run — A record of a protocol interaction.
+ */
+USTRUCT(BlueprintType)
+struct FDirectiveRun {
+  GENERATED_BODY()
+
+  UPROPERTY(BlueprintReadOnly)
+  FString Id;
+
+  UPROPERTY(BlueprintReadOnly)
+  FString NpcId;
+
+  UPROPERTY(BlueprintReadOnly)
+  EDirectiveStatus Status;
+
+  UPROPERTY(BlueprintReadOnly)
+  TArray<FString> Tape;
+
+  UPROPERTY(BlueprintReadOnly)
+  FString LastResult;
+
+  UPROPERTY(BlueprintReadOnly)
+  FString Error;
+
+  UPROPERTY(BlueprintReadOnly)
+  int32 TurnCount;
+
+  UPROPERTY(BlueprintReadOnly)
+  int64 StartTime;
+
+  UPROPERTY(BlueprintReadOnly)
+  int64 EndTime;
+
+  FDirectiveRun()
+      : Status(EDirectiveStatus::Idle), TurnCount(0), StartTime(0), EndTime(0) {
+  }
+};
+
+/**
+ * Cortex Status — Engine state metadata.
+ */
+USTRUCT(BlueprintType)
+struct FCortexStatus {
+  GENERATED_BODY()
+
+  UPROPERTY(BlueprintReadOnly)
+  FString Id;
+
+  UPROPERTY(BlueprintReadOnly)
+  FString Model;
+
+  UPROPERTY(BlueprintReadOnly)
+  bool bReady;
+
+  UPROPERTY(BlueprintReadOnly)
+  FString Engine;
+
+  FCortexStatus() : bReady(false) {}
+};
+
+/**
+ * NPC Instruction types for the protocol loop.
+ */
+UENUM(BlueprintType)
+enum class ENPCInstructionType : uint8 {
+  IdentifyActor,
+  QueryVector,
+  ExecuteInference,
+  Finalize
+};
+
+/**
+ * NPC Instruction — A single step in the recursive protocol.
+ */
+USTRUCT(BlueprintType)
+struct FNPCInstruction {
+  GENERATED_BODY()
+
+  UPROPERTY(BlueprintReadOnly)
+  ENPCInstructionType Type;
+
+  UPROPERTY(BlueprintReadOnly)
+  FString Payload;
+
+  UPROPERTY(BlueprintReadOnly)
+  TArray<FString> Tape;
+
+  FNPCInstruction() : Type(ENPCInstructionType::Finalize) {}
+};
+
+/**
+ * NPC Process Request — Sent to the API for the next protocol step.
+ */
+USTRUCT(BlueprintType)
+struct FNPCProcessRequest {
+  GENERATED_BODY()
+
+  UPROPERTY(BlueprintReadOnly)
+  FString NpcId;
+
+  UPROPERTY(BlueprintReadOnly)
+  TArray<FString> Tape;
+
+  UPROPERTY(BlueprintReadOnly)
+  FString LastResult;
+
+  FNPCProcessRequest() {}
+};
 
 /**
  * Agent State — Immutable data.
@@ -217,19 +333,19 @@ struct FMemoryConfig {
   /** The database file path. */
   UPROPERTY()
   FString DatabasePath;
-  
+
   /** Maximum number of memories to store. */
   UPROPERTY()
   int32 MaxMemories;
-  
+
   /** Vector dimension size. */
   UPROPERTY()
   int32 VectorDimension;
-  
+
   /** Whether to use GPU acceleration if available. */
   UPROPERTY()
   bool UseGPU;
-  
+
   /** Maximum results to return from recall. */
   UPROPERTY()
   int32 MaxRecallResults;
@@ -493,11 +609,10 @@ inline FSoul Soul(FString Id, FString Version, FString Name, FString Persona,
 }
 
 // --- FMemoryConfig ---
-inline FMemoryConfig MemoryConfig(FString DatabasePath = TEXT("ForbocAI_Memory.db"),
-                                 int32 MaxMemories = 10000,
-                                 int32 VectorDimension = 384,
-                                 bool UseGPU = false,
-                                 int32 MaxRecallResults = 10) {
+inline FMemoryConfig
+MemoryConfig(FString DatabasePath = TEXT("ForbocAI_Memory.db"),
+             int32 MaxMemories = 10000, int32 VectorDimension = 384,
+             bool UseGPU = false, int32 MaxRecallResults = 10) {
   FMemoryConfig C;
   C.DatabasePath = MoveTemp(DatabasePath);
   C.MaxMemories = MaxMemories;
@@ -509,11 +624,9 @@ inline FMemoryConfig MemoryConfig(FString DatabasePath = TEXT("ForbocAI_Memory.d
 
 // --- FCortexConfig ---
 inline FCortexConfig CortexConfig(FString Model = TEXT("smalll2-135m"),
-                                 bool UseGPU = false,
-                                 int32 MaxTokens = 512,
-                                 float Temperature = 0.7f,
-                                 int32 TopK = 40,
-                                 float TopP = 0.9f) {
+                                  bool UseGPU = false, int32 MaxTokens = 512,
+                                  float Temperature = 0.7f, int32 TopK = 40,
+                                  float TopP = 0.9f) {
   FCortexConfig C;
   C.Model = MoveTemp(Model);
   C.UseGPU = UseGPU;
@@ -525,12 +638,11 @@ inline FCortexConfig CortexConfig(FString Model = TEXT("smalll2-135m"),
 }
 
 // --- FGhostConfig ---
-inline FGhostConfig GhostConfig(FAgent Agent,
-                               TArray<FString> Scenarios = {},
-                               int32 MaxIterations = 100,
-                               TMap<FString, FString> ExpectedResponses = {},
-                               bool bVerbose = false,
-                               FString ApiUrl = TEXT("")) {
+inline FGhostConfig GhostConfig(FAgent Agent, TArray<FString> Scenarios = {},
+                                int32 MaxIterations = 100,
+                                TMap<FString, FString> ExpectedResponses = {},
+                                bool bVerbose = false,
+                                FString ApiUrl = TEXT("")) {
   FGhostConfig C;
   C.Agent = MoveTemp(Agent);
   C.Scenarios = MoveTemp(Scenarios);

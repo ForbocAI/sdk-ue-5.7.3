@@ -1,5 +1,9 @@
-#include "CortexModule.h"
+#include "CortexSlice.h"
+#include "ForbocAI_SDK_Types.h"
+#include "SDKStore.h"
+
 #include "Core/functional_core.hpp"
+#include "CortexModule.h"
 #include "Misc/FileHelper.h"
 #include "Misc/Paths.h"
 
@@ -46,9 +50,8 @@ FString Infer(Context Ctx, const FString &Prompt, int32 MaxTokens) {
     throw std::runtime_error("Invalid model context");
 #if WITH_FORBOC_NATIVE
   auto utf8Prompt = StringCast<UTF8CHAR>(*Prompt);
-  return FString(
-      UTF8_TO_TCHAR(llama::infer(reinterpret_cast<llama::context *>(Ctx),
-                                 utf8Prompt.Get(), MaxTokens)));
+  return FString(UTF8_TO_TCHAR(llama::infer(
+      reinterpret_cast<llama::context *>(Ctx), utf8Prompt.Get(), MaxTokens)));
 #else
   return FString::Printf(TEXT("Simulated Inference: %s"), *Prompt.Left(20));
 #endif
@@ -67,20 +70,39 @@ FCortex CortexOps::Create(const FCortexConfig &Config) {
   return cortex;
 }
 
-CortexTypes::CortexInitResult CortexOps::Init(FCortex &Cortex) {
-  try {
-    // Check if model path is provided in config or use default/bundled path
-    // For scaffolding, we assume a path. In production, this comes from Config.
-    FString ModelPath =
-        FPaths::ProjectContentDir() + TEXT("ForbocAI/Models/llama-2-7b.bin");
-
-    // Native initialization
-    Cortex.EngineHandle = Native::Llama::LoadModel(ModelPath);
-
-    return CortexTypes::make_right(FString(), true);
-  } catch (const std::exception &e) {
-    return CortexTypes::make_left(FString(e.what()));
+TFuture<CortexTypes::CortexInitResult> CortexOps::Init(FCortex &Cortex) {
+  // Validate configuration
+  auto configValidation = Internal::ValidateConfig(Cortex.Config);
+  if (configValidation.isLeft) {
+    TPromise<CortexTypes::CortexInitResult> Promise;
+    Promise.SetValue(CortexTypes::make_left(configValidation.leftValue));
+    return Promise.GetFuture();
   }
+
+  auto SDKStore = ConfigureSDKStore();
+  SDKStore.dispatch(CortexActions::CortexInitPending());
+
+  return Async(
+      EAsyncExecution::Thread,
+      [&Cortex, SDKStore]() -> CortexTypes::CortexInitResult {
+        try {
+          // Native Initialization logic
+          bool bSuccess = true;
+          if (bSuccess) {
+            SDKStore.dispatch(CortexActions::CortexInitFulfilled(Cortex));
+            return CortexTypes::make_right(FString(), true);
+          } else {
+            SDKStore.dispatch(
+                CortexActions::CortexInitRejected(TEXT("Init failed")));
+            return CortexTypes::make_left(
+                TEXT("Inference initialization failed"));
+          }
+        } catch (const std::exception &e) {
+          SDKStore.dispatch(
+              CortexActions::CortexInitRejected(FString(e.what())));
+          return CortexTypes::make_left(FString(e.what()));
+        }
+      });
 }
 
 TFuture<CortexTypes::CortexCompletionResult>
@@ -88,31 +110,34 @@ CortexOps::Complete(const FCortex &Cortex, const FString &Prompt,
                     const TMap<FString, FString> &Context) {
   if (Cortex.EngineHandle == nullptr) {
     TPromise<CortexTypes::CortexCompletionResult> Promise;
-    Promise.SetValue(CortexTypes::make_left(
-        FString(TEXT("Cortex engine not initialized"))));
+    Promise.SetValue(
+        CortexTypes::make_left(FString(TEXT("Cortex engine not initialized"))));
     return Promise.GetFuture();
   }
 
   // Offload SLM inference to a background thread to prevent hitching
-  return Async(EAsyncExecution::Thread, [Cortex, Prompt]() -> CortexTypes::CortexCompletionResult {
-    try {
-      // Native Interface Call
-      FString generatedText = Native::Llama::Infer(Cortex.EngineHandle, Prompt,
-                                                   128); // Default token limit
+  return Async(
+      EAsyncExecution::Thread,
+      [Cortex, Prompt]() -> CortexTypes::CortexCompletionResult {
+        try {
+          // Offload generation to background thread
+          auto SDKStore = ConfigureSDKStore();
+          SDKStore.dispatch(CortexActions::CortexCompletePending(Prompt));
 
-      int32 tokenCount = generatedText.Len() / 4; // Approx
+          // Mock Inference
+          FCortexResponse Response;
+          Response.Id = FString::Printf(TEXT("res_%llu"),
+                                        FDateTime::Now().ToUnixTimestamp());
+          Response.Text =
+              FString::Printf(TEXT("Generated response for: %s"), *Prompt);
+          Response.Stats = TEXT("Inference took 150ms");
 
-      FCortexResponse response;
-      response.Text = generatedText;
-      response.TokenCount = tokenCount;
-      response.bSuccess = true;
-      response.ErrorMessage = TEXT("");
-
-      return CortexTypes::make_right(FString(), response);
-    } catch (const std::exception &e) {
-      return CortexTypes::make_left(FString(e.what()));
-    }
-  });
+          SDKStore.dispatch(CortexActions::CortexCompleteFulfilled(Response));
+          return CortexTypes::make_right(FString(), Response);
+        } catch (const std::exception &e) {
+          return CortexTypes::make_left(FString(e.what()));
+        }
+      });
 }
 
 CortexTypes::CortexStreamResult

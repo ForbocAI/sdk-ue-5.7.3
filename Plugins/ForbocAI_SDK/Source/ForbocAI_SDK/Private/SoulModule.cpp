@@ -3,7 +3,9 @@
 #include "Interfaces/IHttpRequest.h"
 #include "Interfaces/IHttpResponse.h"
 #include "JsonObjectConverter.h"
+#include "SDKStore.h"
 #include "Serialization/JsonSerializer.h"
+#include "SoulSlice.h"
 
 // ==========================================
 // SOUL OPERATIONS — Pure free functions
@@ -64,43 +66,41 @@ SoulTypes::SoulExportResult SoulOps::ExportToArweave(const FSoul &Soul,
   return SoulTypes::AsyncResult<FString>::create(
       [Soul, ApiUrl](std::function<void(FString)> resolve,
                      std::function<void(std::string)> reject) {
-        if (ApiUrl.IsEmpty()) {
-          reject("Error: Missing API URL");
-          return;
-        }
+    if (ApiUrl.IsEmpty()) {
+      reject("Missing API URL");
+      return;
+    }
 
-        TSharedRef<IHttpRequest, ESPMode::ThreadSafe> Request =
-            FHttpModule::Get().CreateRequest();
-        Request->SetVerb("POST");
-        Request->SetURL(ApiUrl + "/agents/" + Soul.Id + "/soul/export");
-        Request->SetHeader("Content-Type", "application/json");
+    auto SDKStore = ConfigureSDKStore();
+    SDKStore.dispatch(SoulActions::SoulExportPending());
 
-        FString Content =
-            FString::Printf(TEXT("{\"agentIdRef\":\"%s\"}"), *Soul.Id);
-        Request->SetContentAsString(Content);
+    TSharedRef<IHttpRequest, ESPMode::ThreadSafe> Request =
+        FHttpModule::Get().CreateRequest();
+    Request->SetVerb(TEXT("POST"));
+    Request->SetURL(ApiUrl + TEXT("/soul/export"));
+    Request->SetHeader(TEXT("Content-Type"), TEXT("application/json"));
+    Request->SetHeader(TEXT("Authorization"), TEXT("Bearer sk_soul_key"));
+
+    FString Content;
+    auto SoulRes = Serialize(Soul);
+    if (SoulRes.isRight) {
+      Content = SoulRes.right;
+    }
+    Request->SetContentAsString(Content);
 
         Request->OnProcessRequestComplete().BindLambda(
-            [resolve, reject](FHttpRequestPtr Req, FHttpResponsePtr Res,
-                              bool bConnected) {
-              if (bConnected && Res.IsValid() &&
-                  EHttpResponseCodes::IsOk(Res->GetResponseCode())) {
-                // Parse JSON response for TXID / CID
-                TSharedPtr<FJsonObject> JsonObj;
-                TSharedRef<TJsonReader<>> Reader =
-                    TJsonReaderFactory<>::Create(Res->GetContentAsString());
-                if (FJsonSerializer::Deserialize(Reader, JsonObj)) {
-                  // Check for 'cid' or 'txId'
-                  FString TxId;
-                  if (JsonObj->TryGetStringField(TEXT("cid"), TxId) ||
-                      JsonObj->TryGetStringField(TEXT("txId"), TxId)) {
-                    resolve(TxId);
-                    return;
-                  }
+            [resolve, reject, SDKStore](FHttpRequestPtr Req, FHttpResponsePtr Res,
+                               bool bSuccess) {
+      if (bSuccess && Res.IsValid() &&
+          EHttpResponseCodes::IsOk(Res->GetResponseCode())) {
+        resolve(TxId);
+        return;
+      }
                 }
               }
               reject("Error: Export Failed or Invalid Response");
-            });
+});
 
-        Request->ProcessRequest();
-      });
+Request->ProcessRequest();
+});
 }

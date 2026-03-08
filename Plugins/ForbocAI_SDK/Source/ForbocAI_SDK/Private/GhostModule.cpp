@@ -1,9 +1,11 @@
 #include "GhostModule.h"
 #include "AgentModule.h"
 #include "Core/functional_core.hpp"
+#include "GhostSlice.h"
 #include "HAL/PlatformFilemanager.h"
 #include "Misc/FileHelper.h"
 #include "Misc/Paths.h"
+#include "SDKStore.h"
 #include "Serialization/JsonSerializer.h"
 
 // ==========================================================
@@ -31,13 +33,26 @@ GhostTypes::GhostTestRunResult GhostOps::RunTest(const FGhost &Ghost,
           return;
         }
 
+        auto SDKStore = ConfigureSDKStore();
+        SDKStore.dispatch(GhostActions::GhostSessionStarted(Scenario));
+
         // Create agent from configuration
         FAgent Agent = AgentFactory::Create(Ghost.Config.Agent);
 
         // Run the scenario test via Internal helper
         Internal::RunScenarioTest(Agent, Scenario)
-            .then([resolve](FGhostTestResult Result) { resolve(Result); })
-            .catch_([reject](std::string Error) { reject(Error); });
+            .then([resolve, SDKStore, Scenario](FGhostTestResult Result) {
+              SDKStore.dispatch(GhostActions::GhostSessionCompleted(Result));
+              resolve(Result);
+            })
+            .catch_([reject, SDKStore, Scenario](std::string Error) {
+              FGhostTestResult Failure;
+              Failure.Scenario = Scenario;
+              Failure.bPassed = false;
+              Failure.ErrorMessage = FString(Error.c_str());
+              SDKStore.dispatch(GhostActions::GhostSessionCompleted(Failure));
+              reject(Error);
+            });
       });
 }
 
