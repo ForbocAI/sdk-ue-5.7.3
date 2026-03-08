@@ -7,16 +7,18 @@
 // ==========================================================
 // Pure C++11 functional programming primitives.
 // No C++14, C++17, or later features are used.
+// This header is the canonical source of truth for the UE SDK's
+// functional substrate. If surrounding docs disagree, this file wins.
 //
 // DESIGN PRINCIPLES:
-//   - NO classes. Only structs (plain data containers).
-//   - NO constructors. Factory functions for all creation.
-//   - NO member functions that operate on data.
-//     (operator() is allowed only on callable structs —
-//     it is the C++ mechanism for first-class functions,
-//     equivalent to lambda application in FP languages.)
+//   - Prefer structs and plain data for domain state.
+//   - Prefer factory functions for construction of public values.
+//   - Keep domain behavior in free functions under the `func` namespace.
+//   - A small number of helper wrappers intentionally expose fluent
+//     member APIs where C++11 ergonomics would otherwise become
+//     unreadable (`MemoizedLast`, `ValidationPipeline`,
+//     `ConfigBuilder`, `AsyncResult`).
 //   - Immutable value semantics throughout.
-//   - Free functions in the `func` namespace for all operations.
 //
 // CONTENTS:
 //   1. seq / gen_seq        — Index sequence (C++14 backport)
@@ -25,27 +27,35 @@
 //   4. Either<E, T>         — Result/Error monad (data only)
 //   5. Curried / curry      — Automatic function currying
 //   6. Lazy<T> / lazy       — Memoized deferred evaluation
-//   7. Pipeline<T> / pipe   — Value transformation chains (operator|)
-//   8. Composed / compose   — Binary function composition
-//   9. fmap                 — Functor map (Maybe, Either, vector)
-//  10. mbind / ebind        — Monadic bind for Maybe / Either
-//  11. or_else / match      — Extraction / pattern matching
-//  12. ValidationPipeline   — Functional validation chain
-//  13. ConfigBuilder        — Functional configuration builder
-//  14. TestResult           — Functional testing result
-//  15. AsyncResult          — Functional async result handling
+//   7. MemoizedLast         — Last-input memoization for derived values
+//   8. Pipeline<T> / pipe   — Value transformation chains (operator|)
+//   9. Composed / compose   — Binary function composition
+//  10. fmap                 — Functor map (Maybe, Either, vector)
+//  11. mbind / ebind        — Monadic bind for Maybe / Either
+//  12. or_else / match      — Extraction / pattern matching
+//  13. ValidationPipeline   — Functional validation chain
+//  14. ConfigBuilder        — Functional configuration builder
+//  15. TestResult           — Functional testing result
+//  16. AsyncResult          — Functional async result handling
+//  17. HttpResult           — Functional HTTP result wrapper
+//  18. AsyncChain           — AsyncResult chaining helpers
 //
 // REQUIREMENTS:
-//   Maybe<T> and Either<E,T> require T and E to be default-
-//   constructible. This is a deliberate C++11 trade-off
-//   (C++17's std::optional removes this need). All Unreal
-//   Engine USTRUCTs satisfy this requirement.
+//   Several helpers default-construct inactive payloads or
+//   error branches as a deliberate C++11 trade-off:
+//   `Maybe<T>`, `Either<E, T>`, `ValidationPipeline<T, E>`,
+//   `TestResult<T>`, and `HttpResult<T>`.
+//   All Unreal Engine USTRUCTs used by this SDK are expected
+//   to satisfy that requirement.
 //
 // See also: C++11-FP-GUIDE.md for patterns and usage.
 // ==========================================================
 
+#include <cstdint>
+#include <cstdlib>
 #include <functional>
 #include <memory>
+#include <stdexcept>
 #include <string>
 #include <tuple>
 #include <type_traits>
@@ -247,7 +257,99 @@ template <typename T> const T &eval(const Lazy<T> &lz) {
 }
 
 // ==========================================
-// 7. DATA: Pipeline (Value Transformation)
+// 7. CALLABLE: MemoizedLast (Last-Input Memoization)
+// ==========================================
+// Memoizes the most recent invocation of a pure function.
+// This is the canonical primitive for selector-style
+// derived-data memoization in the UE SDK.
+//
+// Construction: use the memoizeLast<Signature>() factory
+// function, optionally with a custom comparator.
+// Access: call the wrapper like a normal function.
+//
+// Note: the default comparator uses tuple equality, so
+// callers with non-comparable or overly-large inputs
+// should supply a custom comparator over a smaller key.
+// ==========================================
+
+template <typename Signature> class MemoizedLast;
+
+template <typename Result, typename... Args>
+class MemoizedLast<Result(Args...)> {
+public:
+  typedef std::tuple<typename std::decay<Args>::type...> ArgsTuple;
+  typedef std::function<bool(const ArgsTuple &, const ArgsTuple &)> Comparator;
+
+private:
+  std::function<Result(Args...)> func;
+  Comparator equals;
+  mutable bool hasCached;
+  mutable ArgsTuple lastArgs;
+  mutable std::shared_ptr<Result> lastResult;
+
+  static Comparator defaultComparator() {
+    return Comparator([](const ArgsTuple &lhs, const ArgsTuple &rhs) {
+      return lhs == rhs;
+    });
+  }
+
+public:
+  MemoizedLast()
+      : func(), equals(defaultComparator()), hasCached(false), lastArgs(),
+        lastResult() {}
+
+  MemoizedLast(std::function<Result(Args...)> inFunc,
+               Comparator comparator = defaultComparator())
+      : func(std::move(inFunc)), equals(std::move(comparator)),
+        hasCached(false), lastArgs(), lastResult() {}
+
+  const Result &operator()(Args... args) const {
+    ArgsTuple currentArgs(std::forward<Args>(args)...);
+
+    if (hasCached && lastResult && equals(lastArgs, currentArgs)) {
+      return *lastResult;
+    }
+
+    Result computed = apply(func, currentArgs);
+    lastArgs = currentArgs;
+
+    if (!lastResult) {
+      lastResult = std::make_shared<Result>(std::move(computed));
+    } else {
+      *lastResult = std::move(computed);
+    }
+
+    hasCached = true;
+    return *lastResult;
+  }
+};
+
+template <typename Signature>
+MemoizedLast<Signature> memoizeLast(std::function<Signature> function) {
+  return MemoizedLast<Signature>(std::move(function));
+}
+
+template <typename Signature, typename F>
+MemoizedLast<Signature> memoizeLast(F f) {
+  return MemoizedLast<Signature>(std::function<Signature>(f));
+}
+
+template <typename Signature>
+MemoizedLast<Signature>
+memoizeLast(std::function<Signature> function,
+            typename MemoizedLast<Signature>::Comparator comparator) {
+  return MemoizedLast<Signature>(std::move(function), std::move(comparator));
+}
+
+template <typename Signature, typename F>
+MemoizedLast<Signature>
+memoizeLast(F f, typename MemoizedLast<Signature>::Comparator comparator) {
+  return MemoizedLast<Signature>(std::function<Signature>(f),
+                                 std::move(comparator));
+}
+
+// ==========================================
+// 8. DATA: Pipeline (Value Transformation)
 // ==========================================
 // Fluent chain for threading a value through a
 // series of pure transformations using operator|.
@@ -272,14 +374,21 @@ template <typename T> Pipeline<T> pipe(T v) {
   return Pipeline<T>{std::move(v)};
 }
 
-// operator| for chaining: Pipeline<T> | (T -> U) -> Pipeline<U>
+// operator| for chaining lvalue-backed pipelines.
 template <typename T, typename F>
 auto operator|(const Pipeline<T> &p, F f) -> Pipeline<decltype(f(p.val))> {
   return Pipeline<decltype(f(p.val))>{f(p.val)};
 }
 
+// operator| for chaining move-only or ownership-transferring values.
+template <typename T, typename F>
+auto operator|(Pipeline<T> &&p, F f)
+    -> Pipeline<decltype(f(std::move(p.val)))> {
+  return Pipeline<decltype(f(std::move(p.val)))>{f(std::move(p.val))};
+}
+
 // ==========================================
-// 8. CALLABLE: Composed (Function Composition)
+// 9. CALLABLE: Composed (Function Composition)
 // ==========================================
 // Combines two functions: compose(f, g)(x) == f(g(x))
 //
@@ -310,7 +419,7 @@ template <typename F, typename G> Composed<F, G> compose(F f, G g) {
 }
 
 // ==========================================
-// 9. FREE FUNCTION: fmap (Functor Map)
+// 10. FREE FUNCTION: fmap (Functor Map)
 // ==========================================
 // Applies a function inside a context, returning
 // a new value in the same context. Overloaded for:
@@ -353,7 +462,7 @@ auto fmap(const std::vector<T> &vec, Func f)
 }
 
 // ==========================================
-// 10. FREE FUNCTION: Monadic Bind
+// 11. FREE FUNCTION: Monadic Bind
 // ==========================================
 // Chains computations that return wrapped values.
 //
@@ -378,7 +487,7 @@ auto ebind(const Either<E, T> &e, Func f) -> decltype(f(e.right)) {
 }
 
 // ==========================================
-// 11. FREE FUNCTION: Extraction & Matching
+// 12. FREE FUNCTION: Extraction & Matching
 // ==========================================
 // or_else:  Extract from Maybe with default value.
 // match:    Pattern match on Maybe (Just / Nothing).
@@ -409,7 +518,7 @@ auto ematch(const Either<E, T> &e, FLeft onLeft, FRight onRight)
 }
 
 // ==========================================
-// 12. ValidationPipeline (Functional Validation Chain)
+// 13. ValidationPipeline (Functional Validation Chain)
 // ==========================================
 // A pipeline for chaining validation functions.
 // Each validation function takes input and returns
@@ -457,39 +566,53 @@ ValidationPipeline<T, E> validationPipeline() {
 }
 
 // ==========================================
-// 13. ConfigBuilder (Functional Configuration Builder)
+// 14. ConfigBuilder (Functional Configuration Builder)
 // ==========================================
 // A builder pattern for creating immutable
 // configuration objects using functional composition.
 //
 // Usage:
-//   auto config = ConfigBuilder<MyConfig>()
-//       .set("name", "MyApp")
-//       .set("port", 8080)
+//   auto config = configBuilder<MyConfig>()
+//       .setMember(&MyConfig::name, std::string("MyApp"))
+//       .setMember(&MyConfig::port, 8080)
 //       .build();
 // ==========================================
 
 template <typename Config> class ConfigBuilder {
-  std::unordered_map<std::string, std::function<void(Config &)>> setters;
+  std::vector<std::function<void(Config &)>> setters;
 
 public:
   ConfigBuilder() = default;
 
-  // Add a setter function
-  template <typename T> ConfigBuilder &set(const std::string &key, T value) {
-    setters[key] = [key, value](Config &config) mutable {
-      // Use reflection or manual mapping to set the value
-      // For simplicity, we'll assume Config has a set method
-      config.set(key, std::move(value));
-    };
+  // Add an explicit configuration transform.
+  ConfigBuilder &with(std::function<void(Config &)> setter) {
+    setters.push_back(std::move(setter));
     return *this;
+  }
+
+  // Assign a known member without relying on reflection-like conventions.
+  template <typename T>
+  ConfigBuilder &setMember(T Config::*member, T value) {
+    return with([member, value](Config &config) mutable {
+      config.*member = std::move(value);
+    });
+  }
+
+  // String-keyed assignment is still available for Config types that
+  // deliberately expose a compatible `set(key, value)` function.
+  template <typename T> ConfigBuilder &set(const std::string &key, T value) {
+    return with([key, value](Config &config) mutable {
+      // Use reflection or manual mapping to set the value
+      // only when the config type explicitly provides it.
+      config.set(key, std::move(value));
+    });
   }
 
   // Build the configuration object
   Config build() const {
     Config config;
-    for (const auto &pair : setters) {
-      pair.second(config);
+    for (const auto &setter : setters) {
+      setter(config);
     }
     return config;
   }
@@ -501,7 +624,7 @@ template <typename Config> ConfigBuilder<Config> configBuilder() {
 }
 
 // ==========================================
-// 14. TestResult (Functional Testing Result)
+// 15. TestResult (Functional Testing Result)
 // ==========================================
 // A result type for functional testing that
 // includes success/failure, messages, and
@@ -536,10 +659,19 @@ template <typename T> struct TestResult {
   // Check if successful
   bool isSuccessful() const { return bSuccess; }
 
-  // Get value or throw if failure
+  // Prefer this accessor in no-exception or UE-constrained builds.
+  Maybe<T> TryGetValue() const {
+    return bSuccess ? just(value) : nothing<T>();
+  }
+
+  // Get value or fail fast if the result is not successful.
   T getValue() const {
     if (!bSuccess) {
+#if defined(__cpp_exceptions) || defined(__EXCEPTIONS) || defined(_CPPUNWIND)
       throw std::runtime_error("TestResult: Cannot get value from failure");
+#else
+      std::abort();
+#endif
     }
     return value;
   }
@@ -569,7 +701,7 @@ template <> struct TestResult<void> {
 };
 
 // ==========================================
-// 15. AsyncResult (Functional Async Result Handling)
+// 16. AsyncResult (Functional Async Result Handling)
 // ==========================================
 // A type for handling async operations that
 // can succeed or fail, with support for
@@ -577,7 +709,9 @@ template <> struct TestResult<void> {
 // Safe for async callbacks via shared state.
 //
 // Usage:
-//   auto result = AsyncResult<int>::create([](auto resolve, auto reject) {
+//   auto result = AsyncResult<int>::create([](
+//       std::function<void(int)> resolve,
+//       std::function<void(std::string)> reject) {
 //       // async operation
 //   });
 //
@@ -585,7 +719,7 @@ template <> struct TestResult<void> {
 //       // success
 //   }).catch_([](std::string error) {
 //       // failure
-//   });
+//   }).execute();
 // ==========================================
 
 template <typename T> class AsyncResult {
@@ -611,13 +745,13 @@ public:
   AsyncResult() : state(std::make_shared<State>()) {}
 
   // Add success handler
-  AsyncResult<T> &then(std::function<void(T)> handler) {
+  const AsyncResult<T> &then(std::function<void(T)> handler) const {
     state->successHandlers.push_back(std::move(handler));
     return *this;
   }
 
   // Add error handler
-  AsyncResult<T> &catch_(std::function<void(std::string)> handler) {
+  const AsyncResult<T> &catch_(std::function<void(std::string)> handler) const {
     state->errorHandlers.push_back(std::move(handler));
     return *this;
   }
@@ -666,12 +800,12 @@ public:
 
   AsyncResult() : state(std::make_shared<State>()) {}
 
-  AsyncResult<void> &then(std::function<void()> handler) {
+  const AsyncResult<void> &then(std::function<void()> handler) const {
     state->successHandlers.push_back(std::move(handler));
     return *this;
   }
 
-  AsyncResult<void> &catch_(std::function<void(std::string)> handler) {
+  const AsyncResult<void> &catch_(std::function<void(std::string)> handler) const {
     state->errorHandlers.push_back(std::move(handler));
     return *this;
   }
@@ -696,26 +830,28 @@ public:
 };
 
 // ==========================================
-// 16. HttpResult (Functional Http Request Wrapper)
+// 17. HttpResult (Functional Http Request Wrapper)
 // ==========================================
+
+typedef std::int32_t HttpStatusCode;
 
 template <typename T> struct HttpResult {
   bool bSuccess;
-  int32 ResponseCode;
+  HttpStatusCode ResponseCode;
   T data;
   std::string error;
 
-  static HttpResult<T> Success(T d, int32 code = 200) {
+  static HttpResult<T> Success(T d, HttpStatusCode code = 200) {
     return HttpResult<T>{true, code, std::move(d), ""};
   }
 
-  static HttpResult<T> Failure(std::string e, int32 code = 0) {
+  static HttpResult<T> Failure(std::string e, HttpStatusCode code = 0) {
     return HttpResult<T>{false, code, T{}, std::move(e)};
   }
 };
 
 // ==========================================
-// 17. AsyncChain (Helpers for chaining AsyncResults)
+// 18. AsyncChain (Helpers for chaining AsyncResults)
 // ==========================================
 
 namespace AsyncChain {

@@ -5,7 +5,7 @@
 > A guide to functional programming in **strict C++11** for the ForbocAI SDK.
 > All code targets C++11 only -- no C++14/17 features.
 >
-> **Library**: This guide accompanies [`functional_core.hpp`](Plugins/ForbocAI_SDK/Source/ForbocAI_SDK/Public/Core/functional_core.hpp), which provides production-ready implementations of Maybe, Either, Currying, Lazy evaluation, Pipeline, Composition, and fmap — all as **pure data structs with free functions only**.
+> **Library**: This guide accompanies [`functional_core.hpp`](Plugins/ForbocAI_SDK/Source/ForbocAI_SDK/Public/Core/functional_core.hpp), the canonical source of truth for functional primitives in the UE SDK. If this guide and the header ever disagree, the header wins.
 
 ---
 
@@ -22,13 +22,13 @@
 | `for` loops with mutation  | `std::transform` / `std::accumulate`      |
 | `new` / `delete`           | Stack values or `std::shared_ptr`         |
 
-**The iron rule: structs hold data; namespaces hold functions.**
+**The iron rule: public domain state stays data-first; the functional core is the authoritative substrate.**
 
 ---
 
-## 1. Data vs. Behavior (Structs, not Classes)
+## 1. Data vs. Behavior (Data-First, Not Gameplay OO)
 
-In FP, data and behavior are **separated**. Structs are pure data carriers with **no member functions** (except `operator()` on callable types, which is the C++ mechanism for first-class functions). All logic lives in free functions inside namespaces.
+In FP, data and behavior are **separated**. Public domain structs are pure data carriers. Behavior lives in free functions or in the small set of canonical helper wrappers already defined by `functional_core.hpp` when those wrappers are the established abstraction.
 
 ```cpp
 #include <string>
@@ -51,9 +51,9 @@ struct WorldState {
 
 ---
 
-## 2. The Factory Pattern (Replaces ALL Constructors)
+## 2. The Factory Pattern (Preferred for Public Values)
 
-**Never use constructors.** Use factory functions in namespaces for all creation. Factories separate creation logic from the data layout and are composable with other functions.
+For public domain values, prefer factory functions in namespaces for creation. Factories separate creation logic from the data layout and are composable with other functions.
 
 ```cpp
 // Factory namespace — replaces constructors entirely
@@ -93,9 +93,9 @@ namespace TypeFactory {
 
 ---
 
-## 3. Free Functions Only (No Member Functions)
+## 3. Free Functions First
 
-All operations on data go in namespace-scoped free functions. Structs never have methods.
+Operations on public domain data should go in namespace-scoped free functions. The exception is the functional core itself, which already defines the canonical helper wrappers the rest of the SDK should reuse instead of cloning.
 
 ```cpp
 // Operations namespace — stateless pure functions

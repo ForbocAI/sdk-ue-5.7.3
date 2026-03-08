@@ -37,7 +37,7 @@ The **ForbocAI SDK for Unreal Engine 5.7** drives hyper-realistic NPC behavior t
 | **SoulModule** | Portable identity serialization (JSON import/export) |
 | **CLIModule** | HTTP-based API operations for CLI commands |
 | **Commandlet** | UE command-line interface for verification and admin |
-| **functional_core.hpp** | Pure C++11 FP library: Maybe, Either, Currying, Lazy, Pipeline, Composition |
+| **functional_core.hpp** | Canonical C++11 FP core: Maybe, Either, Currying, Lazy, Pipeline, Composition, AsyncResult |
 
 ---
 
@@ -71,7 +71,7 @@ Get the plugin directly from **Fab** (formerly Unreal Engine Marketplace).
 #include "AgentModule.h"
 #include "MemoryModule.h"
 
-// 1. Create an agent via factory function (no constructors, no classes)
+// 1. Create an agent via factory function (public domain values stay data-first)
 FAgentConfig Config;
 Config.Persona = TEXT("Cyber-Merchant");
 Config.ApiUrl = TEXT("https://api.forboc.ai");
@@ -169,21 +169,21 @@ Response: {"message":"Neuro-Symbolic Grid: ACTIVE","status":"online","version":"
 
 `UE5_Arch // Fúnctional_C++11`
 
-ForbocAI enforces **strict Functional Programming** in C++11. The entire SDK contains **no classes** (except UE-required `UCLASS` for the Commandlet). All code follows these rules:
+ForbocAI enforces **strict Functional Programming** in C++11. The UE SDK treats [`functional_core.hpp`](./Plugins/ForbocAI_SDK/Source/ForbocAI_SDK/Public/Core/functional_core.hpp) as the canonical source of truth for its FP substrate. Public gameplay/domain code stays data-first, and the SDK reuses the core helper wrappers instead of inventing parallel abstractions. All code follows these rules:
 
 | Rule | Pattern |
 |------|---------|
-| **Data** | `struct` only — public, immutable where possible, no member functions |
-| **Construction** | Factory functions in namespaces (`AgentFactory::Create`, `TypeFactory::Soul`) |
-| **Operations** | Free functions in namespaces (`AgentOps::Process`, `MemoryOps::Recall`) |
+| **Data** | Public gameplay/domain state is `struct`-first, immutable where possible |
+| **Construction** | Prefer factory functions in namespaces (`AgentFactory::Create`, `TypeFactory::Soul`) |
+| **Operations** | Prefer free functions in namespaces (`AgentOps::Process`, `MemoryOps::Recall`) |
 | **Updates** | Copy-on-write — always return a new value (`AgentOps::WithState`) |
-| **Error handling** | `Maybe<T>` / `Either<E,T>` monads with free functions (`func::fmap`, `func::mbind`) |
-| **Chaining** | `func::pipe(x) \| f \| g` or `func::compose(f, g)` |
-| **Deferred work** | `func::lazy(thunk)` with `func::eval(lz)` |
+| **Error handling** | `Maybe<T>` / `Either<E,T>` from `functional_core.hpp` |
+| **Chaining** | `func::pipe(x) \| f \| g`, `func::compose(f, g)`, or `func::AsyncChain::then(...)` |
+| **Deferred work** | `func::lazy(thunk)` with `func::eval(lz)` where one-shot memoization is actually the right tool |
 
 **Key references:**
 - **[Functional C++11 Guide](./C++11-FP-GUIDE.md)** — Patterns, rules, and examples
-- **[`functional_core.hpp`](./Plugins/ForbocAI_SDK/Source/ForbocAI_SDK/Public/Core/functional_core.hpp)** — Production FP library
+- **[`functional_core.hpp`](./Plugins/ForbocAI_SDK/Source/ForbocAI_SDK/Public/Core/functional_core.hpp)** — Canonical FP core and source of truth
 - **[`style-guide.md`](./style-guide.md)** — Aesthetic protocols
 
 ---
