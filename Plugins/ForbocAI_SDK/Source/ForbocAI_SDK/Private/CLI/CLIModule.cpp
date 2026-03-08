@@ -2,8 +2,10 @@
 #include "Core/functional_core.hpp"
 #include "HttpManager.h"
 #include "HttpModule.h"
+#include "SDKConfig.h"
 #include "SDKStore.h"
 #include "Serialization/JsonSerializer.h"
+#include "Thunks.h"
 
 // WaitForResult pumps the HTTP tick loop until the AsyncResult completes.
 // This allows asynchronous thunks to be used in a synchronous CLI command.
@@ -32,9 +34,9 @@ namespace CLIOps {
 CLITypes::TestResult<void> Doctor(const FString &ApiUrl) {
   UE_LOG(LogTemp, Display, TEXT("Running Doctor check via RTK Store..."));
 
+  SDKConfig::SetApiConfig(ApiUrl, SDKConfig::GetApiKey());
   auto Store = ConfigureSDKStore();
-  auto Result =
-      WaitForResult(Store.dispatch(rtk::doctorThunk(FEmptyPayload{})));
+  auto Result = WaitForResult(Store.dispatch(rtk::doctorThunk()));
 
   if (Result.Status == TEXT("ONLINE") || Result.Status == TEXT("ok")) {
     UE_LOG(LogTemp, Display, TEXT("API Status: %s (v%s)"), *Result.Status,
@@ -49,6 +51,7 @@ CLITypes::TestResult<void> Doctor(const FString &ApiUrl) {
 CLITypes::TestResult<void> ListAgents(const FString &ApiUrl) {
   UE_LOG(LogTemp, Display, TEXT("Listing Agents via RTK Store..."));
 
+  SDKConfig::SetApiConfig(ApiUrl, SDKConfig::GetApiKey());
   auto Store = ConfigureSDKStore();
   auto Result = WaitForResult(Store.dispatch(APISlice::Endpoints::getNPCs()));
 
@@ -68,6 +71,7 @@ CLITypes::TestResult<void> CreateAgent(const FString &ApiUrl,
   Config.Persona = Persona;
   Config.ApiUrl = ApiUrl;
 
+  SDKConfig::SetApiConfig(ApiUrl, SDKConfig::GetApiKey());
   auto Store = ConfigureSDKStore();
   auto Result =
       WaitForResult(Store.dispatch(APISlice::Endpoints::postNPC(Config)));
@@ -81,11 +85,12 @@ CLITypes::TestResult<void> ProcessAgent(const FString &ApiUrl,
                                         const FString &Input) {
   UE_LOG(LogTemp, Display, TEXT("Processing NPC Protocol via RTK Store..."));
 
+  SDKConfig::SetApiConfig(ApiUrl, SDKConfig::GetApiKey());
   auto Store = ConfigureSDKStore();
   // Using the real processNPC thunk which handles the recursive loop
-  auto Result = WaitForResult(Store.dispatch(rtk::processNPC(AgentId)));
+  auto Result = WaitForResult(Store.dispatch(rtk::processNPC(AgentId, Input)));
 
-  UE_LOG(LogTemp, Display, TEXT("Final Verdict: %s"), *Result);
+  UE_LOG(LogTemp, Display, TEXT("Final Verdict: %s"), *Result.Dialogue);
   return CLITypes::TestResult<void>::Success("Protocol complete");
 }
 
@@ -93,13 +98,12 @@ CLITypes::TestResult<void> ExportSoul(const FString &ApiUrl,
                                       const FString &AgentId) {
   UE_LOG(LogTemp, Display, TEXT("Exporting Soul via RTK Store..."));
 
+  SDKConfig::SetApiConfig(ApiUrl, SDKConfig::GetApiKey());
   auto Store = ConfigureSDKStore();
   auto Result = WaitForResult(Store.dispatch(rtk::exportSoulThunk(AgentId)));
 
-  UE_LOG(LogTemp, Display, TEXT("Soul Exported to: %s"), *Result);
+  UE_LOG(LogTemp, Display, TEXT("Soul Exported to: %s"), *Result.TxId);
   return CLITypes::TestResult<void>::Success("Soul exported");
 }
-
-} // namespace CLIOps
 
 } // namespace CLIOps

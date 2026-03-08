@@ -4,181 +4,196 @@
 #include "CoreMinimal.h"
 #include "Types.h"
 
-// ==========================================================
-// Memory Slice (UE RTK)
-// ==========================================================
-// Equivalent to `memorySlice.ts`
-// Manages the state of Memory Items using an EntityAdapter,
-// and tracks async operations (storage, recall).
-// ==========================================================
-
 namespace MemorySlice {
 
 using namespace rtk;
 using namespace func;
 
-namespace AsyncStatus {
-const FString Idle = TEXT("idle");
-const FString Loading = TEXT("loading");
-const FString Succeeded = TEXT("succeeded");
-const FString Failed = TEXT("failed");
-} // namespace AsyncStatus
-
 inline FString MemoryItemIdSelector(const FMemoryItem &Item) { return Item.Id; }
 
-// Global EntityAdapter instance for Memories
-inline EntityAdapter<FMemoryItem, decltype(&MemoryItemIdSelector)>
-GetMemoryAdapter() {
-  return EntityAdapter<FMemoryItem, decltype(&MemoryItemIdSelector)>(
-      &MemoryItemIdSelector);
+inline EntityAdapterOps<FMemoryItem> GetMemoryAdapter() {
+  return createEntityAdapter<FMemoryItem>(&MemoryItemIdSelector);
 }
 
-// The root state for the Memory slice
 struct FMemorySliceState {
   EntityState<FMemoryItem> Entities;
   FString StorageStatus;
   FString RecallStatus;
-  Maybe<FString> Error;
+  FString Error;
   TArray<FString> LastRecalledIds;
 
   FMemorySliceState()
       : Entities(GetMemoryAdapter().getInitialState()),
-        StorageStatus(AsyncStatus::Idle), RecallStatus(AsyncStatus::Idle) {}
+        StorageStatus(TEXT("idle")), RecallStatus(TEXT("idle")) {}
 };
 
-// --- Actions ---
-struct MemoryStorePendingAction : public Action {
-  static const FString Type;
-  MemoryStorePendingAction() : Action(Type) {}
-};
-inline const FString MemoryStorePendingAction::Type =
-    TEXT("memory/storePending");
-
-struct MemoryStoreSuccessAction : public Action {
-  static const FString Type;
-  FMemoryItem Payload;
-  MemoryStoreSuccessAction(FMemoryItem InPayload)
-      : Action(Type), Payload(MoveTemp(InPayload)) {}
-};
-inline const FString MemoryStoreSuccessAction::Type =
-    TEXT("memory/storeSuccess");
-
-struct MemoryStoreFailedAction : public Action {
-  static const FString Type;
-  FString Payload;
-  MemoryStoreFailedAction(FString InPayload)
-      : Action(Type), Payload(MoveTemp(InPayload)) {}
-};
-inline const FString MemoryStoreFailedAction::Type = TEXT("memory/storeFailed");
-
-struct MemoryRecallPendingAction : public Action {
-  static const FString Type;
-  MemoryRecallPendingAction() : Action(Type) {}
-};
-inline const FString MemoryRecallPendingAction::Type =
-    TEXT("memory/recallPending");
-
-struct MemoryRecallSuccessAction : public Action {
-  static const FString Type;
-  TArray<FMemoryItem> Payload;
-  MemoryRecallSuccessAction(TArray<FMemoryItem> InPayload)
-      : Action(Type), Payload(MoveTemp(InPayload)) {}
-};
-inline const FString MemoryRecallSuccessAction::Type =
-    TEXT("memory/recallSuccess");
-
-struct MemoryRecallFailedAction : public Action {
-  static const FString Type;
-  FString Payload;
-  MemoryRecallFailedAction(FString InPayload)
-      : Action(Type), Payload(MoveTemp(InPayload)) {}
-};
-inline const FString MemoryRecallFailedAction::Type =
-    TEXT("memory/recallFailed");
-
-struct MemoryClearAction : public Action {
-  static const FString Type;
-  MemoryClearAction() : Action(Type) {}
-};
 namespace Actions {
-inline MemoryStorePendingAction MemoryStorePending(FString Text) {
-  return MemoryStorePendingAction();
+
+inline const EmptyActionCreator &MemoryStoreStartActionCreator() {
+  static const EmptyActionCreator ActionCreator =
+      createAction(TEXT("memory/storeStart"));
+  return ActionCreator;
 }
-inline MemoryStoreSuccessAction MemoryStoreSuccess(FMemoryItem Item) {
-  return MemoryStoreSuccessAction(MoveTemp(Item));
+
+inline const ActionCreator<FMemoryItem> &MemoryStoreSuccessActionCreator() {
+  static const ActionCreator<FMemoryItem> ActionCreator =
+      createAction<FMemoryItem>(TEXT("memory/storeSuccess"));
+  return ActionCreator;
 }
-inline MemoryStoreFailedAction MemoryStoreFailure(FString Error) {
-  return MemoryStoreFailedAction(MoveTemp(Error));
+
+inline const ActionCreator<FString> &MemoryStoreFailedActionCreator() {
+  static const ActionCreator<FString> ActionCreator =
+      createAction<FString>(TEXT("memory/storeFailed"));
+  return ActionCreator;
 }
-inline MemoryRecallPendingAction MemoryRecallPending(FString Query) {
-  return MemoryRecallPendingAction();
+
+inline const EmptyActionCreator &MemoryRecallStartActionCreator() {
+  static const EmptyActionCreator ActionCreator =
+      createAction(TEXT("memory/recallStart"));
+  return ActionCreator;
 }
-inline MemoryRecallSuccessAction
-MemoryRecallSuccess(TArray<FMemoryItem> Results) {
-  return MemoryRecallSuccessAction(MoveTemp(Results));
+
+inline const ActionCreator<TArray<FMemoryItem>> &
+MemoryRecallSuccessActionCreator() {
+  static const ActionCreator<TArray<FMemoryItem>> ActionCreator =
+      createAction<TArray<FMemoryItem>>(TEXT("memory/recallSuccess"));
+  return ActionCreator;
 }
-inline MemoryRecallFailedAction MemoryRecallFailure(FString Error) {
-  return MemoryRecallFailedAction(MoveTemp(Error));
+
+inline const ActionCreator<FString> &MemoryRecallFailedActionCreator() {
+  static const ActionCreator<FString> ActionCreator =
+      createAction<FString>(TEXT("memory/recallFailed"));
+  return ActionCreator;
 }
-inline MemoryClearAction MemoryClear() { return MemoryClearAction(); }
+
+inline const EmptyActionCreator &MemoryClearActionCreator() {
+  static const EmptyActionCreator ActionCreator =
+      createAction(TEXT("memory/clear"));
+  return ActionCreator;
+}
+
+inline AnyAction MemoryStoreStart() {
+  return MemoryStoreStartActionCreator()();
+}
+
+inline AnyAction MemoryStoreSuccess(const FMemoryItem &Item) {
+  return MemoryStoreSuccessActionCreator()(Item);
+}
+
+inline AnyAction MemoryStoreFailed(const FString &Error) {
+  return MemoryStoreFailedActionCreator()(Error);
+}
+
+inline AnyAction MemoryRecallStart() {
+  return MemoryRecallStartActionCreator()();
+}
+
+inline AnyAction MemoryRecallSuccess(const TArray<FMemoryItem> &Items) {
+  return MemoryRecallSuccessActionCreator()(Items);
+}
+
+inline AnyAction MemoryRecallFailed(const FString &Error) {
+  return MemoryRecallFailedActionCreator()(Error);
+}
+
+inline AnyAction MemoryClear() { return MemoryClearActionCreator()(); }
+
 } // namespace Actions
 
-// --- Slice Builder ---
 inline Slice<FMemorySliceState> CreateMemorySlice() {
   return SliceBuilder<FMemorySliceState>(TEXT("memory"), FMemorySliceState())
-      .addCase<MemoryStorePendingAction>(
-          [](FMemorySliceState State, const MemoryStorePendingAction &Action) {
-            State.StorageStatus = AsyncStatus::Loading;
-            State.Error = nothing<FString>();
-            return State;
+      .addExtraCase(
+          Actions::MemoryStoreStartActionCreator(),
+          [](const FMemorySliceState &State,
+             const Action<rtk::FEmptyPayload> &Action)
+              -> FMemorySliceState {
+            FMemorySliceState Next = State;
+            Next.StorageStatus = TEXT("storing");
+            Next.Error.Empty();
+            return Next;
           })
-      .addCase<MemoryStoreSuccessAction>(
-          [](FMemorySliceState State, const MemoryStoreSuccessAction &Action) {
-            State.StorageStatus = AsyncStatus::Succeeded;
-            State.Entities =
-                GetMemoryAdapter().upsertOne(State.Entities, Action.Payload);
-            return State;
+      .addExtraCase(
+          Actions::MemoryStoreSuccessActionCreator(),
+          [](const FMemorySliceState &State,
+             const Action<FMemoryItem> &Action) -> FMemorySliceState {
+            FMemorySliceState Next = State;
+            Next.StorageStatus = TEXT("idle");
+            Next.Entities =
+                GetMemoryAdapter().upsertOne(Next.Entities, Action.PayloadValue);
+            return Next;
           })
-      .addCase<MemoryStoreFailedAction>(
-          [](FMemorySliceState State, const MemoryStoreFailedAction &Action) {
-            State.StorageStatus = AsyncStatus::Failed;
-            State.Error = just(Action.Payload);
-            return State;
+      .addExtraCase(
+          Actions::MemoryStoreFailedActionCreator(),
+          [](const FMemorySliceState &State,
+             const Action<FString> &Action) -> FMemorySliceState {
+            FMemorySliceState Next = State;
+            Next.StorageStatus = TEXT("error");
+            Next.Error = Action.PayloadValue;
+            return Next;
           })
-      .addCase<MemoryRecallPendingAction>(
-          [](FMemorySliceState State, const MemoryRecallPendingAction &Action) {
-            State.RecallStatus = AsyncStatus::Loading;
-            State.Error = nothing<FString>();
-            return State;
+      .addExtraCase(
+          Actions::MemoryRecallStartActionCreator(),
+          [](const FMemorySliceState &State,
+             const Action<rtk::FEmptyPayload> &Action)
+              -> FMemorySliceState {
+            FMemorySliceState Next = State;
+            Next.RecallStatus = TEXT("recalling");
+            Next.Error.Empty();
+            return Next;
           })
-      .addCase<MemoryRecallSuccessAction>(
-          [](FMemorySliceState State, const MemoryRecallSuccessAction &Action) {
-            State.RecallStatus = AsyncStatus::Succeeded;
-            State.Entities =
-                GetMemoryAdapter().upsertMany(State.Entities, Action.Payload);
-
-            State.LastRecalledIds.Empty(Action.Payload.Num());
-            for (const FMemoryItem &Item : Action.Payload) {
-              State.LastRecalledIds.Add(Item.Id);
+      .addExtraCase(
+          Actions::MemoryRecallSuccessActionCreator(),
+          [](const FMemorySliceState &State,
+             const Action<TArray<FMemoryItem>> &Action) -> FMemorySliceState {
+            FMemorySliceState Next = State;
+            Next.RecallStatus = TEXT("idle");
+            Next.Entities =
+                GetMemoryAdapter().upsertMany(Next.Entities, Action.PayloadValue);
+            Next.LastRecalledIds.Empty(Action.PayloadValue.Num());
+            for (int32 Index = 0; Index < Action.PayloadValue.Num(); ++Index) {
+              Next.LastRecalledIds.Add(Action.PayloadValue[Index].Id);
             }
-            return State;
+            return Next;
           })
-      .addCase<MemoryRecallFailedAction>(
-          [](FMemorySliceState State, const MemoryRecallFailedAction &Action) {
-            State.RecallStatus = AsyncStatus::Failed;
-            State.Error = just(Action.Payload);
-            return State;
+      .addExtraCase(
+          Actions::MemoryRecallFailedActionCreator(),
+          [](const FMemorySliceState &State,
+             const Action<FString> &Action) -> FMemorySliceState {
+            FMemorySliceState Next = State;
+            Next.RecallStatus = TEXT("error");
+            Next.Error = Action.PayloadValue;
+            return Next;
           })
-      .addCase<MemoryClearAction>(
-          [](FMemorySliceState State, const MemoryClearAction &Action) {
-            State.Entities = GetMemoryAdapter().removeAll(State.Entities);
-            State.StorageStatus = AsyncStatus::Idle;
-            State.RecallStatus = AsyncStatus::Idle;
-            State.Error = nothing<FString>();
-            State.LastRecalledIds.Empty();
-            return State;
+      .addExtraCase(
+          Actions::MemoryClearActionCreator(),
+          [](const FMemorySliceState &State,
+             const Action<rtk::FEmptyPayload> &Action)
+              -> FMemorySliceState {
+            return FMemorySliceState();
           })
       .build();
+}
+
+inline Maybe<FMemoryItem> SelectMemoryById(const FMemorySliceState &State,
+                                           const FString &Id) {
+  return GetMemoryAdapter().getSelectors().selectById(State.Entities, Id);
+}
+
+inline TArray<FMemoryItem> SelectAllMemories(const FMemorySliceState &State) {
+  return GetMemoryAdapter().getSelectors().selectAll(State.Entities);
+}
+
+inline TArray<FMemoryItem>
+SelectLastRecalledMemories(const FMemorySliceState &State) {
+  TArray<FMemoryItem> Results;
+  for (int32 Index = 0; Index < State.LastRecalledIds.Num(); ++Index) {
+    const Maybe<FMemoryItem> Item =
+        SelectMemoryById(State, State.LastRecalledIds[Index]);
+    if (Item.hasValue) {
+      Results.Add(Item.value);
+    }
+  }
+  return Results;
 }
 
 } // namespace MemorySlice

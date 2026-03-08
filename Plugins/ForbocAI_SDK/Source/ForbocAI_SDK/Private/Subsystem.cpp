@@ -1,5 +1,6 @@
-#include "Subsystem.h"
+#include "ForbocAISDKSubsystem.h"
 #include "NPC/NPCSlice.h"
+#include "SDKConfig.h"
 #include "SDKStore.h"
 #include "Thunks.h"
 
@@ -8,20 +9,20 @@ void UForbocAISDKSubsystem::Initialize(FSubsystemCollectionBase &Collection) {
 
   // Initialize the store with a listener for actions
   std::vector<rtk::Middleware<FSDKState>> Middlewares;
-  Middlewares.push_back(rtk::createNpcRemovalListener());
+  Middlewares.push_back(createNpcRemovalListener());
 
   // Action broadcast middleware
-  Middlewares.push_back([this](auto dispatch, auto getState) {
-    return [this](auto next) {
-      return [this, next](const rtk::AnyAction &action) {
-        this->HandleAction(action);
-        return next(action);
+  Middlewares.push_back([this](const rtk::MiddlewareApi<FSDKState> &Api) {
+    return [this](rtk::NextDispatcher<FSDKState> Next) {
+      return [this, Next](const rtk::AnyAction &Action) {
+        this->HandleAction(Action);
+        return Next(Action);
       };
     };
   });
 
   SDKStore = MakeShared<rtk::EnhancedStore<FSDKState>>(
-      rtk::configureStore<FSDKState>(SDKReducer, FSDKState(), Middlewares));
+      rtk::configureStore<FSDKState>(&SDKReducer, FSDKState(), Middlewares));
 }
 
 void UForbocAISDKSubsystem::Deinitialize() {
@@ -30,18 +31,28 @@ void UForbocAISDKSubsystem::Deinitialize() {
 }
 
 void UForbocAISDKSubsystem::InitSDK(FString ApiKey, FString ApiUrl) {
-  // Config logic would go here
+  SDKConfig::SetApiConfig(ApiUrl, ApiKey);
 }
 
-void UForbocAISDKSubsystem::ProcessNPC(FString NpcId) {
+void UForbocAISDKSubsystem::ProcessNPC(FString NpcId, FString Input) {
   if (!SDKStore.IsValid())
     return;
 
-  rtk::processNPC(NpcId)(
-      [this](auto action) { return SDKStore->dispatch(action); },
-      [this]() { return SDKStore->getState(); })
-      .then([this](FString Result) {
-        // Handle result
+  OnTypingStart.Broadcast();
+
+  SDKStore->dispatch(rtk::processNPC(NpcId, Input))
+      .then([this](const FAgentResponse &Result) {
+        if (!Result.Dialogue.IsEmpty()) {
+          OnMessageReceived.Broadcast(Result.Dialogue);
+        }
+        if (!Result.Action.Type.IsEmpty()) {
+          OnNPCActionReceived.Broadcast(Result.Action);
+        }
+        OnTypingEnd.Broadcast();
+      })
+      .catch_([this](std::string Error) {
+        static_cast<void>(Error);
+        OnTypingEnd.Broadcast();
       });
 }
 
@@ -49,10 +60,10 @@ void UForbocAISDKSubsystem::ExportSoul(FString AgentId) {
   if (!SDKStore.IsValid())
     return;
 
-  rtk::exportSoulThunk(
-      AgentId, {[this](auto action) { return SDKStore->dispatch(action); },
-                [this]() { return SDKStore->getState(); }})
-      .then([this](FString TxId) { OnSoulExportComplete.Broadcast(TxId); });
+  SDKStore->dispatch(rtk::exportSoulThunk(AgentId))
+      .then([this](const FSoulExportResult &Result) {
+        OnSoulExportComplete.Broadcast(Result.TxId);
+      });
 }
 
 FAgentState UForbocAISDKSubsystem::GetNPCState(FString NpcId) const {
@@ -60,7 +71,7 @@ FAgentState UForbocAISDKSubsystem::GetNPCState(FString NpcId) const {
     return FAgentState();
 
   auto State = SDKStore->getState();
-  auto NPC = NPCSlice::GetNPCAdapter().selectById(State.NPCs.Entities, NpcId);
+  auto NPC = NPCSlice::SelectNPCById(State.NPCs, NpcId);
   if (NPC.hasValue) {
     return NPC.value.State;
   }
@@ -68,14 +79,11 @@ FAgentState UForbocAISDKSubsystem::GetNPCState(FString NpcId) const {
 }
 
 void UForbocAISDKSubsystem::HandleAction(const rtk::AnyAction &Action) {
-  if (Action.Type == NPCSlice::SetLastActionAction::Type) {
-    // We need to extract the payload.
-    // In this implementation, we'll assume the action creator is available
-    // or just use the raw payload pointer if we know the structure.
-    auto PayloadPtr = static_cast<NPCSlice::SetLastActionAction::FPayload *>(
-        Action.PayloadWrapper.get());
-    if (PayloadPtr) {
-      OnNPCActionReceived.Broadcast(PayloadPtr->Action);
+  if (NPCSlice::Actions::SetLastActionActionCreator().match(Action)) {
+    const auto Payload =
+        NPCSlice::Actions::SetLastActionActionCreator().extract(Action);
+    if (Payload.hasValue) {
+      OnNPCActionReceived.Broadcast(Payload.value.Action);
     }
   }
 }

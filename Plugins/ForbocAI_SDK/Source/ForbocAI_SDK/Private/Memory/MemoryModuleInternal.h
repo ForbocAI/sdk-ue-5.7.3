@@ -1,14 +1,14 @@
 #pragma once
 
-#include "CoreMinimal.h"
-#include "Types.h"
+#include "Memory/MemoryModule.h"
+#include "NativeEngine.h"
 
 namespace MemoryInternal {
 
 // Native Wrappers
 namespace Native {
 namespace Sqlite {
-typedef void *Connection;
+using Connection = ::Native::Sqlite::DB;
 Connection Open(const FString &Path);
 void Close(Connection Db);
 bool Execute(Connection Db, const FString &Sql);
@@ -18,13 +18,25 @@ TArray<FMemoryItem> VssSearch(Connection Db, const TArray<float> &Vector,
 } // namespace Sqlite
 } // namespace Native
 
+struct FDatabaseOpenResult {
+  bool isLeft = false;
+  FString left;
+  Native::Sqlite::Connection right = nullptr;
+
+  operator MemoryTypes::MemoryStoreInitializationResult() const {
+    return MemoryTypes::MemoryStoreInitializationResult{
+        isLeft, left, !isLeft && right != nullptr};
+  }
+};
+
+using FDatabaseMutationResult = MemoryTypes::MemoryStoreInitializationResult;
+
 // SQLite-VSS Specifics
 namespace SQLiteVSS {
-MemoryTypes::MemoryStoreCreationResult OpenDatabase(const FString &Path);
+FDatabaseOpenResult OpenDatabase(const FString &Path);
 void CloseDatabase(void *Handle);
-MemoryTypes::MemoryStoreInitializationResult CreateTables(void *Handle);
-MemoryTypes::MemoryStoreAddResult InsertMemory(void *Handle,
-                                               const FMemoryItem &Item);
+FDatabaseMutationResult CreateTables(void *Handle);
+FDatabaseMutationResult InsertMemory(void *Handle, const FMemoryItem &Item);
 MemoryTypes::MemoryStoreRecallResult
 VectorSearch(void *Handle, const FString &Query, int32 Limit);
 MemoryTypes::MemoryStoreEmbeddingResult GenerateEmbedding(void *Handle,
@@ -33,7 +45,7 @@ MemoryTypes::MemoryStoreEmbeddingResult GenerateEmbedding(void *Handle,
 
 // Helpers
 FString GetDatabasePath(const FMemoryConfig &Config);
-MemoryTypes::MemoryStoreCreationResult
+MemoryTypes::MemoryStoreInitializationResult
 ValidateConfig(const FMemoryConfig &Config);
 FString GetMemoryStatistics(const FMemoryStore &Store);
 

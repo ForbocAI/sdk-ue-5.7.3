@@ -98,7 +98,14 @@ struct FCortexStatus {
   UPROPERTY(BlueprintReadOnly)
   ECortexEngine Engine;
 
-  FCortexStatus() : bReady(false), Engine(ECortexEngine::Mock) {}
+  UPROPERTY(BlueprintReadOnly)
+  float DownloadProgress;
+
+  UPROPERTY(BlueprintReadOnly)
+  FString Error;
+
+  FCortexStatus()
+      : bReady(false), Engine(ECortexEngine::Mock), DownloadProgress(0.0f) {}
 };
 
 /**
@@ -135,8 +142,26 @@ struct FCortexConfig {
  * Cortex Engine Handle — Opaque handle to the inference engine.
  */
 struct FCortex {
+  FCortexConfig Config;
   void *EngineHandle;
-  FCortex() : EngineHandle(nullptr) {}
+  FString Id;
+  bool bReady;
+
+  FCortex() : EngineHandle(nullptr), bReady(false) {}
+};
+
+USTRUCT(BlueprintType)
+struct FCortexResponse {
+  GENERATED_BODY()
+
+  UPROPERTY(BlueprintReadOnly)
+  FString Id;
+
+  UPROPERTY(BlueprintReadOnly)
+  FString Text;
+
+  UPROPERTY(BlueprintReadOnly)
+  FString Stats;
 };
 
 namespace TypeFactory {

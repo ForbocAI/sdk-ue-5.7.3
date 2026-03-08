@@ -7,6 +7,7 @@
 #include "Misc/Paths.h"
 #include "SDKStore.h"
 #include "Serialization/JsonSerializer.h"
+#include "Thunks.h"
 
 // ==========================================================
 // Memory Module Implementation — Full Embedding-Based Memory
@@ -18,7 +19,7 @@ FMemoryStore MemoryFactory::CreateStore(const FMemoryConfig &Config) {
   auto validationResult =
       MemoryHelpers::memoryConfigValidationPipeline().run(Config);
   if (validationResult.isLeft) {
-    throw std::runtime_error(validationResult.left.c_str());
+    throw std::runtime_error(TCHAR_TO_UTF8(*validationResult.left));
   }
 
   FMemoryStore Store;
@@ -64,7 +65,7 @@ MemoryOps::Initialize(FMemoryStore &Store) {
     Store.bInitialized = true;
     return MemoryTypes::make_right(FString(), true);
   } catch (const std::exception &e) {
-    return MemoryTypes::make_left(FString(e.what()));
+    return MemoryTypes::make_left(FString(e.what()), false);
   }
 }
 
@@ -96,16 +97,17 @@ MemoryOps::Store(const FMemoryStore &Store, const FString &Text,
       [SDKStore]() { return SDKStore.getState(); });
 
   // Chain result back to the promise
-  func::AsyncChain::then<FMemoryItem, void>(
-      ThunkResult,
-      [Promise, Store](FMemoryItem SavedItem) {
+  ThunkResult
+      .then([Promise, Store](FMemoryItem SavedItem) {
         FMemoryStore NewStore = Store;
         NewStore.Items.Add(SavedItem);
         Promise->SetValue(MemoryTypes::make_right(FString(), NewStore));
       })
       .catch_([Promise](std::string Error) {
-        Promise->SetValue(MemoryTypes::make_left(FString(Error.c_str())));
-      });
+        Promise->SetValue(
+            MemoryTypes::make_left(FString(Error.c_str()), FMemoryStore{}));
+      })
+      .execute();
 
   return Promise->GetFuture();
 }
@@ -130,21 +132,26 @@ MemoryOps::Recall(const FMemoryStore &Store, const FString &Query,
       MakeShared<TPromise<MemoryTypes::MemoryStoreRecallResult>>();
 
   auto SDKStore = ConfigureSDKStore();
+  FMemoryRecallRequest RecallRequest;
+  RecallRequest.Query = Query;
+  RecallRequest.Limit = Limit < 0 ? Store.Config.MaxRecallResults : Limit;
+  RecallRequest.Threshold = 0.0f;
 
   // Dispatch the recall thunk
-  auto ThunkResult = rtk::nodeMemoryRecallThunk(Query)(
+  auto ThunkResult = rtk::nodeMemoryRecallThunk(RecallRequest)(
       [SDKStore](const rtk::AnyAction &a) { return SDKStore.dispatch(a); },
       [SDKStore]() { return SDKStore.getState(); });
 
   // Chain result back to the promise
-  func::AsyncChain::then<TArray<FMemoryItem>, void>(
-      ThunkResult,
-      [Promise](TArray<FMemoryItem> Results) {
+  ThunkResult
+      .then([Promise](TArray<FMemoryItem> Results) {
         Promise->SetValue(MemoryTypes::make_right(FString(), Results));
       })
       .catch_([Promise](std::string Error) {
-        Promise->SetValue(MemoryTypes::make_left(FString(Error.c_str())));
-      });
+        Promise->SetValue(MemoryTypes::make_left(FString(Error.c_str()),
+                                                 TArray<FMemoryItem>{}));
+      })
+      .execute();
 
   return Promise->GetFuture();
 }
@@ -166,7 +173,8 @@ MemoryOps::GenerateEmbedding(const FMemoryStore &Store, const FString &Text) {
                    return MemoryInternal::SQLiteVSS::GenerateEmbedding(
                        Store.DatabaseHandle, Text);
                  } catch (const std::exception &e) {
-                   return MemoryTypes::make_left(FString(e.what()));
+                   return MemoryTypes::make_left(FString(e.what()),
+                                                 TArray<float>{});
                  }
                });
 }
@@ -184,69 +192,3 @@ void MemoryOps::Cleanup(FMemoryStore &Store) {
     Store.bInitialized = false;
   }
 }
-
-// Functional helper implementations
-namespace MemoryHelpers {
-MemoryTypes::Lazy<FMemoryStore>
-createLazyMemoryStore(const FMemoryConfig &config) {
-  return func::lazy([config]() -> FMemoryStore {
-    return MemoryFactory::CreateStore(config);
-  });
-}
-
-MemoryTypes::ValidationPipeline<FMemoryConfig>
-memoryConfigValidationPipeline() {
-  return func::validationPipeline<FMemoryConfig>()
-      .add([](const FMemoryConfig &config)
-               -> MemoryTypes::Either<FString, FMemoryConfig> {
-        if (config.DatabasePath.IsEmpty()) {
-          return MemoryTypes::make_left(
-              FString(TEXT("Database path cannot be empty")));
-        }
-        return MemoryTypes::make_right(config);
-      })
-      .add([](const FMemoryConfig &config)
-               -> MemoryTypes::Either<FString, FMemoryConfig> {
-        if (config.MaxMemories < 1) {
-          return MemoryTypes::make_left(
-              FString(TEXT("Max memories must be at least 1")));
-        }
-        return MemoryTypes::make_right(config);
-      })
-      .add([](const FMemoryConfig &config)
-               -> MemoryTypes::Either<FString, FMemoryConfig> {
-        if (config.VectorDimension != 384) {
-          return MemoryTypes::make_left(
-              FString(TEXT("Vector dimension must be 384")));
-        }
-        return MemoryTypes::make_right(config);
-      })
-      .add([](const FMemoryConfig &config)
-               -> MemoryTypes::Either<FString, FMemoryConfig> {
-        if (config.MaxRecallResults < 1) {
-          return MemoryTypes::make_left(
-              FString(TEXT("Max recall results must be at least 1")));
-        }
-        return MemoryTypes::make_right(config);
-      });
-}
-
-MemoryTypes::Pipeline<FMemoryStore>
-memoryStoreCreationPipeline(const FMemoryStore &store) {
-  return func::pipe(store);
-}
-
-MemoryTypes::Curried<
-    1, std::function<MemoryTypes::MemoryStoreCreationResult(FMemoryConfig)>>
-curriedMemoryStoreCreation() {
-  return func::curry<1>(
-      [](FMemoryConfig config) -> MemoryTypes::MemoryStoreCreationResult {
-        try {
-          FMemoryStore store = MemoryFactory::CreateStore(config);
-          return MemoryTypes::make_right(FString(), store);
-        } catch (const std::exception &e) {
-          return MemoryTypes::make_left(FString(e.what()));
-        }
-      });
-}
-} // namespace MemoryHelpers

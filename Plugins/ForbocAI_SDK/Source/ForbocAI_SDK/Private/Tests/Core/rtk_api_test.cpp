@@ -6,7 +6,7 @@
 using namespace rtk;
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FRtkApiSliceTest, "ForbocAI.Core.RTK.ApiSlice",
-                                 EAutomationTestFlags::ApplicationContextMask |
+                                 EAutomationTestFlags_ApplicationContextMask |
                                      EAutomationTestFlags::EngineFilter)
 bool FRtkApiSliceTest::RunTest(const FString &Parameters) {
   // 1. Define an API Endpoint
@@ -20,14 +20,14 @@ bool FRtkApiSliceTest::RunTest(const FString &Parameters) {
         [UserId](auto Resolve, auto Reject) {
           if (UserId == TEXT("error")) {
             func::HttpResult<int32> FailedRes;
-            FailedRes.IsSuccess = false;
-            FailedRes.ErrorMessage = TEXT("Mock Network Failure");
+            FailedRes.bSuccess = false;
+            FailedRes.error = "Mock Network Failure";
             FailedRes.ResponseCode = 500;
             Resolve(FailedRes);
           } else {
             func::HttpResult<int32> SuccessRes;
-            SuccessRes.IsSuccess = true;
-            SuccessRes.Payload = 42;
+            SuccessRes.bSuccess = true;
+            SuccessRes.data = 42;
             SuccessRes.ResponseCode = 200;
             Resolve(SuccessRes);
           }

@@ -13,6 +13,13 @@
 // Ghost Module Implementation — Strict FP (Reduced)
 // ==========================================================
 
+FGhost GhostOps::Create(const FGhostConfig &Config) {
+  FGhost Ghost;
+  Ghost.Config = Config;
+  Ghost.bInitialized = true;
+  return Ghost;
+}
+
 // Single test implementation (Async)
 GhostTypes::GhostTestRunResult GhostOps::RunTest(const FGhost &Ghost,
                                                  const FString &Scenario) {
@@ -30,15 +37,24 @@ GhostTypes::GhostTestRunResult GhostOps::RunTest(const FGhost &Ghost,
         }
 
         auto SDKStore = ConfigureSDKStore();
-        SDKStore.dispatch(GhostActions::GhostSessionStarted(Scenario));
+        SDKStore.dispatch(
+            GhostSlice::Actions::GhostSessionStarted(Scenario, TEXT("running")));
 
         // Create agent from configuration
-        FAgent Agent = AgentFactory::Create(Ghost.Config.Agent);
+        FAgent Agent = Ghost.Config.Agent;
 
         // Run the scenario test via Internal helper
         GhostInternal::RunScenarioTest(Agent, Scenario)
             .then([resolve, SDKStore, Scenario](FGhostTestResult Result) {
-              SDKStore.dispatch(GhostActions::GhostSessionCompleted(Result));
+              FGhostTestReport Report;
+              Report.Results.Add(Result);
+              Report.TotalTests = 1;
+              Report.PassedTests = Result.bPassed ? 1 : 0;
+              Report.FailedTests = Result.bPassed ? 0 : 1;
+              Report.SuccessRate = Result.bPassed ? 1.0f : 0.0f;
+              Report.Summary = Result.bPassed ? TEXT("Passed") : TEXT("Failed");
+              SDKStore.dispatch(
+                  GhostSlice::Actions::GhostSessionCompleted(Report));
               resolve(Result);
             })
             .catch_([reject, SDKStore, Scenario](std::string Error) {
@@ -46,7 +62,8 @@ GhostTypes::GhostTestRunResult GhostOps::RunTest(const FGhost &Ghost,
               Failure.Scenario = Scenario;
               Failure.bPassed = false;
               Failure.ErrorMessage = FString(Error.c_str());
-              SDKStore.dispatch(GhostActions::GhostSessionCompleted(Failure));
+              SDKStore.dispatch(GhostSlice::Actions::GhostSessionFailed(
+                  Scenario, Failure.ErrorMessage));
               reject(Error);
             });
       });
@@ -60,7 +77,20 @@ GhostTypes::GhostTestRunAllResult GhostOps::RunAllTests(const FGhost &Ghost) {
         auto Report = MakeShared<FGhostTestReport>();
         Report->Config = Ghost.Config;
 
-        GhostInternal::RunTestsSequentially(Ghost, Report, 0, resolve, reject);
+        GhostInternal::RunTestsSequentially(
+            Ghost, Report, 0,
+            [resolve](FGhostTestReport FinalReport) {
+              auto SDKStore = ConfigureSDKStore();
+              SDKStore.dispatch(
+                  GhostSlice::Actions::GhostSessionCompleted(FinalReport));
+              resolve(FinalReport);
+            },
+            [reject](std::string Error) {
+              auto SDKStore = ConfigureSDKStore();
+              SDKStore.dispatch(GhostSlice::Actions::GhostSessionFailed(
+                  TEXT("ghost-run"), FString(Error.c_str())));
+              reject(Error);
+            });
       });
 }
 
@@ -87,57 +117,3 @@ GhostTypes::Either<FString, FString>
 GhostOps::ExportToCsv(const FGhostTestReport &Report) {
   return GhostInternal::ExportResultsToCsv(Report);
 }
-
-// Functional helper implementations
-namespace GhostHelpers {
-GhostTypes::Lazy<FGhost> createLazyGhost(const FGhostConfig &config) {
-  return func::lazy(
-      [config]() -> FGhost { return GhostFactory::Create(config); });
-}
-
-GhostTypes::ValidationPipeline<FGhostConfig> ghostConfigValidationPipeline() {
-  return func::validationPipeline<FGhostConfig>()
-      .add([](const FGhostConfig &config)
-               -> GhostTypes::Either<FString, FGhostConfig> {
-        if (config.Agent.Id.IsEmpty() || config.Agent.Persona.IsEmpty()) {
-          return GhostTypes::make_left(
-              FString(TEXT("Agent must have valid Id and Persona")));
-        }
-        return GhostTypes::make_right(config);
-      })
-      .add([](const FGhostConfig &config)
-               -> GhostTypes::Either<FString, FGhostConfig> {
-        if (config.Scenarios.Num() == 0) {
-          return GhostTypes::make_left(
-              FString(TEXT("At least one test scenario must be provided")));
-        }
-        return GhostTypes::make_right(config);
-      })
-      .add([](const FGhostConfig &config)
-               -> GhostTypes::Either<FString, FGhostConfig> {
-        if (config.MaxIterations < 1) {
-          return GhostTypes::make_left(
-              FString(TEXT("Max iterations must be at least 1")));
-        }
-        return GhostTypes::make_right(config);
-      });
-}
-
-GhostTypes::Pipeline<FGhost> ghostTestPipeline(const FGhost &ghost) {
-  return func::pipe(ghost);
-}
-
-GhostTypes::Curried<
-    1, std::function<GhostTypes::GhostCreationResult(FGhostConfig)>>
-curriedGhostCreation() {
-  return func::curry<1>(
-      [](FGhostConfig config) -> GhostTypes::GhostCreationResult {
-        try {
-          FGhost ghost = GhostFactory::Create(config);
-          return GhostTypes::make_right(FString(), ghost);
-        } catch (const std::exception &e) {
-          return GhostTypes::make_left(FString(e.what()));
-        }
-      });
-}
-} // namespace GhostHelpers

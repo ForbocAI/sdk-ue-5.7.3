@@ -1,31 +1,93 @@
 #pragma once
 
 #include "CoreMinimal.h"
-#include "ProtocolRequestTypes.generated.h"
 #include "Protocol/ProtocolTypes.h"
+#include "ProtocolRequestTypes.generated.h"
 
-/**
- * NPC Process Request — Sent to the API for the next protocol step.
- */
 USTRUCT(BlueprintType)
-struct FNPCProcessRequest {
+struct FNPCActorInfo {
   GENERATED_BODY()
 
   UPROPERTY(BlueprintReadOnly)
   FString NpcId;
 
   UPROPERTY(BlueprintReadOnly)
-  TArray<FString> Tape;
+  FString Persona;
 
   UPROPERTY(BlueprintReadOnly)
-  FString LastResult;
-
-  FNPCProcessRequest() {}
+  FAgentState Data;
 };
 
-/**
- * Directive Request
- */
+USTRUCT(BlueprintType)
+struct FNPCProcessTape {
+  GENERATED_BODY()
+
+  UPROPERTY(BlueprintReadOnly)
+  FString Observation;
+
+  UPROPERTY(BlueprintReadOnly)
+  FString ContextJson;
+
+  UPROPERTY(BlueprintReadOnly)
+  FAgentState NpcState;
+
+  UPROPERTY(BlueprintReadOnly)
+  FString Persona;
+
+  UPROPERTY(BlueprintReadOnly)
+  bool bHasActor;
+
+  UPROPERTY(BlueprintReadOnly)
+  FNPCActorInfo Actor;
+
+  UPROPERTY(BlueprintReadOnly)
+  TArray<FRecalledMemory> Memories;
+
+  UPROPERTY(BlueprintReadOnly)
+  FString Prompt;
+
+  UPROPERTY(BlueprintReadOnly)
+  FCortexConfig Constraints;
+
+  UPROPERTY(BlueprintReadOnly)
+  FString GeneratedOutput;
+
+  UPROPERTY(BlueprintReadOnly)
+  FString RulesetId;
+
+  UPROPERTY(BlueprintReadOnly)
+  bool bVectorQueried;
+
+  FNPCProcessTape() : bHasActor(false), bVectorQueried(false) {}
+};
+
+USTRUCT(BlueprintType)
+struct FNPCProcessRequest {
+  GENERATED_BODY()
+
+  UPROPERTY(BlueprintReadOnly)
+  FNPCProcessTape Tape;
+
+  UPROPERTY(BlueprintReadOnly)
+  FString LastResultJson;
+
+  UPROPERTY(BlueprintReadOnly)
+  bool bHasLastResult;
+
+  FNPCProcessRequest() : bHasLastResult(false) {}
+};
+
+USTRUCT(BlueprintType)
+struct FNPCProcessResponse {
+  GENERATED_BODY()
+
+  UPROPERTY(BlueprintReadOnly)
+  FNPCInstruction Instruction;
+
+  UPROPERTY(BlueprintReadOnly)
+  FNPCProcessTape Tape;
+};
+
 USTRUCT(BlueprintType)
 struct FDirectiveRequest {
   GENERATED_BODY()
@@ -34,27 +96,20 @@ struct FDirectiveRequest {
   FString Observation;
 
   UPROPERTY(BlueprintReadOnly)
-  FString NpcStateJson; // Serialized NPCState
+  FAgentState NpcState;
 
-  FDirectiveRequest() {}
+  UPROPERTY(BlueprintReadOnly)
+  FString ContextJson;
 };
 
-/**
- * Directive Response
- */
 USTRUCT(BlueprintType)
 struct FDirectiveResponse {
   GENERATED_BODY()
 
   UPROPERTY(BlueprintReadOnly)
   FMemoryRecallInstruction MemoryRecall;
-
-  FDirectiveResponse() {}
 };
 
-/**
- * Context Request
- */
 USTRUCT(BlueprintType)
 struct FContextRequest {
   GENERATED_BODY()
@@ -66,17 +121,12 @@ struct FContextRequest {
   FString Observation;
 
   UPROPERTY(BlueprintReadOnly)
-  FString NpcStateJson;
+  FAgentState NpcState;
 
   UPROPERTY(BlueprintReadOnly)
   FString Persona;
-
-  FContextRequest() {}
 };
 
-/**
- * Context Response
- */
 USTRUCT(BlueprintType)
 struct FContextResponse {
   GENERATED_BODY()
@@ -86,13 +136,8 @@ struct FContextResponse {
 
   UPROPERTY(BlueprintReadOnly)
   FCortexConfig Constraints;
-
-  FContextResponse() {}
 };
 
-/**
- * Verdict Request
- */
 USTRUCT(BlueprintType)
 struct FVerdictRequest {
   GENERATED_BODY()
@@ -104,14 +149,9 @@ struct FVerdictRequest {
   FString Observation;
 
   UPROPERTY(BlueprintReadOnly)
-  FString NpcStateJson;
-
-  FVerdictRequest() {}
+  FAgentState NpcState;
 };
 
-/**
- * Verdict Response
- */
 USTRUCT(BlueprintType)
 struct FVerdictResponse {
   GENERATED_BODY()
@@ -126,46 +166,64 @@ struct FVerdictResponse {
   TArray<FMemoryStoreInstruction> MemoryStore;
 
   UPROPERTY(BlueprintReadOnly)
-  FString StateDeltaJson;
+  FAgentState StateDelta;
 
   UPROPERTY(BlueprintReadOnly)
   FAgentAction Action;
 
   UPROPERTY(BlueprintReadOnly)
+  bool bHasAction;
+
+  UPROPERTY(BlueprintReadOnly)
   FString Dialogue;
 
-  FVerdictResponse() : bValid(true) {}
+  FVerdictResponse() : bValid(true), bHasAction(false) {}
 };
 
 namespace TypeFactory {
 
-inline FDirectiveRequest DirectiveRequest(FString Observation,
-                                          FString NpcStateJson) {
-  FDirectiveRequest R;
-  R.Observation = MoveTemp(Observation);
-  R.NpcStateJson = MoveTemp(NpcStateJson);
-  return R;
+inline FNPCProcessTape ProcessTape(const FString &Observation,
+                                   const FString &ContextJson,
+                                   const FAgentState &NpcState,
+                                   const FString &Persona) {
+  FNPCProcessTape Tape;
+  Tape.Observation = Observation;
+  Tape.ContextJson = ContextJson;
+  Tape.NpcState = NpcState;
+  Tape.Persona = Persona;
+  return Tape;
 }
 
-inline FContextRequest ContextRequest(TArray<FRecalledMemory> Memories,
-                                      FString Observation, FString NpcStateJson,
-                                      FString Persona) {
-  FContextRequest R;
-  R.Memories = MoveTemp(Memories);
-  R.Observation = MoveTemp(Observation);
-  R.NpcStateJson = MoveTemp(NpcStateJson);
-  R.Persona = MoveTemp(Persona);
-  return R;
+inline FDirectiveRequest DirectiveRequest(const FString &Observation,
+                                          const FAgentState &NpcState,
+                                          const FString &ContextJson) {
+  FDirectiveRequest Request;
+  Request.Observation = Observation;
+  Request.NpcState = NpcState;
+  Request.ContextJson = ContextJson;
+  return Request;
 }
 
-inline FVerdictRequest VerdictRequest(FString GeneratedOutput,
-                                      FString Observation,
-                                      FString NpcStateJson) {
-  FVerdictRequest R;
-  R.GeneratedOutput = MoveTemp(GeneratedOutput);
-  R.Observation = MoveTemp(Observation);
-  R.NpcStateJson = MoveTemp(NpcStateJson);
-  return R;
+inline FContextRequest ContextRequest(const TArray<FRecalledMemory> &Memories,
+                                      const FString &Observation,
+                                      const FAgentState &NpcState,
+                                      const FString &Persona) {
+  FContextRequest Request;
+  Request.Memories = Memories;
+  Request.Observation = Observation;
+  Request.NpcState = NpcState;
+  Request.Persona = Persona;
+  return Request;
+}
+
+inline FVerdictRequest VerdictRequest(const FString &GeneratedOutput,
+                                      const FString &Observation,
+                                      const FAgentState &NpcState) {
+  FVerdictRequest Request;
+  Request.GeneratedOutput = GeneratedOutput;
+  Request.Observation = Observation;
+  Request.NpcState = NpcState;
+  return Request;
 }
 
 } // namespace TypeFactory

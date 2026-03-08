@@ -4,159 +4,193 @@
 #include "CoreMinimal.h"
 #include "Types.h"
 
-// ==========================================================
-// Ghost Slice (UE RTK)
-// ==========================================================
-// Equivalent to `ghostSlice.ts`
-// Manages the state of the Ghost QA/test orchestration system.
-// ==========================================================
-
 namespace GhostSlice {
 
 using namespace rtk;
-using namespace func;
 
-enum class EGhostSessionStatus : uint8 {
-  Idle,
-  Running,
-  Paused,
-  Completed,
-  Error
+struct FGhostSessionStartedPayload {
+  FString SessionId;
+  FString Status;
 };
 
-// The root state for the Ghost slice
+struct FGhostSessionProgressPayload {
+  FString SessionId;
+  FString Status;
+  float Progress;
+
+  FGhostSessionProgressPayload() : Progress(0.0f) {}
+};
+
+struct FGhostSessionFailedPayload {
+  FString SessionId;
+  FString Error;
+};
+
 struct FGhostSliceState {
-  Maybe<FString> ActiveSessionId;
-  EGhostSessionStatus Status;
-  float Progress; // 0.0 - 1.0
-  TArray<FGhostTestResult> Results;
-  TArray<FString> History; // Past session IDs or logs
+  FString ActiveSessionId;
+  FString Status;
+  float Progress;
+  FGhostTestReport Results;
+  bool bHasResults;
+  TArray<FGhostHistoryEntry> History;
   bool bLoading;
-  Maybe<FString> Error;
+  FString Error;
 
   FGhostSliceState()
-      : Status(EGhostSessionStatus::Idle), Progress(0.0f), bLoading(false) {}
+      : Status(TEXT("idle")), Progress(0.0f), bHasResults(false),
+        bLoading(false) {}
 };
-
-// --- Actions ---
-struct GhostSessionStartedAction : public Action {
-  static const FString Type;
-  FString Payload; // SessionId
-  GhostSessionStartedAction(FString InPayload)
-      : Action(Type), Payload(MoveTemp(InPayload)) {}
-};
-inline const FString GhostSessionStartedAction::Type =
-    TEXT("ghost/sessionStarted");
-
-struct GhostProgressUpdatedAction : public Action {
-  static const FString Type;
-  float Payload; // Progress
-  GhostProgressUpdatedAction(float InPayload)
-      : Action(Type), Payload(InPayload) {}
-};
-inline const FString GhostProgressUpdatedAction::Type =
-    TEXT("ghost/progressUpdated");
-
-struct GhostResultAddedAction : public Action {
-  static const FString Type;
-  FGhostTestResult Payload;
-  GhostResultAddedAction(FGhostTestResult InPayload)
-      : Action(Type), Payload(MoveTemp(InPayload)) {}
-};
-inline const FString GhostResultAddedAction::Type = TEXT("ghost/resultAdded");
-
-struct GhostSessionCompletedAction : public Action {
-  static const FString Type;
-  GhostSessionCompletedAction() : Action(Type) {}
-};
-inline const FString GhostSessionCompletedAction::Type =
-    TEXT("ghost/sessionCompleted");
-
-struct GhostSessionFailedAction : public Action {
-  static const FString Type;
-  FString Payload; // Error
-  GhostSessionFailedAction(FString InPayload)
-      : Action(Type), Payload(MoveTemp(InPayload)) {}
-};
-inline const FString GhostSessionFailedAction::Type =
-    TEXT("ghost/sessionFailed");
-
-struct ClearGhostSessionAction : public Action {
-  static const FString Type;
-  ClearGhostSessionAction() : Action(Type) {}
-};
-inline const FString ClearGhostSessionAction::Type =
-    TEXT("ghost/clearGhostSession");
 
 namespace Actions {
-inline GhostSessionStartedAction GhostSessionStarted(FString SessionId) {
-  return GhostSessionStartedAction(MoveTemp(SessionId));
+
+inline const ActionCreator<FGhostSessionStartedPayload> &
+GhostSessionStartedActionCreator() {
+  static const ActionCreator<FGhostSessionStartedPayload> ActionCreator =
+      createAction<FGhostSessionStartedPayload>(TEXT("ghost/sessionStarted"));
+  return ActionCreator;
 }
-inline GhostProgressUpdatedAction GhostProgressUpdated(float Progress) {
-  return GhostProgressUpdatedAction(Progress);
+
+inline const ActionCreator<FGhostSessionProgressPayload> &
+GhostSessionProgressActionCreator() {
+  static const ActionCreator<FGhostSessionProgressPayload> ActionCreator =
+      createAction<FGhostSessionProgressPayload>(TEXT("ghost/sessionProgress"));
+  return ActionCreator;
 }
-inline GhostResultAddedAction GhostResultAdded(FGhostTestResult Result) {
-  return GhostResultAddedAction(MoveTemp(Result));
+
+inline const ActionCreator<FGhostTestReport> &
+GhostSessionCompletedActionCreator() {
+  static const ActionCreator<FGhostTestReport> ActionCreator =
+      createAction<FGhostTestReport>(TEXT("ghost/sessionCompleted"));
+  return ActionCreator;
 }
-inline GhostSessionCompletedAction GhostSessionCompleted() {
-  return GhostSessionCompletedAction();
+
+inline const ActionCreator<FGhostSessionFailedPayload> &
+GhostSessionFailedActionCreator() {
+  static const ActionCreator<FGhostSessionFailedPayload> ActionCreator =
+      createAction<FGhostSessionFailedPayload>(TEXT("ghost/sessionFailed"));
+  return ActionCreator;
 }
-inline GhostSessionFailedAction GhostSessionFailed(FString Error) {
-  return GhostSessionFailedAction(MoveTemp(Error));
+
+inline const ActionCreator<TArray<FGhostHistoryEntry>> &
+GhostHistoryLoadedActionCreator() {
+  static const ActionCreator<TArray<FGhostHistoryEntry>> ActionCreator =
+      createAction<TArray<FGhostHistoryEntry>>(TEXT("ghost/historyLoaded"));
+  return ActionCreator;
 }
-inline ClearGhostSessionAction ClearGhostSession() {
-  return ClearGhostSessionAction();
+
+inline const EmptyActionCreator &ClearGhostSessionActionCreator() {
+  static const EmptyActionCreator ActionCreator =
+      createAction(TEXT("ghost/clearGhostSession"));
+  return ActionCreator;
 }
+
+inline AnyAction GhostSessionStarted(const FString &SessionId,
+                                     const FString &Status = TEXT("running")) {
+  return GhostSessionStartedActionCreator()(
+      FGhostSessionStartedPayload{SessionId, Status});
+}
+
+inline AnyAction GhostSessionProgress(const FString &SessionId,
+                                      const FString &Status, float Progress) {
+  FGhostSessionProgressPayload Payload;
+  Payload.SessionId = SessionId;
+  Payload.Status = Status;
+  Payload.Progress = Progress;
+  return GhostSessionProgressActionCreator()(Payload);
+}
+
+inline AnyAction GhostSessionCompleted(const FGhostTestReport &Report) {
+  return GhostSessionCompletedActionCreator()(Report);
+}
+
+inline AnyAction GhostSessionFailed(const FString &SessionId,
+                                    const FString &Error) {
+  return GhostSessionFailedActionCreator()(
+      FGhostSessionFailedPayload{SessionId, Error});
+}
+
+inline AnyAction GhostHistoryLoaded(const TArray<FGhostHistoryEntry> &History) {
+  return GhostHistoryLoadedActionCreator()(History);
+}
+
+inline AnyAction ClearGhostSession() {
+  return ClearGhostSessionActionCreator()();
+}
+
 } // namespace Actions
 
-using namespace Actions;
-
-// --- Slice Builder ---
 inline Slice<FGhostSliceState> CreateGhostSlice() {
   return SliceBuilder<FGhostSliceState>(TEXT("ghost"), FGhostSliceState())
-      .addCase<GhostSessionStartedAction>(
-          [](FGhostSliceState State, const GhostSessionStartedAction &Action) {
-            State.ActiveSessionId = just(Action.Payload);
-            State.Status = EGhostSessionStatus::Running;
-            State.Progress = 0.0f;
-            State.Results.Empty();
-            State.Error = nothing<FString>();
-            return State;
+      .addExtraCase(
+          Actions::GhostSessionStartedActionCreator(),
+          [](const FGhostSliceState &State,
+             const Action<FGhostSessionStartedPayload> &Action)
+              -> FGhostSliceState {
+            FGhostSliceState Next = State;
+            Next.ActiveSessionId = Action.PayloadValue.SessionId;
+            Next.Status = Action.PayloadValue.Status;
+            Next.Progress = 0.0f;
+            Next.bLoading = false;
+            Next.Error.Empty();
+            Next.bHasResults = false;
+            return Next;
           })
-      .addCase<GhostProgressUpdatedAction>(
-          [](FGhostSliceState State, const GhostProgressUpdatedAction &Action) {
-            State.Progress = Action.Payload;
-            return State;
+      .addExtraCase(
+          Actions::GhostSessionProgressActionCreator(),
+          [](const FGhostSliceState &State,
+             const Action<FGhostSessionProgressPayload> &Action)
+              -> FGhostSliceState {
+            FGhostSliceState Next = State;
+            Next.ActiveSessionId = Action.PayloadValue.SessionId;
+            Next.Status = Action.PayloadValue.Status;
+            Next.Progress = Action.PayloadValue.Progress;
+            return Next;
           })
-      .addCase<GhostResultAddedAction>(
-          [](FGhostSliceState State, const GhostResultAddedAction &Action) {
-            State.Results.Add(Action.Payload);
-            return State;
-          })
-      .addCase<GhostSessionCompletedAction>(
-          [](FGhostSliceState State,
-             const GhostSessionCompletedAction &Action) {
-            State.Status = EGhostSessionStatus::Completed;
-            State.Progress = 1.0f;
-            if (State.ActiveSessionId.hasValue) {
-              State.History.Add(State.ActiveSessionId.value);
+      .addExtraCase(
+          Actions::GhostSessionCompletedActionCreator(),
+          [](const FGhostSliceState &State,
+             const Action<FGhostTestReport> &Action) -> FGhostSliceState {
+            FGhostSliceState Next = State;
+            Next.Results = Action.PayloadValue;
+            Next.bHasResults = true;
+            Next.Status = TEXT("completed");
+            Next.Progress = 1.0f;
+            Next.bLoading = false;
+            if (Action.PayloadValue.Results.Num() > 0) {
+              Next.ActiveSessionId =
+                  Action.PayloadValue.Results[0].Scenario.IsEmpty()
+                      ? Next.ActiveSessionId
+                      : Next.ActiveSessionId;
             }
-            return State;
+            return Next;
           })
-      .addCase<GhostSessionFailedAction>(
-          [](FGhostSliceState State, const GhostSessionFailedAction &Action) {
-            State.Status = EGhostSessionStatus::Error;
-            State.Error = just(Action.Payload);
-            return State;
+      .addExtraCase(
+          Actions::GhostSessionFailedActionCreator(),
+          [](const FGhostSliceState &State,
+             const Action<FGhostSessionFailedPayload> &Action)
+              -> FGhostSliceState {
+            FGhostSliceState Next = State;
+            Next.ActiveSessionId = Action.PayloadValue.SessionId;
+            Next.Status = TEXT("failed");
+            Next.bLoading = false;
+            Next.Error = Action.PayloadValue.Error;
+            return Next;
           })
-      .addCase<ClearGhostSessionAction>(
-          [](FGhostSliceState State, const ClearGhostSessionAction &Action) {
-            State.ActiveSessionId = nothing<FString>();
-            State.Status = EGhostSessionStatus::Idle;
-            State.Progress = 0.0f;
-            State.Results.Empty();
-            State.Error = nothing<FString>();
-            return State;
+      .addExtraCase(
+          Actions::GhostHistoryLoadedActionCreator(),
+          [](const FGhostSliceState &State,
+             const Action<TArray<FGhostHistoryEntry>> &Action)
+              -> FGhostSliceState {
+            FGhostSliceState Next = State;
+            Next.History = Action.PayloadValue;
+            return Next;
+          })
+      .addExtraCase(
+          Actions::ClearGhostSessionActionCreator(),
+          [](const FGhostSliceState &State,
+             const Action<rtk::FEmptyPayload> &Action)
+              -> FGhostSliceState {
+            return FGhostSliceState();
           })
       .build();
 }

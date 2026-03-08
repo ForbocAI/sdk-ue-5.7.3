@@ -7,7 +7,7 @@ using namespace rtk;
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FRtkMiddlewareTest,
                                  "ForbocAI.Core.RTK.Middleware",
-                                 EAutomationTestFlags::ApplicationContextMask |
+                                 EAutomationTestFlags_ApplicationContextMask |
                                      EAutomationTestFlags::EngineFilter)
 bool FRtkMiddlewareTest::RunTest(const FString &Parameters) {
   TArray<FString> EventLog;
@@ -49,7 +49,7 @@ bool FRtkMiddlewareTest::RunTest(const FString &Parameters) {
 
   // 5. Execute
   EnhancedDispatch(
-      AnyAction{TEXT("trigger"), std::make_shared<FEmptyPayload>()});
+      AnyAction{TEXT("trigger"), std::make_shared<rtk::FEmptyPayload>()});
 
   // Validate Order
   TestEqual("Event Log Length", EventLog.Num(), 4);

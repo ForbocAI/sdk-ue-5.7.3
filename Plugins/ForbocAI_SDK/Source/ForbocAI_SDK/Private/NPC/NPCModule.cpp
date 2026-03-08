@@ -12,32 +12,51 @@
 // AGENT FACTORY — Pure construction functions
 // ==========================================
 
-AgentTypes::AgentCreationResult
-AgentFactory::Create(const FAgentConfig &Config) {
-  try {
-    const FString NewId =
-        FString::Printf(TEXT("agent_%s"), *FGuid::NewGuid().ToString());
-    const FString Url =
-        Config.ApiUrl.IsEmpty() ? TEXT("http://localhost:8080") : Config.ApiUrl;
+namespace {
 
-    FAgent agent{NewId, Config.Persona, FAgentState(), TArray<FMemoryItem>(),
-                 Url};
-    return AgentTypes::make_right(FString(), agent);
-  } catch (const std::exception &e) {
-    return AgentTypes::make_left(FString(e.what()));
+FString ToBase36(uint64 Value) {
+  static const TCHAR Digits[] = TEXT("0123456789abcdefghijklmnopqrstuvwxyz");
+
+  if (Value == 0) {
+    return TEXT("0");
   }
+
+  FString Encoded;
+  while (Value > 0) {
+    const int32 DigitIndex = static_cast<int32>(Value % 36ull);
+    Encoded.InsertAt(0, FString(1, &Digits[DigitIndex]));
+    Value /= 36ull;
+  }
+
+  return Encoded;
 }
 
-AgentTypes::AgentCreationResult AgentFactory::FromSoul(const FSoul &Soul,
-                                                       const FString &ApiUrl) {
-  try {
-    const FString Url =
-        ApiUrl.IsEmpty() ? TEXT("http://localhost:8080") : ApiUrl;
-    FAgent agent{Soul.Id, Soul.Persona, Soul.State, Soul.Memories, Url};
-    return AgentTypes::make_right(FString(), agent);
-  } catch (const std::exception &e) {
-    return AgentTypes::make_left(FString(e.what()));
-  }
+FString GenerateNPCId() {
+  return FString::Printf(TEXT("ag_%s"),
+                         *ToBase36(FDateTime::UtcNow().ToUnixTimestamp()));
+}
+
+} // namespace
+
+FAgent AgentFactory::Create(const FAgentConfig &Config) {
+  FAgent Agent;
+  Agent.Id = Config.Id.IsEmpty() ? GenerateNPCId() : Config.Id;
+  Agent.Persona = Config.Persona;
+  Agent.State = Config.InitialState;
+  Agent.ApiUrl =
+      Config.ApiUrl.IsEmpty() ? TEXT("https://api.forboc.ai") : Config.ApiUrl;
+  return Agent;
+}
+
+FAgent AgentFactory::FromSoul(const FSoul &Soul, const FString &ApiUrl) {
+  FAgent Agent;
+  Agent.Id = Soul.Id;
+  Agent.Persona = Soul.Persona;
+  Agent.State = Soul.State;
+  Agent.Memories = Soul.Memories;
+  Agent.ApiUrl =
+      ApiUrl.IsEmpty() ? TEXT("https://api.forboc.ai") : ApiUrl;
+  return Agent;
 }
 
 // ==========================================
@@ -45,14 +64,16 @@ AgentTypes::AgentCreationResult AgentFactory::FromSoul(const FSoul &Soul,
 // ==========================================
 
 FAgent AgentOps::WithState(const FAgent &Agent, const FAgentState &NewState) {
-  return FAgent{Agent.Id, Agent.Persona, NewState, Agent.Memories,
-                Agent.ApiUrl};
+  FAgent Updated = Agent;
+  Updated.State = NewState;
+  return Updated;
 }
 
 FAgent AgentOps::WithMemories(const FAgent &Agent,
                               const TArray<FMemoryItem> &NewMemories) {
-  return FAgent{Agent.Id, Agent.Persona, Agent.State, NewMemories,
-                Agent.ApiUrl};
+  FAgent Updated = Agent;
+  Updated.Memories = NewMemories;
+  return Updated;
 }
 
 FAgentState AgentOps::CalculateNewState(const FAgentState &Current,
@@ -82,22 +103,8 @@ AgentOps::Process(const FAgent &Agent, const FString &Input,
         // Use the global SDK Store to dispatch the processNPC thunk
         auto Store = ConfigureSDKStore();
 
-        // Dispatch the thunk with the initial input
-        auto ThunkResult = processNPC(Agent.Id, Input)(
-            [Store](const AnyAction &a) { return Store.dispatch(a); },
-            [Store]() { return Store.getState(); });
-
-        // Chain the result back to FAgentResponse
-        func::AsyncChain::then<FString, void>(
-            ThunkResult,
-            [resolve, Agent](FString FinalVerdict) {
-              FAgentResponse Res;
-              Res.GeneratedDialogue = FinalVerdict;
-              Res.Action =
-                  TypeFactory::Action(TEXT("Dialogue"), TEXT("Character"));
-              Res.Signature = TEXT("RTK_SIGNED");
-              resolve(Res);
-            })
+        Store.dispatch(rtk::processNPC(Agent.Id, Input))
+            .then([resolve](const FAgentResponse &Response) { resolve(Response); })
             .catch_([reject](std::string Error) { reject(Error); });
       });
 }
@@ -106,49 +113,3 @@ FSoul AgentOps::Export(const FAgent &Agent) {
   return TypeFactory::Soul(Agent.Id, TEXT("1.0.0"), TEXT("Agent"),
                            Agent.Persona, Agent.State, Agent.Memories);
 }
-
-// Functional helper implementations
-namespace AgentHelpers {
-// Implementation of lazy agent creation
-AgentTypes::Lazy<FAgent> createLazyAgent(const FAgentConfig &config) {
-  return func::lazy(
-      [config]() -> FAgent { return AgentFactory::Create(config); });
-}
-
-// Implementation of agent state validation pipeline
-AgentTypes::ValidationPipeline<FAgentState> agentStateValidationPipeline() {
-  return func::validationPipeline<FAgentState>()
-      .add([](const FAgentState &state)
-               -> AgentTypes::Either<FString, FAgentState> {
-        if (state.JsonData.IsEmpty() || state.JsonData == TEXT("{}")) {
-          return AgentTypes::make_left(FString(TEXT("Empty agent state")));
-        }
-        return AgentTypes::make_right(state);
-      })
-      .add([](const FAgentState &state)
-               -> AgentTypes::Either<FString, FAgentState> {
-        // Add more validation rules here
-        return AgentTypes::make_right(state);
-      });
-}
-
-// Implementation of agent processing pipeline
-AgentTypes::Pipeline<FAgent> agentProcessingPipeline(const FAgent &agent) {
-  return func::pipe(agent);
-}
-
-// Implementation of curried agent creation
-AgentTypes::Curried<
-    1, std::function<AgentTypes::AgentCreationResult(FAgentConfig)>>
-curriedAgentCreation() {
-  return func::curry<1>(
-      [](FAgentConfig config) -> AgentTypes::AgentCreationResult {
-        try {
-          FAgent agent = AgentFactory::Create(config);
-          return AgentTypes::make_right(FString(), agent);
-        } catch (const std::exception &e) {
-          return AgentTypes::make_left(FString(e.what()));
-        }
-      });
-}
-} // namespace AgentHelpers

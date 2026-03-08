@@ -3,9 +3,11 @@
 #include "Interfaces/IHttpRequest.h"
 #include "Interfaces/IHttpResponse.h"
 #include "JsonObjectConverter.h"
+#include "SDKConfig.h"
 #include "SDKStore.h"
 #include "Serialization/JsonSerializer.h"
 #include "Soul/SoulSlice.h"
+#include "Thunks.h"
 
 // ==========================================
 // SOUL OPERATIONS — Pure free functions
@@ -20,7 +22,7 @@ SoulOps::FromAgent(const FAgentState &State,
                                    Persona, State, Memories);
     return SoulTypes::make_right(FString(), Soul);
   } catch (const std::exception &e) {
-    return SoulTypes::make_left(FString(e.what()));
+    return SoulTypes::make_left(FString(e.what()), FSoul{});
   }
 }
 
@@ -31,9 +33,9 @@ SoulTypes::SoulSerializationResult SoulOps::Serialize(const FSoul &Soul) {
       return SoulTypes::make_right(FString(), JsonString);
     }
     return SoulTypes::make_left(
-        FString(TEXT("Failed to serialize Soul to JSON")));
+        FString(TEXT("Failed to serialize Soul to JSON")), FString());
   } catch (const std::exception &e) {
-    return SoulTypes::make_left(FString(e.what()));
+    return SoulTypes::make_left(FString(e.what()), FString());
   }
 }
 
@@ -44,9 +46,9 @@ SoulTypes::SoulDeserializationResult SoulOps::Deserialize(const FString &Json) {
       return SoulTypes::make_right(FString(), Soul);
     }
     return SoulTypes::make_left(
-        FString(TEXT("Failed to deserialize JSON to Soul")));
+        FString(TEXT("Failed to deserialize JSON to Soul")), FSoul{});
   } catch (const std::exception &e) {
-    return SoulTypes::make_left(FString(e.what()));
+    return SoulTypes::make_left(FString(e.what()), FSoul{});
   }
 }
 
@@ -55,7 +57,7 @@ SoulTypes::SoulValidationResult SoulOps::Validate(const FSoul &Soul) {
   auto result = SoulHelpers::soulValidationPipeline().run(Soul);
 
   if (result.isLeft) {
-    return SoulTypes::make_left(result.left);
+    return SoulTypes::make_left(result.left, FSoul{});
   }
 
   return SoulTypes::make_right(FString(), Soul);
@@ -63,22 +65,14 @@ SoulTypes::SoulValidationResult SoulOps::Validate(const FSoul &Soul) {
 
 SoulTypes::SoulExportResult SoulOps::ExportToArweave(const FSoul &Soul,
                                                      const FString &ApiUrl) {
-  return SoulTypes::AsyncResult<FString>::create(
-      [Soul](std::function<void(FString)> resolve,
-             std::function<void(std::string)> reject) {
+  return SoulTypes::AsyncResult<FSoulExportResult>::create(
+      [Soul, ApiUrl](std::function<void(FSoulExportResult)> resolve,
+                     std::function<void(std::string)> reject) {
+        SDKConfig::SetApiConfig(ApiUrl, SDKConfig::GetApiKey());
         auto SDKStore = ConfigureSDKStore();
 
-        // Dispatch the export thunk using the Soul's ID as the AgentId
-        auto ThunkResult = rtk::exportSoulThunk(Soul.Id)(
-            [SDKStore](const rtk::AnyAction &a) {
-              return SDKStore.dispatch(a);
-            },
-            [SDKStore]() { return SDKStore.getState(); });
-
-        // Chain the result back
-        func::AsyncChain::then<FString, void>(ThunkResult, [resolve](
-                                                               FString TxId) {
-          resolve(TxId);
-        }).catch_([reject](std::string Error) { reject(Error); });
+        SDKStore.dispatch(rtk::exportSoulThunk(Soul))
+            .then([resolve](const FSoulExportResult &Result) { resolve(Result); })
+            .catch_([reject](std::string Error) { reject(Error); });
       });
 }

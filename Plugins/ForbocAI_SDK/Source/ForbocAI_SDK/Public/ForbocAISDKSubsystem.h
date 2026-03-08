@@ -1,12 +1,17 @@
 #pragma once
 
 #include "CoreMinimal.h"
-#include "Subsystem.generated.h"
+#include "SDKStore.h"
 #include "Types.h"
 #include "Subsystems/GameInstanceSubsystem.h"
+#include "ForbocAISDKSubsystem.generated.h"
 
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FOnNPCActionReceived, FAgentAction,
                                             Action);
+DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FOnMessageReceived, FString,
+                                            Message);
+DECLARE_DYNAMIC_MULTICAST_DELEGATE(FOnTypingStart);
+DECLARE_DYNAMIC_MULTICAST_DELEGATE(FOnTypingEnd);
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FOnSoulExportComplete, FString,
                                             TxId);
 
@@ -36,7 +41,7 @@ public:
    * This is an asynchronous operation.
    */
   UFUNCTION(BlueprintCallable, Category = "Forboc AI|NPC")
-  void ProcessNPC(FString NpcId);
+  void ProcessNPC(FString NpcId, FString Input = TEXT(""));
 
   /**
    * Exports an NPC's Soul to Arweave.
@@ -53,6 +58,18 @@ public:
   /** Delegate triggered when a new action is received from the NPC. */
   UPROPERTY(BlueprintAssignable, Category = "Forboc AI|Events")
   FOnNPCActionReceived OnNPCActionReceived;
+
+  /** Delegate triggered when finalized dialogue is produced for an NPC turn. */
+  UPROPERTY(BlueprintAssignable, Category = "Forboc AI|Events")
+  FOnMessageReceived OnMessageReceived;
+
+  /** Delegate triggered when an NPC turn begins asynchronous processing. */
+  UPROPERTY(BlueprintAssignable, Category = "Forboc AI|Events")
+  FOnTypingStart OnTypingStart;
+
+  /** Delegate triggered when an NPC turn finishes asynchronous processing. */
+  UPROPERTY(BlueprintAssignable, Category = "Forboc AI|Events")
+  FOnTypingEnd OnTypingEnd;
 
   /** Delegate triggered when soul export is complete. */
   UPROPERTY(BlueprintAssignable, Category = "Forboc AI|Events")

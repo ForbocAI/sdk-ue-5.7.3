@@ -4,128 +4,185 @@
 #include "CoreMinimal.h"
 #include "Types.h"
 
-// ==========================================================
-// Bridge Slice (UE RTK)
-// ==========================================================
-// Equivalent to `bridgeSlice.ts`
-// Manages the policy validation lane, rulesets, and presets.
-// ==========================================================
-
 namespace BridgeSlice {
 
 using namespace rtk;
 using namespace func;
 
-enum class EBridgeStatus : uint8 { Idle, Validating, Validated, Error };
-
-// The root state for the Bridge slice
 struct FBridgeSliceState {
   TArray<FString> ActivePresetIds;
+  TArray<FDirectiveRuleSet> AvailableRulesets;
   TArray<FString> AvailablePresetIds;
-  TMap<FString, FString> AvailableRulesets; // Id -> Description/Version
-  Maybe<FValidationResult> LastValidation;
-  EBridgeStatus Status;
-  Maybe<FString> Error;
+  FValidationResult LastValidation;
+  bool bHasLastValidation;
+  FString Status;
+  FString Error;
 
-  FBridgeSliceState() : Status(EBridgeStatus::Idle) {}
+  FBridgeSliceState()
+      : bHasLastValidation(false), Status(TEXT("idle")) {}
 };
 
-// --- Actions ---
-struct BridgeValidationPendingAction : public Action {
-  static const FString Type;
-  BridgeValidationPendingAction() : Action(Type) {}
-};
-inline const FString BridgeValidationPendingAction::Type =
-    TEXT("bridge/validationPending");
-
-struct BridgeValidationSuccessAction : public Action {
-  static const FString Type;
-  FValidationResult Payload;
-  BridgeValidationSuccessAction(FValidationResult InPayload)
-      : Action(Type), Payload(MoveTemp(InPayload)) {}
-};
-inline const FString BridgeValidationSuccessAction::Type =
-    TEXT("bridge/validationSuccess");
-
-struct BridgeValidationFailedAction : public Action {
-  static const FString Type;
-  FString Payload; // Error message
-  BridgeValidationFailedAction(FString InPayload)
-      : Action(Type), Payload(MoveTemp(InPayload)) {}
-};
-inline const FString BridgeValidationFailedAction::Type =
-    TEXT("bridge/validationFailed");
-
-struct SetActivePresetsAction : public Action {
-  static const FString Type;
-  TArray<FString> Payload; // PresetIds
-  SetActivePresetsAction(TArray<FString> InPayload)
-      : Action(Type), Payload(MoveTemp(InPayload)) {}
-};
-inline const FString SetActivePresetsAction::Type =
-    TEXT("bridge/setActivePresets");
-
-struct ClearBridgeValidationAction : public Action {
-  static const FString Type;
-  ClearBridgeValidationAction() : Action(Type) {}
-};
 namespace Actions {
-inline BridgeValidationPendingAction BridgeValidationPending() {
-  return BridgeValidationPendingAction();
+
+inline const EmptyActionCreator &BridgeValidationPendingActionCreator() {
+  static const EmptyActionCreator ActionCreator =
+      createAction(TEXT("bridge/validationPending"));
+  return ActionCreator;
 }
-inline BridgeValidationSuccessAction
-BridgeValidationSuccess(FValidationResult Result) {
-  return BridgeValidationSuccessAction(MoveTemp(Result));
+
+inline const ActionCreator<FValidationResult> &
+BridgeValidationSuccessActionCreator() {
+  static const ActionCreator<FValidationResult> ActionCreator =
+      createAction<FValidationResult>(TEXT("bridge/validationSuccess"));
+  return ActionCreator;
 }
-inline BridgeValidationFailedAction BridgeValidationFailure(FString Error) {
-  return BridgeValidationFailedAction(MoveTemp(Error));
+
+inline const ActionCreator<FString> &BridgeValidationFailedActionCreator() {
+  static const ActionCreator<FString> ActionCreator =
+      createAction<FString>(TEXT("bridge/validationFailed"));
+  return ActionCreator;
 }
-inline SetActivePresetsAction SetActivePresets(TArray<FString> Presets) {
-  return SetActivePresetsAction(MoveTemp(Presets));
+
+inline const ActionCreator<TArray<FString>> &SetActivePresetsActionCreator() {
+  static const ActionCreator<TArray<FString>> ActionCreator =
+      createAction<TArray<FString>>(TEXT("bridge/setActivePresets"));
+  return ActionCreator;
 }
-inline ClearBridgeValidationAction ClearBridgeValidation() {
-  return ClearBridgeValidationAction();
+
+inline const ActionCreator<FString> &AddActivePresetIdActionCreator() {
+  static const ActionCreator<FString> ActionCreator =
+      createAction<FString>(TEXT("bridge/addActivePresetId"));
+  return ActionCreator;
 }
+
+inline const ActionCreator<TArray<FDirectiveRuleSet>> &
+SetAvailableRulesetsActionCreator() {
+  static const ActionCreator<TArray<FDirectiveRuleSet>> ActionCreator =
+      createAction<TArray<FDirectiveRuleSet>>(TEXT("bridge/setAvailableRulesets"));
+  return ActionCreator;
+}
+
+inline const ActionCreator<TArray<FString>> &
+SetAvailablePresetIdsActionCreator() {
+  static const ActionCreator<TArray<FString>> ActionCreator =
+      createAction<TArray<FString>>(TEXT("bridge/setAvailablePresetIds"));
+  return ActionCreator;
+}
+
+inline const EmptyActionCreator &ClearBridgeValidationActionCreator() {
+  static const EmptyActionCreator ActionCreator =
+      createAction(TEXT("bridge/clearBridgeValidation"));
+  return ActionCreator;
+}
+
+inline AnyAction BridgeValidationPending() {
+  return BridgeValidationPendingActionCreator()();
+}
+
+inline AnyAction BridgeValidationSuccess(const FValidationResult &Result) {
+  return BridgeValidationSuccessActionCreator()(Result);
+}
+
+inline AnyAction BridgeValidationFailure(const FString &Error) {
+  return BridgeValidationFailedActionCreator()(Error);
+}
+
+inline AnyAction SetActivePresets(const TArray<FString> &Presets) {
+  return SetActivePresetsActionCreator()(Presets);
+}
+
+inline AnyAction AddActivePresetId(const FString &PresetId) {
+  return AddActivePresetIdActionCreator()(PresetId);
+}
+
+inline AnyAction
+SetAvailableRulesets(const TArray<FDirectiveRuleSet> &Rulesets) {
+  return SetAvailableRulesetsActionCreator()(Rulesets);
+}
+
+inline AnyAction SetAvailablePresetIds(const TArray<FString> &PresetIds) {
+  return SetAvailablePresetIdsActionCreator()(PresetIds);
+}
+
+inline AnyAction ClearBridgeValidation() {
+  return ClearBridgeValidationActionCreator()();
+}
+
 } // namespace Actions
 
-using namespace Actions; // Export to BridgeSlice namespace
-
-// --- Slice Builder ---
 inline Slice<FBridgeSliceState> CreateBridgeSlice() {
   return SliceBuilder<FBridgeSliceState>(TEXT("bridge"), FBridgeSliceState())
-      .addCase<BridgeValidationPendingAction>(
-          [](FBridgeSliceState State,
-             const BridgeValidationPendingAction &Action) {
-            State.Status = EBridgeStatus::Validating;
-            State.Error = nothing<FString>();
-            return State;
+      .addExtraCase(
+          Actions::BridgeValidationPendingActionCreator(),
+          [](const FBridgeSliceState &State,
+             const Action<rtk::FEmptyPayload> &Action) -> FBridgeSliceState {
+            FBridgeSliceState Next = State;
+            Next.Status = TEXT("validating");
+            Next.Error.Empty();
+            return Next;
           })
-      .addCase<BridgeValidationSuccessAction>(
-          [](FBridgeSliceState State,
-             const BridgeValidationSuccessAction &Action) {
-            State.Status = EBridgeStatus::Validated;
-            State.LastValidation = just(Action.Payload);
-            return State;
+      .addExtraCase(
+          Actions::BridgeValidationSuccessActionCreator(),
+          [](const FBridgeSliceState &State,
+             const Action<FValidationResult> &Action) -> FBridgeSliceState {
+            FBridgeSliceState Next = State;
+            Next.Status = TEXT("idle");
+            Next.LastValidation = Action.PayloadValue;
+            Next.bHasLastValidation = true;
+            return Next;
           })
-      .addCase<BridgeValidationFailedAction>(
-          [](FBridgeSliceState State,
-             const BridgeValidationFailedAction &Action) {
-            State.Status = EBridgeStatus::Error;
-            State.Error = just(Action.Payload);
-            return State;
+      .addExtraCase(
+          Actions::BridgeValidationFailedActionCreator(),
+          [](const FBridgeSliceState &State,
+             const Action<FString> &Action) -> FBridgeSliceState {
+            FBridgeSliceState Next = State;
+            Next.Status = TEXT("error");
+            Next.Error = Action.PayloadValue;
+            Next.LastValidation = TypeFactory::Invalid(Action.PayloadValue);
+            Next.bHasLastValidation = true;
+            return Next;
           })
-      .addCase<SetActivePresetsAction>(
-          [](FBridgeSliceState State, const SetActivePresetsAction &Action) {
-            State.ActivePresetIds = Action.Payload;
-            return State;
+      .addExtraCase(
+          Actions::SetActivePresetsActionCreator(),
+          [](const FBridgeSliceState &State,
+             const Action<TArray<FString>> &Action) -> FBridgeSliceState {
+            FBridgeSliceState Next = State;
+            Next.ActivePresetIds = Action.PayloadValue;
+            return Next;
           })
-      .addCase<ClearBridgeValidationAction>(
-          [](FBridgeSliceState State,
-             const ClearBridgeValidationAction &Action) {
-            State.Status = EBridgeStatus::Idle;
-            State.LastValidation = nothing<FValidationResult>();
-            State.Error = nothing<FString>();
-            return State;
+      .addExtraCase(
+          Actions::AddActivePresetIdActionCreator(),
+          [](const FBridgeSliceState &State,
+             const Action<FString> &Action) -> FBridgeSliceState {
+            FBridgeSliceState Next = State;
+            if (!Next.ActivePresetIds.Contains(Action.PayloadValue)) {
+              Next.ActivePresetIds.Add(Action.PayloadValue);
+            }
+            return Next;
+          })
+      .addExtraCase(
+          Actions::SetAvailableRulesetsActionCreator(),
+          [](const FBridgeSliceState &State,
+             const Action<TArray<FDirectiveRuleSet>> &Action)
+              -> FBridgeSliceState {
+            FBridgeSliceState Next = State;
+            Next.AvailableRulesets = Action.PayloadValue;
+            return Next;
+          })
+      .addExtraCase(
+          Actions::SetAvailablePresetIdsActionCreator(),
+          [](const FBridgeSliceState &State,
+             const Action<TArray<FString>> &Action) -> FBridgeSliceState {
+            FBridgeSliceState Next = State;
+            Next.AvailablePresetIds = Action.PayloadValue;
+            return Next;
+          })
+      .addExtraCase(
+          Actions::ClearBridgeValidationActionCreator(),
+          [](const FBridgeSliceState &State,
+             const Action<rtk::FEmptyPayload> &Action)
+              -> FBridgeSliceState {
+            return FBridgeSliceState();
           })
       .build();
 }

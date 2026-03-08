@@ -6,34 +6,16 @@ namespace MemoryInternal {
 namespace Native {
 namespace Sqlite {
 
-Connection Open(const FString &Path) {
-#if WITH_FORBOC_NATIVE
-  // Real Sqlite Open logic
-  return nullptr;
-#else
-  return reinterpret_cast<Connection>(new int(101)); // Dummy handle
-#endif
-}
+Connection Open(const FString &Path) { return ::Native::Sqlite::Open(Path); }
 
-void Close(Connection Db) {
-#if WITH_FORBOC_NATIVE
-  // Real Sqlite Close logic
-#else
-  if (Db)
-    delete reinterpret_cast<int *>(Db);
-#endif
-}
+void Close(Connection Db) { ::Native::Sqlite::Close(Db); }
 
 bool Execute(Connection Db, const FString &Sql) {
-#if WITH_FORBOC_NATIVE
-  return true;
-#else
-  return Db != nullptr;
-#endif
+  return Db != nullptr && !Sql.IsEmpty();
 }
 
 void Insert(Connection Db, const FMemoryItem &Item) {
-  // Insert logic
+  ::Native::Sqlite::Upsert(Db, Item);
 }
 
 } // namespace Sqlite
@@ -41,71 +23,102 @@ void Insert(Connection Db, const FMemoryItem &Item) {
 
 namespace SQLiteVSS {
 
-MemoryTypes::MemoryStoreCreationResult OpenDatabase(const FString &Path) {
+FDatabaseOpenResult OpenDatabase(const FString &Path) {
   try {
-    void *handle = Native::Sqlite::Open(Path);
-    return MemoryTypes::make_right(FString(), handle);
+    void *Handle = Native::Sqlite::Open(Path);
+    if (Handle == nullptr) {
+      return {true, TEXT("Failed to open memory database"), nullptr};
+    }
+
+    return {false, FString(), Handle};
   } catch (const std::exception &e) {
-    return MemoryTypes::make_left(FString(e.what()));
+    return {true, FString(e.what()), nullptr};
   }
 }
 
 void CloseDatabase(void *Handle) {
-  if (Handle) {
+  if (Handle != nullptr) {
     Native::Sqlite::Close(Handle);
   }
 }
 
-MemoryTypes::MemoryStoreInitializationResult CreateTables(void *Handle) {
+FDatabaseMutationResult CreateTables(void *Handle) {
   try {
-    FString Sql = TEXT(
-        "CREATE TABLE IF NOT EXISTS items(id TEXT PRIMARY KEY, content TEXT, "
-        "type TEXT, importance REAL, timestamp INTEGER, embedding BLOB);");
-    Native::Sqlite::Execute(Handle, Sql);
-    return MemoryTypes::make_right(FString(), true);
+    const FString Sql = TEXT(
+        "CREATE TABLE IF NOT EXISTS items("
+        "id TEXT PRIMARY KEY,"
+        "text TEXT,"
+        "type TEXT,"
+        "importance REAL,"
+        "timestamp INTEGER,"
+        "similarity REAL,"
+        "embedding BLOB);");
+
+    const bool bSuccess = Native::Sqlite::Execute(Handle, Sql);
+    return FDatabaseMutationResult{
+        !bSuccess,
+        bSuccess ? FString()
+                 : FString(TEXT("Failed to create memory tables")),
+        bSuccess};
   } catch (const std::exception &e) {
-    return MemoryTypes::make_left(FString(e.what()));
+    return FDatabaseMutationResult{true, FString(e.what()), false};
   }
 }
 
-MemoryTypes::MemoryStoreAddResult InsertMemory(void *Handle,
-                                               const FMemoryItem &Item) {
+FDatabaseMutationResult InsertMemory(void *Handle, const FMemoryItem &Item) {
   try {
+    if (Handle == nullptr) {
+      return FDatabaseMutationResult{
+          true, TEXT("Memory database is not open"), false};
+    }
+
     Native::Sqlite::Insert(Handle, Item);
-    return MemoryTypes::make_right(FString(), true);
+    return FDatabaseMutationResult{false, FString(), true};
   } catch (const std::exception &e) {
-    return MemoryTypes::make_left(FString(e.what()));
+    return FDatabaseMutationResult{true, FString(e.what()), false};
   }
 }
 
 } // namespace SQLiteVSS
 
 FString GetDatabasePath(const FMemoryConfig &Config) {
-  return FPaths::ProjectContentDir() + TEXT("ForbocAI/") + Config.DatabasePath;
+  if (Config.DatabasePath.IsEmpty()) {
+    return FString();
+  }
+
+  if (FPaths::IsRelative(Config.DatabasePath)) {
+    return FPaths::Combine(FPaths::ProjectContentDir(), TEXT("ForbocAI"),
+                           Config.DatabasePath);
+  }
+
+  return Config.DatabasePath;
 }
 
-MemoryTypes::MemoryStoreCreationResult
+MemoryTypes::MemoryStoreInitializationResult
 ValidateConfig(const FMemoryConfig &Config) {
   try {
     if (Config.DatabasePath.IsEmpty()) {
-      return MemoryTypes::make_left(
-          FString(TEXT("Database path cannot be empty")));
+      return MemoryTypes::MemoryStoreInitializationResult{
+          true, TEXT("Database path cannot be empty"), false};
     }
     if (Config.MaxMemories <= 0) {
-      return MemoryTypes::make_left(
-          FString(TEXT("Max memories must be greater than 0")));
+      return MemoryTypes::MemoryStoreInitializationResult{
+          true, TEXT("Max memories must be greater than 0"), false};
     }
     if (Config.VectorDimension != 384) {
-      return MemoryTypes::make_left(
-          FString(TEXT("Vector dimension must be 384")));
+      return MemoryTypes::MemoryStoreInitializationResult{
+          true, TEXT("Vector dimension must be 384"), false};
     }
     if (Config.MaxRecallResults <= 0) {
-      return MemoryTypes::make_left(
-          FString(TEXT("Max recall results must be greater than 0")));
+      return MemoryTypes::MemoryStoreInitializationResult{
+          true, TEXT("Max recall results must be greater than 0"), false};
     }
-    return MemoryTypes::make_right(FString(), Config);
+
+    return MemoryTypes::MemoryStoreInitializationResult{
+        false, FString(), true};
   } catch (const std::exception &e) {
-    return MemoryTypes::make_left(FString(e.what()));
+    return MemoryTypes::MemoryStoreInitializationResult{
+        true, FString(e.what()), false};
   }
 }
 

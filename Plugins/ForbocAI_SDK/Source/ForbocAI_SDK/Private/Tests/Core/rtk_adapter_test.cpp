@@ -7,7 +7,7 @@ using namespace rtk;
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FRtkEntityAdapterTest,
                                  "ForbocAI.Core.RTK.EntityAdapter",
-                                 EAutomationTestFlags::ApplicationContextMask |
+                                 EAutomationTestFlags_ApplicationContextMask |
                                      EAutomationTestFlags::EngineFilter)
 bool FRtkEntityAdapterTest::RunTest(const FString &Parameters) {
   auto Adapter = createEntityAdapter<FNpcMockState>(

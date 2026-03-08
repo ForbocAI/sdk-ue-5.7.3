@@ -8,14 +8,29 @@
  */
 namespace SDKConfig {
 
+inline FString &ApiUrlStorage() {
+  static FString Value = TEXT("https://api.forboc.ai");
+  return Value;
+}
+
+inline FString &ApiKeyStorage() {
+  static FString Value = TEXT("");
+  return Value;
+}
+
+inline void SetApiConfig(const FString &ApiUrl, const FString &ApiKey) {
+  if (!ApiUrl.IsEmpty()) {
+    ApiUrlStorage() = ApiUrl;
+  }
+  ApiKeyStorage() = ApiKey;
+}
+
 inline FString GetApiUrl() {
-  // Priority: Env Var > Default
-  return TEXT("https://api.forboc.ai");
+  return ApiUrlStorage();
 }
 
 inline FString GetApiKey() {
-  // Priority: Env Var > Config File
-  return TEXT("");
+  return ApiKeyStorage();
 }
 
 inline FString GetSdkVersion() {

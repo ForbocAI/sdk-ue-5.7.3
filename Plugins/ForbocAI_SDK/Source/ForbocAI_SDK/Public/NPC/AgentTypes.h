@@ -1,7 +1,8 @@
 #pragma once
 
 #include "CoreMinimal.h"
-#include "NPC/AgentTypes.generated.h"
+#include "Memory/MemoryTypes.h"
+#include "AgentTypes.generated.h"
 
 /**
  * Agent State — Immutable data.
@@ -61,6 +62,9 @@ struct FAgent {
   FAgentState State;
 
   UPROPERTY(BlueprintReadOnly)
+  TArray<FMemoryItem> Memories;
+
+  UPROPERTY(BlueprintReadOnly)
   FString ApiUrl;
 
   FAgent() {}
@@ -69,18 +73,40 @@ struct FAgent {
 /**
  * Agent Configuration — Plain data.
  */
+USTRUCT(BlueprintType)
 struct FAgentConfig {
+  GENERATED_BODY()
+
+  UPROPERTY(BlueprintReadOnly)
+  FString Id;
+
+  UPROPERTY(BlueprintReadOnly)
   FString Persona;
+
+  UPROPERTY(BlueprintReadOnly)
   FString ApiUrl;
+
+  UPROPERTY(BlueprintReadOnly)
   FAgentState InitialState;
+
+  UPROPERTY(BlueprintReadOnly)
+  FString ApiKey;
 };
 
 /**
  * Agent Response — Plain data.
  */
+USTRUCT(BlueprintType)
 struct FAgentResponse {
+  GENERATED_BODY()
+
+  UPROPERTY(BlueprintReadOnly)
   FString Dialogue;
+
+  UPROPERTY(BlueprintReadOnly)
   FAgentAction Action;
+
+  UPROPERTY(BlueprintReadOnly)
   FString Thought;
 };
 

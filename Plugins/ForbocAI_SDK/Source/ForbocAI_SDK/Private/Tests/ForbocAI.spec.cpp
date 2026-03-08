@@ -3,25 +3,34 @@
 
 DEFINE_SPEC(FForbocAIBridgeSpec, "ForbocAI.Bridge.Validation",
             EAutomationTestFlags::ProductFilter |
-                EAutomationTestFlags::ApplicationContextMask)
+                EAutomationTestFlags_ApplicationContextMask)
 
 void FForbocAIBridgeSpec::Define() {
-  Describe("Action Validation", [this]() {
-    It("Should validate a valid MOVE action", [this]() {
+  Describe("BridgeOps::Validate", [this]() {
+    It("accepts a MOVE action with payload coordinates", [this]() {
       FAgentAction Action;
-      Action.Type = "MOVE";
-      Action.Payload.Add("x", 10);
-      Action.Payload.Add("y", 20);
+      Action.Type = TEXT("MOVE");
+      Action.Target = TEXT("player");
+      Action.PayloadJson = TEXT("{\"x\":10,\"y\":20}");
 
-      FValidationResult Result = FBridgeModule::ValidateAction(Action);
+      const TArray<FValidationRule> Rules = BridgeOps::CreateRPGRules();
+      const FValidationResult Result =
+          BridgeOps::Validate(Action, Rules, BridgeFactory::CreateContext());
 
-      // Default bridge has no rules, so it should be valid
       TestTrue("Result.bValid", Result.bValid);
     });
 
-    It("Should create valid error messages", [this]() {
-      FValidationError Error = FValidationError::Create("Test Error");
-      TestEqual("Error Message", Error.Message, TEXT("Test Error"));
+    It("rejects ATTACK without a target", [this]() {
+      FAgentAction Action;
+      Action.Type = TEXT("ATTACK");
+      Action.PayloadJson = TEXT("{}");
+
+      const TArray<FValidationRule> Rules = BridgeOps::CreateRPGRules();
+      const FValidationResult Result =
+          BridgeOps::Validate(Action, Rules, BridgeFactory::CreateContext());
+
+      TestFalse("Result.bValid", Result.bValid);
+      TestEqual("Result.Reason", Result.Reason, FString(TEXT("Action target cannot be empty")));
     });
   });
 }

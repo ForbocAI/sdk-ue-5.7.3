@@ -1,8 +1,8 @@
 #pragma once
 
 #include "CoreMinimal.h"
-#include "BridgeTypes.generated.h"
 #include "NPC/AgentTypes.h"
+#include "BridgeTypes.generated.h"
 
 /**
  * Validation Result — Immutable data.
@@ -27,7 +27,7 @@ struct FValidationResult {
  * Validation Context
  */
 USTRUCT(BlueprintType)
-struct FValidationContext {
+struct FBridgeValidationContext {
   GENERATED_BODY()
 
   UPROPERTY(BlueprintReadOnly)
@@ -39,7 +39,7 @@ struct FValidationContext {
   UPROPERTY(BlueprintReadOnly)
   FString ConstraintsJson;
 
-  FValidationContext() {}
+  FBridgeValidationContext() {}
 };
 
 /**
@@ -80,6 +80,17 @@ struct FDirectiveRuleSet {
   FDirectiveRuleSet() {}
 };
 
+USTRUCT(BlueprintType)
+struct FBridgeValidateRequest {
+  GENERATED_BODY()
+
+  UPROPERTY(BlueprintReadOnly)
+  FAgentAction Action;
+
+  UPROPERTY(BlueprintReadOnly)
+  FBridgeValidationContext Context;
+};
+
 namespace TypeFactory {
 
 inline FValidationResult Valid(FString Reason) {
@@ -94,6 +105,15 @@ inline FValidationResult Invalid(FString Reason) {
   R.bValid = false;
   R.Reason = MoveTemp(Reason);
   return R;
+}
+
+inline FBridgeValidateRequest
+BridgeValidateRequest(const FAgentAction &Action,
+                      const FBridgeValidationContext &Context) {
+  FBridgeValidateRequest Request;
+  Request.Action = Action;
+  Request.Context = Context;
+  return Request;
 }
 
 } // namespace TypeFactory

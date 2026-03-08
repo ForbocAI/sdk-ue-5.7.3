@@ -5,12 +5,14 @@ namespace GhostInternal {
 GhostTypes::Either<FString, FGhostConfig>
 ValidateTestConfig(const FGhostConfig &Config) {
   if (Config.Scenarios.Num() == 0) {
-    return GhostTypes::make_left(FString(TEXT("No test scenarios provided")));
+    return GhostTypes::make_left(FString(TEXT("No test scenarios provided")),
+                                 FGhostConfig{});
   }
   if (Config.MaxIterations < 1) {
-    return GhostTypes::make_left(FString(TEXT("Max iterations must be >= 1")));
+    return GhostTypes::make_left(FString(TEXT("Max iterations must be >= 1")),
+                                 FGhostConfig{});
   }
-  return GhostTypes::make_right(Config);
+  return GhostTypes::make_right(FString(), Config);
 }
 
 GhostTypes::Either<FString, FString>
@@ -22,7 +24,7 @@ GenerateTestSummary(const FGhostTestReport &Report) {
   Summary += FString::Printf(TEXT("Failed: %d\n"), Report.FailedTests);
   Summary += FString::Printf(TEXT("Success Rate: %.1f%%\n"),
                              Report.SuccessRate * 100.0f);
-  return GhostTypes::make_right(Summary);
+  return GhostTypes::make_right(FString(), Summary);
 }
 
 GhostTypes::Either<FString, FString>
@@ -39,7 +41,7 @@ ExportResultsToJson(const FGhostTestReport &Report) {
     Json += TEXT("\n");
   }
   Json += TEXT("  ]\n}");
-  return GhostTypes::make_right(Json);
+  return GhostTypes::make_right(FString(), Json);
 }
 
 GhostTypes::Either<FString, FString>
@@ -53,7 +55,7 @@ ExportResultsToCsv(const FGhostTestReport &Report) {
                         *Res.ActualResponse.Replace(TEXT("\""), TEXT("\"\"")),
                         *Res.ErrorMessage.Replace(TEXT("\""), TEXT("\"\"")));
   }
-  return GhostTypes::make_right(Csv);
+  return GhostTypes::make_right(FString(), Csv);
 }
 
 } // namespace GhostInternal

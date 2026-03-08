@@ -3,7 +3,6 @@
 #include "Async/Async.h"
 #include "Core/functional_core.hpp"
 #include "CoreMinimal.h"
-#include "Cortex/CortexModule.generated.h"
 #include "Types.h"
 
 // ==========================================================
@@ -130,25 +129,28 @@ cortexConfigValidationPipeline() {
       .add([](const FCortexConfig &config)
                -> CortexTypes::Either<FString, FCortexConfig> {
         if (config.Model.IsEmpty()) {
-          return CortexTypes::make_left(FString(TEXT("Model cannot be empty")));
+          return CortexTypes::make_left(FString(TEXT("Model cannot be empty")),
+                                        FCortexConfig{});
         }
-        return CortexTypes::make_right(config);
+        return CortexTypes::make_right(FString(), config);
       })
       .add([](const FCortexConfig &config)
                -> CortexTypes::Either<FString, FCortexConfig> {
         if (config.MaxTokens < 1 || config.MaxTokens > 2048) {
           return CortexTypes::make_left(
-              FString(TEXT("Max tokens must be between 1 and 2048")));
+              FString(TEXT("Max tokens must be between 1 and 2048")),
+              FCortexConfig{});
         }
-        return CortexTypes::make_right(config);
+        return CortexTypes::make_right(FString(), config);
       })
       .add([](const FCortexConfig &config)
                -> CortexTypes::Either<FString, FCortexConfig> {
         if (config.Temperature < 0.0f || config.Temperature > 2.0f) {
           return CortexTypes::make_left(
-              FString(TEXT("Temperature must be between 0.0 and 2.0")));
+              FString(TEXT("Temperature must be between 0.0 and 2.0")),
+              FCortexConfig{});
         }
-        return CortexTypes::make_right(config);
+        return CortexTypes::make_right(FString(), config);
       });
 }
 
@@ -159,18 +161,19 @@ cortexCompletionPipeline(const FCortex &cortex) {
 }
 
 // Helper to create a curried cortex creation function
-inline CortexTypes::Curried<
-    1, std::function<CortexTypes::CortexCreationResult(FCortexConfig)>>
-curriedCortexCreation() {
-  return func::curry<1>(
+inline auto curriedCortexCreation()
+    -> decltype(func::curry<1>(
+        std::function<CortexTypes::CortexCreationResult(FCortexConfig)>())) {
+  std::function<CortexTypes::CortexCreationResult(FCortexConfig)> Creator =
       [](FCortexConfig config) -> CortexTypes::CortexCreationResult {
-        try {
-          FCortex cortex = CortexOps::Create(config);
-          return CortexTypes::make_right(FString(), cortex);
-        } catch (const std::exception &e) {
-          return CortexTypes::make_left(FString(e.what()));
-        }
-      });
+    try {
+      FCortex cortex = CortexOps::Create(config);
+      return CortexTypes::make_right(FString(), cortex);
+    } catch (const std::exception &e) {
+      return CortexTypes::make_left(FString(e.what()), FCortex{});
+    }
+  };
+  return func::curry<1>(Creator);
 }
 } // namespace CortexHelpers
 

@@ -5,529 +5,363 @@
 #include "../SDKConfig.h"
 #include "../Types.h"
 #include "CoreMinimal.h"
+#include "GenericPlatform/GenericPlatformHttp.h"
+#include "JsonObjectConverter.h"
 
-struct FSDKState; // Forward declaration to break circularity
+struct FSDKState;
 
 namespace APISlice {
 
 using namespace rtk;
-using namespace func;
 
-// Forward declaration of the API instance (defined in SDKStore.h)
+struct FAPIState {
+  FString LastEndpoint;
+  FString Status;
+  FString Error;
+
+  FAPIState() : Status(TEXT("idle")) {}
+};
+
 extern rtk::ApiSlice<FSDKState> ForbocAiApi;
 
-// --- Endpoints ---
+namespace Detail {
+
+template <typename T> inline FString ToJson(const T &Value) {
+  FString Json;
+  FJsonObjectConverter::UStructToJsonObjectString(Value, Json);
+  return Json;
+}
+
+inline FString Encode(const FString &Value) {
+  return FGenericPlatformHttp::UrlEncode(Value);
+}
+
+template <typename Arg, typename Result>
+inline ThunkAction<Result, FSDKState>
+MakeEndpoint(const FString &EndpointName, const Arg &ArgValue,
+             std::function<func::AsyncResult<func::HttpResult<Result>>(
+                 const Arg &)>
+                 RequestBuilder,
+             const TArray<FApiEndpointTag> &ProvidesTags =
+                 TArray<FApiEndpointTag>(),
+             const TArray<FApiEndpointTag> &InvalidatesTags =
+                 TArray<FApiEndpointTag>()) {
+  ApiEndpoint<Arg, Result> Endpoint;
+  Endpoint.EndpointName = EndpointName;
+  Endpoint.ProvidesTags = ProvidesTags;
+  Endpoint.InvalidatesTags = InvalidatesTags;
+  Endpoint.RequestBuilder = RequestBuilder;
+  return ForbocAiApi.injectEndpoint(Endpoint)(ArgValue);
+}
+
+template <typename Result>
+inline ThunkAction<Result, FSDKState>
+MakeGet(const FString &EndpointName, const FString &Url) {
+  return MakeEndpoint<rtk::FEmptyPayload, Result>(
+      EndpointName, rtk::FEmptyPayload{},
+      [Url](const rtk::FEmptyPayload &) {
+        return func::AsyncHttp::Get<Result>(Url, SDKConfig::GetApiKey());
+      });
+}
+
+template <typename Request, typename Result>
+inline ThunkAction<Result, FSDKState>
+MakePost(const FString &EndpointName, const FString &Url,
+         const Request &RequestValue) {
+  return MakeEndpoint<Request, Result>(
+      EndpointName, RequestValue,
+      [Url](const Request &Arg) {
+        return func::AsyncHttp::Post<Result>(Url, ToJson(Arg),
+                                             SDKConfig::GetApiKey());
+      });
+}
+
+template <typename Result>
+inline ThunkAction<Result, FSDKState>
+MakeDelete(const FString &EndpointName, const FString &Url) {
+  return MakeEndpoint<rtk::FEmptyPayload, Result>(
+      EndpointName, rtk::FEmptyPayload{},
+      [Url](const rtk::FEmptyPayload &) {
+        return func::AsyncHttp::Delete<Result>(Url, SDKConfig::GetApiKey());
+      });
+}
+
+} // namespace Detail
+
 namespace Endpoints {
 
-/** Soul Endpoints */
-inline auto getSoul(FString SoulId) {
-  ApiEndpoint<FString, FSoul> Ep;
-  Ep.EndpointName = TEXT("getSoul");
-  Ep.ProvidesTags = {{TEXT("Soul"), SoulId}};
-  Ep.RequestBuilder = [SoulId](const FString &Arg) {
-    return AsyncHttp::Get<FSoul>(SDKConfig::GetApiUrl() + TEXT("/souls/") +
-                                     SoulId,
-                                 SDKConfig::GetApiKey());
-  };
-  return ForbocAiApi.injectEndpoint(Ep)(SoulId);
-}
-
-inline auto getSouls() {
-  ApiEndpoint<FEmptyPayload, TArray<FSoul>> Ep;
-  Ep.EndpointName = TEXT("getSouls");
-  Ep.ProvidesTags = {{TEXT("Soul"), TEXT("LIST")}};
-  Ep.RequestBuilder = [](const FEmptyPayload &Arg) {
-    return AsyncHttp::Get<TArray<FSoul>>(
-        SDKConfig::GetApiUrl() + TEXT("/souls"), SDKConfig::GetApiKey());
-  };
-  return ForbocAiApi.injectEndpoint(Ep)(FEmptyPayload{});
-}
-
-/** NPC Endpoints */
-inline auto getNPC(FString NpcId) {
-  ApiEndpoint<FString, FAgent> Ep;
-  Ep.EndpointName = TEXT("getNPC");
-  Ep.ProvidesTags = {{TEXT("NPC"), NpcId}};
-  Ep.RequestBuilder = [NpcId](const FString &Arg) {
-    return AsyncHttp::Get<FAgent>(SDKConfig::GetApiUrl() + TEXT("/npcs/") +
-                                      NpcId,
-                                  SDKConfig::GetApiKey());
-  };
-  return ForbocAiApi.injectEndpoint(Ep)(NpcId);
-}
-
 inline auto getNPCs() {
-  ApiEndpoint<FEmptyPayload, TArray<FAgent>> Ep;
-  Ep.EndpointName = TEXT("getNPCs");
-  Ep.ProvidesTags = {{TEXT("NPC"), TEXT("LIST")}};
-  Ep.RequestBuilder = [](const FEmptyPayload &Arg) {
-    return AsyncHttp::Get<TArray<FAgent>>(
-        SDKConfig::GetApiUrl() + TEXT("/npcs"), SDKConfig::GetApiKey());
-  };
-  return ForbocAiApi.injectEndpoint(Ep)(FEmptyPayload{});
+  return Detail::MakeGet<TArray<FAgent>>(TEXT("getNPCs"),
+                                         SDKConfig::GetApiUrl() +
+                                             TEXT("/npcs"));
 }
 
-inline auto postNPC(FAgentConfig Config) {
-  ApiEndpoint<FAgentConfig, FAgent> Ep;
-  Ep.EndpointName = TEXT("postNPC");
-  Ep.InvalidatesTags = {{TEXT("NPC"), TEXT("LIST")}};
-  Ep.RequestBuilder = [Config](const FAgentConfig &Arg) {
-    FString Payload;
-    FJsonObjectConverter::UStructToJsonObjectString(Arg, Payload);
-    return AsyncHttp::Post<FAgent>(SDKConfig::GetApiUrl() + TEXT("/npcs"),
-                                   Payload, SDKConfig::GetApiKey());
-  };
-  return ForbocAiApi.injectEndpoint(Ep)(Config);
+inline auto getNPC(const FString &NpcId) {
+  return Detail::MakeGet<FAgent>(TEXT("getNPC"),
+                                 SDKConfig::GetApiUrl() + TEXT("/npcs/") +
+                                     Detail::Encode(NpcId));
 }
 
-/** Memory Endpoints */
-inline auto searchMemories(FString Query) {
-  ApiEndpoint<FString, TArray<FMemoryItem>> Ep;
-  Ep.EndpointName = TEXT("searchMemories");
-  Ep.ProvidesTags = {{TEXT("Memory"), TEXT("SEARCH")}};
-  Ep.RequestBuilder = [Query](const FString &Arg) {
-    return AsyncHttp::Get<TArray<FMemoryItem>>(
-        SDKConfig::GetApiUrl() + TEXT("/memories?query=") + Query,
-        SDKConfig::GetApiKey());
-  };
-  return ForbocAiApi.injectEndpoint(Ep)(Query);
+inline auto postNPC(const FAgentConfig &Config) {
+  return Detail::MakePost<FAgentConfig, FAgent>(
+      TEXT("postNPC"), SDKConfig::GetApiUrl() + TEXT("/npcs"), Config);
 }
 
-inline auto postMemory(FMemoryItem Item) {
-  ApiEndpoint<FMemoryItem, FMemoryItem> Ep;
-  Ep.EndpointName = TEXT("postMemory");
-  Ep.InvalidatesTags = {{TEXT("Memory"), TEXT("SEARCH")},
-                        {TEXT("Memory"), TEXT("LIST")}};
-  Ep.RequestBuilder = [Item](const FMemoryItem &Arg) {
-    FString Payload;
-    FJsonObjectConverter::UStructToJsonObjectString(Arg, Payload);
-    return AsyncHttp::Post<FMemoryItem>(SDKConfig::GetApiUrl() +
-                                            TEXT("/memories"),
-                                        Payload, SDKConfig::GetApiKey());
-  };
-  return ForbocAiApi.injectEndpoint(Ep)(Item);
+inline auto getApiStatus() {
+  return Detail::MakeGet<FApiStatusResponse>(TEXT("getApiStatus"),
+                                             SDKConfig::GetApiUrl() +
+                                                 TEXT("/status"));
 }
 
-/** Directive Endpoints */
-inline auto getDirectives() {
-  ApiEndpoint<FEmptyPayload, TArray<FString>> Ep;
-  Ep.EndpointName = TEXT("getDirectives");
-  Ep.RequestBuilder = [](const FEmptyPayload &Arg) {
-    return AsyncHttp::Get<TArray<FString>>(
-        SDKConfig::GetApiUrl() + TEXT("/directives"), SDKConfig::GetApiKey());
-  };
-  return ForbocAiApi.injectEndpoint(Ep)(FEmptyPayload{});
-}
-
-inline auto getDirectiveRuns(FString NpcId) {
-  ApiEndpoint<FString, TArray<FDirectiveRun>> Ep;
-  Ep.EndpointName = TEXT("getDirectiveRuns");
-  Ep.RequestBuilder = [NpcId](const FString &Arg) {
-    return AsyncHttp::Get<TArray<FDirectiveRun>>(
-        SDKConfig::GetApiUrl() + TEXT("/directives/runs?npcId=") + NpcId,
-        SDKConfig::GetApiKey());
-  };
-  return ForbocAiApi.injectEndpoint(Ep)(NpcId);
-}
-
-/** Cortex Endpoints */
 inline auto getCortexModels() {
-  ApiEndpoint<FEmptyPayload, TArray<FString>> Ep;
-  Ep.EndpointName = TEXT("getCortexModels");
-  Ep.RequestBuilder = [](const FEmptyPayload &Arg) {
-    return AsyncHttp::Get<TArray<FString>>(SDKConfig::GetApiUrl() +
-                                               TEXT("/cortex/models"),
-                                           SDKConfig::GetApiKey());
-  };
-  return ForbocAiApi.injectEndpoint(Ep)(FEmptyPayload{});
+  return Detail::MakeGet<TArray<FCortexModelInfo>>(
+      TEXT("getCortexModels"),
+      SDKConfig::GetApiUrl() + TEXT("/cortex/models"));
 }
 
-inline auto postCortexInit(const FCortexInitRequest &Req) {
-  ApiEndpoint<FCortexInitRequest, FCortexInitResponse> Ep;
-  Ep.EndpointName = TEXT("postCortexInit");
-  Ep.RequestBuilder = [Req](const FCortexInitRequest &Arg) {
-    FString Payload;
-    FJsonObjectConverter::UStructToJsonObjectString(Arg, Payload);
-    return AsyncHttp::Post<FCortexInitResponse>(
-        SDKConfig::GetApiUrl() + TEXT("/cortex/init"), Payload,
-        SDKConfig::GetApiKey());
-  };
-  return ForbocAiApi.injectEndpoint(Ep)(Req);
+inline auto postCortexInit(const FCortexInitRequest &Request) {
+  return Detail::MakePost<FCortexInitRequest, FCortexInitResponse>(
+      TEXT("postCortexInit"), SDKConfig::GetApiUrl() + TEXT("/cortex/init"),
+      Request);
 }
 
-inline auto postCortexComplete(const FCortexCompleteRequest &Req) {
-  ApiEndpoint<FCortexCompleteRequest, FString> Ep;
-  Ep.EndpointName = TEXT("postCortexComplete");
-  Ep.RequestBuilder = [Req](const FCortexCompleteRequest &Arg) {
-    FString Payload;
-    FJsonObjectConverter::UStructToJsonObjectString(Arg, Payload);
-    return AsyncHttp::Post<FString>(SDKConfig::GetApiUrl() +
-                                        TEXT("/cortex/complete"),
-                                    Payload, SDKConfig::GetApiKey());
-  };
-  return ForbocAiApi.injectEndpoint(Ep)(Req);
+inline auto postCortexComplete(const FCortexCompleteRequest &Request) {
+  return Detail::MakePost<FCortexCompleteRequest, FCortexResponse>(
+      TEXT("postCortexComplete"),
+      SDKConfig::GetApiUrl() + TEXT("/cortex/complete"), Request);
 }
 
-inline auto getCortexStatus() {
-  ApiEndpoint<FEmptyPayload, FCortexStatus> Ep;
-  Ep.EndpointName = TEXT("getCortexStatus");
-  Ep.RequestBuilder = [](const FEmptyPayload &Arg) {
-    return AsyncHttp::Get<FCortexStatus>(SDKConfig::GetApiUrl() +
-                                             TEXT("/cortex/status"),
-                                         SDKConfig::GetApiKey());
-  };
-  return ForbocAiApi.injectEndpoint(Ep)(FEmptyPayload{});
+inline auto postNpcProcess(const FString &NpcId,
+                           const FNPCProcessRequest &Request) {
+  return Detail::MakePost<FNPCProcessRequest, FNPCProcessResponse>(
+      TEXT("postNpcProcess"),
+      SDKConfig::GetApiUrl() + TEXT("/npcs/") + Detail::Encode(NpcId) +
+          TEXT("/process"),
+      Request);
 }
 
-/** Ghost Endpoints */
-inline auto getGhostSessions() {
-  ApiEndpoint<FEmptyPayload, TArray<FString>> Ep;
-  Ep.EndpointName = TEXT("getGhostSessions");
-  Ep.RequestBuilder = [](const FEmptyPayload &Arg) {
-    return AsyncHttp::Get<TArray<FString>>(SDKConfig::GetApiUrl() +
-                                               TEXT("/ghost/sessions"),
-                                           SDKConfig::GetApiKey());
-  };
-  return ForbocAiApi.injectEndpoint(Ep)(FEmptyPayload{});
+inline auto postDirective(const FString &NpcId,
+                          const FDirectiveRequest &Request) {
+  return Detail::MakePost<FDirectiveRequest, FDirectiveResponse>(
+      TEXT("postDirective"),
+      SDKConfig::GetApiUrl() + TEXT("/npcs/") + Detail::Encode(NpcId) +
+          TEXT("/directive"),
+      Request);
 }
 
-inline auto createGhostSession(FGhostConfig Config) {
-  ApiEndpoint<FGhostConfig, FString> Ep;
-  Ep.EndpointName = TEXT("createGhostSession");
-  Ep.RequestBuilder = [Config](const FGhostConfig &Arg) {
-    FString Payload;
-    // Note: FGhostConfig may need a custom mapper if nesting is complex
-    FJsonObjectConverter::UStructToJsonObjectString(Arg, Payload);
-    return AsyncHttp::Post<FString>(SDKConfig::GetApiUrl() +
-                                        TEXT("/ghost/sessions"),
-                                    Payload, SDKConfig::GetApiKey());
-  };
-  return ForbocAiApi.injectEndpoint(Ep)(Config);
+inline auto postContext(const FString &NpcId, const FContextRequest &Request) {
+  return Detail::MakePost<FContextRequest, FContextResponse>(
+      TEXT("postContext"),
+      SDKConfig::GetApiUrl() + TEXT("/npcs/") + Detail::Encode(NpcId) +
+          TEXT("/context"),
+      Request);
 }
 
-/** Bridge Endpoints */
-inline auto postBridgePreset(FString PresetId) {
-  ApiEndpoint<FString, FEmptyPayload> Ep;
-  Ep.EndpointName = TEXT("postBridgePreset");
-  Ep.RequestBuilder = [PresetId](const FString &Arg) {
-    FString Payload = FString::Printf(TEXT("{\"presetId\":\"%s\"}"), *PresetId);
-    return AsyncHttp::Post<FEmptyPayload>(SDKConfig::GetApiUrl() +
-                                              TEXT("/bridge/presets"),
-                                          Payload, SDKConfig::GetApiKey());
-  };
-  return ForbocAiApi.injectEndpoint(Ep)(PresetId);
+inline auto postVerdict(const FString &NpcId, const FVerdictRequest &Request) {
+  return Detail::MakePost<FVerdictRequest, FVerdictResponse>(
+      TEXT("postVerdict"),
+      SDKConfig::GetApiUrl() + TEXT("/npcs/") + Detail::Encode(NpcId) +
+          TEXT("/verdict"),
+      Request);
 }
 
-inline auto postBridgeValidate(FString PolicyId, FString Content) {
-  struct FPolicyRequest {
-    FString id;
-    FString content;
-  };
-  ApiEndpoint<FPolicyRequest, FValidationResult> Ep;
-  Ep.EndpointName = TEXT("postBridgeValidate");
-  Ep.RequestBuilder = [PolicyId, Content](const FPolicyRequest &Arg) {
-    FString Payload = FString::Printf(
-        TEXT("{\"id\":\"%s\",\"content\":\"%s\"}"), *PolicyId, *Content);
-    return AsyncHttp::Post<FValidationResult>(SDKConfig::GetApiUrl() +
-                                                  TEXT("/bridge/validate"),
-                                              Payload, SDKConfig::GetApiKey());
-  };
-  return ForbocAiApi.injectEndpoint(Ep)({PolicyId, Content});
+inline auto postMemoryStore(const FString &NpcId,
+                            const FRemoteMemoryStoreRequest &Request) {
+  return Detail::MakePost<FRemoteMemoryStoreRequest, rtk::FEmptyPayload>(
+      TEXT("postMemoryStore"),
+      SDKConfig::GetApiUrl() + TEXT("/npcs/") + Detail::Encode(NpcId) +
+          TEXT("/memory"),
+      Request);
 }
 
-/** Protocol Endpoints */
-inline auto postNpcProcess(const FNPCProcessRequest &Req) {
-  ApiEndpoint<FNPCProcessRequest, FNPCInstruction> Ep;
-  Ep.EndpointName = TEXT("postNpcProcess");
-  Ep.InvalidatesTags = {{TEXT("NPC"), Req.NpcId}};
-  Ep.RequestBuilder = [Req](const FNPCProcessRequest &Arg) {
-    FString Payload;
-    FJsonObjectConverter::UStructToJsonObjectString(Arg, Payload);
-    return AsyncHttp::Post<FNPCInstruction>(SDKConfig::GetApiUrl() +
-                                                TEXT("/npcs/process"),
-                                            Payload, SDKConfig::GetApiKey());
-  };
-  return ForbocAiApi.injectEndpoint(Ep)(Req);
+inline auto getMemoryList(const FString &NpcId) {
+  return Detail::MakeGet<TArray<FMemoryItem>>(
+      TEXT("getMemoryList"),
+      SDKConfig::GetApiUrl() + TEXT("/npcs/") + Detail::Encode(NpcId) +
+          TEXT("/memory"));
 }
 
-/** NPC Import Endpoints */
-inline auto postNpcImport(FString SoulId) {
-  ApiEndpoint<FString, FAgent> Ep;
-  Ep.EndpointName = TEXT("postNpcImport");
-  Ep.InvalidatesTags = {{TEXT("NPC"), TEXT("LIST")}};
-  Ep.RequestBuilder = [SoulId](const FString &Arg) {
-    FString Payload = FString::Printf(TEXT("{\"soulId\":\"%s\"}"), *SoulId);
-    return AsyncHttp::Post<FAgent>(SDKConfig::GetApiUrl() +
-                                       TEXT("/npcs/import"),
-                                   Payload, SDKConfig::GetApiKey());
-  };
-  return ForbocAiApi.injectEndpoint(Ep)(SoulId);
+inline auto postMemoryRecall(const FString &NpcId,
+                             const FRemoteMemoryRecallRequest &Request) {
+  return Detail::MakePost<FRemoteMemoryRecallRequest, TArray<FMemoryItem>>(
+      TEXT("postMemoryRecall"),
+      SDKConfig::GetApiUrl() + TEXT("/npcs/") + Detail::Encode(NpcId) +
+          TEXT("/memory/recall"),
+      Request);
 }
 
-inline auto postNpcImportConfirm(FString ImportId) {
-  ApiEndpoint<FString, FAgent> Ep;
-  Ep.EndpointName = TEXT("postNpcImportConfirm");
-  Ep.InvalidatesTags = {{TEXT("NPC"), TEXT("LIST")}};
-  Ep.RequestBuilder = [ImportId](const FString &Arg) {
-    FString Payload = FString::Printf(TEXT("{\"importId\":\"%s\"}"), *ImportId);
-    return AsyncHttp::Post<FAgent>(SDKConfig::GetApiUrl() +
-                                       TEXT("/npcs/import/confirm"),
-                                   Payload, SDKConfig::GetApiKey());
-  };
-  return ForbocAiApi.injectEndpoint(Ep)(ImportId);
+inline auto deleteMemoryClear(const FString &NpcId) {
+  return Detail::MakeDelete<rtk::FEmptyPayload>(
+      TEXT("deleteMemoryClear"),
+      SDKConfig::GetApiUrl() + TEXT("/npcs/") + Detail::Encode(NpcId) +
+          TEXT("/memory/clear"));
 }
 
-/** Legacy Protocol Endpoints (for compatibility/internal use) */
-inline auto postDirective(const FDirectiveRequest &Req) {
-  ApiEndpoint<FDirectiveRequest, FDirectiveResponse> Ep;
-  Ep.EndpointName = TEXT("postDirective");
-  Ep.RequestBuilder = [Req](const FDirectiveRequest &Arg) {
-    FString Payload;
-    FJsonObjectConverter::UStructToJsonObjectString(Arg, Payload);
-    return AsyncHttp::Post<FDirectiveResponse>(SDKConfig::GetApiUrl() +
-                                                   TEXT("/directives"),
-                                               Payload, SDKConfig::GetApiKey());
-  };
-  return ForbocAiApi.injectEndpoint(Ep)(Req);
+inline auto postBridgeValidate(const FString &NpcId,
+                               const FString &PayloadJson) {
+  const FString Url = NpcId.IsEmpty()
+                          ? SDKConfig::GetApiUrl() + TEXT("/bridge/validate")
+                          : SDKConfig::GetApiUrl() + TEXT("/bridge/validate/") +
+                                Detail::Encode(NpcId);
+  return Detail::MakeEndpoint<FString, FValidationResult>(
+      TEXT("postBridgeValidate"), PayloadJson,
+      [Url](const FString &Arg) {
+        return func::AsyncHttp::Post<FValidationResult>(Url, Arg,
+                                                        SDKConfig::GetApiKey());
+      });
 }
 
-inline auto postContext(const FContextRequest &Req) {
-  ApiEndpoint<FContextRequest, FContextResponse> Ep;
-  Ep.EndpointName = TEXT("postContext");
-  Ep.RequestBuilder = [Req](const FContextRequest &Arg) {
-    FString Payload;
-    FJsonObjectConverter::UStructToJsonObjectString(Arg, Payload);
-    return AsyncHttp::Post<FContextResponse>(SDKConfig::GetApiUrl() +
-                                                 TEXT("/context"),
-                                             Payload, SDKConfig::GetApiKey());
-  };
-  return ForbocAiApi.injectEndpoint(Ep)(Req);
+inline auto postBridgeValidate(const FString &NpcId,
+                               const FBridgeValidateRequest &Request) {
+  const FString Url = NpcId.IsEmpty()
+                          ? SDKConfig::GetApiUrl() + TEXT("/bridge/validate")
+                          : SDKConfig::GetApiUrl() + TEXT("/bridge/validate/") +
+                                Detail::Encode(NpcId);
+  return Detail::MakePost<FBridgeValidateRequest, FValidationResult>(
+      TEXT("postBridgeValidate"), Url, Request);
 }
 
-inline auto postVerdict(const FVerdictRequest &Req) {
-  ApiEndpoint<FVerdictRequest, FVerdictResponse> Ep;
-  Ep.EndpointName = TEXT("postVerdict");
-  Ep.RequestBuilder = [Req](const FVerdictRequest &Arg) {
-    FString Payload;
-    FJsonObjectConverter::UStructToJsonObjectString(Arg, Payload);
-    return AsyncHttp::Post<FVerdictResponse>(SDKConfig::GetApiUrl() +
-                                                 TEXT("/verdict"),
-                                             Payload, SDKConfig::GetApiKey());
-  };
-  return ForbocAiApi.injectEndpoint(Ep)(Req);
+inline auto getBridgeRules() {
+  return Detail::MakeGet<TArray<FBridgeRule>>(TEXT("getBridgeRules"),
+                                              SDKConfig::GetApiUrl() +
+                                                  TEXT("/bridge/rules"));
 }
 
-/** Memory Management Endpoints */
-inline auto getMemoryList(FString NpcId) {
-  ApiEndpoint<FString, TArray<FMemoryItem>> Ep;
-  Ep.EndpointName = TEXT("getMemoryList");
-  Ep.ProvidesTags = {{TEXT("Memory"), TEXT("LIST")}};
-  Ep.RequestBuilder = [NpcId](const FString &Arg) {
-    return AsyncHttp::Get<TArray<FMemoryItem>>(
-        SDKConfig::GetApiUrl() + TEXT("/memories?npcId=") + NpcId,
-        SDKConfig::GetApiKey());
-  };
-  return ForbocAiApi.injectEndpoint(Ep)(NpcId);
+inline auto postBridgePreset(const FString &PresetName) {
+  return Detail::MakeEndpoint<rtk::FEmptyPayload, FDirectiveRuleSet>(
+      TEXT("postBridgePreset"), rtk::FEmptyPayload{},
+      [PresetName](const rtk::FEmptyPayload &) {
+        return func::AsyncHttp::Post<FDirectiveRuleSet>(
+            SDKConfig::GetApiUrl() + TEXT("/rules/presets/") +
+                Detail::Encode(PresetName),
+            TEXT("{}"), SDKConfig::GetApiKey());
+      });
 }
 
-inline auto postMemoryRecall(const FMemoryRecallRequest &Req) {
-  ApiEndpoint<FMemoryRecallRequest, TArray<FMemoryItem>> Ep;
-  Ep.EndpointName = TEXT("postMemoryRecall");
-  Ep.ProvidesTags = {{TEXT("Memory"), TEXT("RECALL")}};
-  Ep.RequestBuilder = [Req](const FMemoryRecallRequest &Arg) {
-    FString Payload;
-    FJsonObjectConverter::UStructToJsonObjectString(Arg, Payload);
-    return AsyncHttp::Post<TArray<FMemoryItem>>(
-        SDKConfig::GetApiUrl() + TEXT("/memories/recall"), Payload,
-        SDKConfig::GetApiKey());
-  };
-  return ForbocAiApi.injectEndpoint(Ep)(Req);
-}
-
-inline auto deleteMemoryClear(FString NpcId) {
-  ApiEndpoint<FString, FEmptyPayload> Ep;
-  Ep.EndpointName = TEXT("deleteMemoryClear");
-  Ep.InvalidatesTags = {{TEXT("Memory"), TEXT("LIST")},
-                        {TEXT("Memory"), TEXT("SEARCH")}};
-  Ep.RequestBuilder = [NpcId](const FString &Arg) {
-    return AsyncHttp::Delete(SDKConfig::GetApiUrl() + TEXT("/memories?npcId=") +
-                                 NpcId,
-                             SDKConfig::GetApiKey());
-  };
-  return ForbocAiApi.injectEndpoint(Ep)(NpcId);
-}
-
-/** Ghost Running Endpoints */
-inline auto postGhostRun(const FGhostConfig &Config) {
-  ApiEndpoint<FGhostConfig, FString> Ep;
-  Ep.EndpointName = TEXT("postGhostRun");
-  Ep.InvalidatesTags = {{TEXT("Ghost"), TEXT("LIST")}};
-  Ep.RequestBuilder = [Config](const FGhostConfig &Arg) {
-    FString Payload;
-    FJsonObjectConverter::UStructToJsonObjectString(Arg, Payload);
-    return AsyncHttp::Post<FString>(SDKConfig::GetApiUrl() + TEXT("/ghost/run"),
-                                    Payload, SDKConfig::GetApiKey());
-  };
-  return ForbocAiApi.injectEndpoint(Ep)(Config);
-}
-
-inline auto postGhostStop(FString SessionId) {
-  ApiEndpoint<FString, FEmptyPayload> Ep;
-  Ep.EndpointName = TEXT("postGhostStop");
-  Ep.RequestBuilder = [SessionId](const FString &Arg) {
-    FString Payload =
-        FString::Printf(TEXT("{\"sessionId\":\"%s\"}"), *SessionId);
-    return AsyncHttp::Post<FEmptyPayload>(SDKConfig::GetApiUrl() +
-                                              TEXT("/ghost/stop"),
-                                          Payload, SDKConfig::GetApiKey());
-  };
-  return ForbocAiApi.injectEndpoint(Ep)(SessionId);
-}
-
-inline auto getGhostResults(FString SessionId) {
-  ApiEndpoint<FString, FGhostTestReport> Ep;
-  Ep.EndpointName = TEXT("getGhostResults");
-  Ep.RequestBuilder = [SessionId](const FString &Arg) {
-    return AsyncHttp::Get<FGhostTestReport>(
-        SDKConfig::GetApiUrl() + TEXT("/ghost/results/") + SessionId,
-        SDKConfig::GetApiKey());
-  };
-  return ForbocAiApi.injectEndpoint(Ep)(SessionId);
-}
-
-inline auto getGhostHistory(FString NpcId) {
-  ApiEndpoint<FString, TArray<FGhostHistoryEntry>> Ep;
-  Ep.EndpointName = TEXT("getGhostHistory");
-  Ep.RequestBuilder = [NpcId](const FString &Arg) {
-    return AsyncHttp::Get<TArray<FGhostHistoryEntry>>(
-        SDKConfig::GetApiUrl() + TEXT("/ghost/history?npcId=") + NpcId,
-        SDKConfig::GetApiKey());
-  };
-  return ForbocAiApi.injectEndpoint(Ep)(NpcId);
-}
-
-/** Soul Portability Endpoints */
-inline auto postSoulExport(FString NpcId) {
-  ApiEndpoint<FString, FSoulExportRequest> Ep;
-  Ep.EndpointName = TEXT("postSoulExport");
-  Ep.RequestBuilder = [NpcId](const FString &Arg) {
-    FString Payload = FString::Printf(TEXT("{\"npcId\":\"%s\"}"), *NpcId);
-    return AsyncHttp::Post<FSoulExportRequest>(SDKConfig::GetApiUrl() +
-                                                   TEXT("/souls/export"),
-                                               Payload, SDKConfig::GetApiKey());
-  };
-  return ForbocAiApi.injectEndpoint(Ep)(NpcId);
-}
-
-inline auto postSoulExportConfirm(const FSoulExportConfirmRequest &Req) {
-  ApiEndpoint<FSoulExportConfirmRequest, FSoul> Ep;
-  Ep.EndpointName = TEXT("postSoulExportConfirm");
-  Ep.InvalidatesTags = {{TEXT("Soul"), TEXT("LIST")}};
-  Ep.RequestBuilder = [Req](const FSoulExportConfirmRequest &Arg) {
-    FString Payload;
-    FJsonObjectConverter::UStructToJsonObjectString(Arg, Payload);
-    return AsyncHttp::Post<FSoul>(SDKConfig::GetApiUrl() +
-                                      TEXT("/souls/export/confirm"),
-                                  Payload, SDKConfig::GetApiKey());
-  };
-  return ForbocAiApi.injectEndpoint(Ep)(Req);
-}
-
-inline auto postSoulVerify(const FSoulVerifyRequest &Req) {
-  ApiEndpoint<FSoulVerifyRequest, FSoulVerifyResult> Ep;
-  Ep.EndpointName = TEXT("postSoulVerify");
-  Ep.RequestBuilder = [Req](const FSoulVerifyRequest &Arg) {
-    FString Payload;
-    FJsonObjectConverter::UStructToJsonObjectString(Arg, Payload);
-    return AsyncHttp::Post<FSoulVerifyResult>(SDKConfig::GetApiUrl() +
-                                                  TEXT("/souls/verify"),
-                                              Payload, SDKConfig::GetApiKey());
-  };
-  return ForbocAiApi.injectEndpoint(Ep)(Req);
-}
-
-inline auto getSoulImport(FString SoulId) {
-  ApiEndpoint<FString, FSoul> Ep;
-  Ep.EndpointName = TEXT("getSoulImport");
-  Ep.RequestBuilder = [SoulId](const FString &Arg) {
-    return AsyncHttp::Get<FSoul>(SDKConfig::GetApiUrl() + TEXT("/souls/") +
-                                     SoulId + TEXT("/import"),
-                                 SDKConfig::GetApiKey());
-  };
-  return ForbocAiApi.injectEndpoint(Ep)(SoulId);
-}
-
-/** Bridge & Rule Endpoints */
 inline auto getRulesets() {
-  ApiEndpoint<FEmptyPayload, TArray<FString>> Ep;
-  Ep.EndpointName = TEXT("getRulesets");
-  Ep.RequestBuilder = [](const FEmptyPayload &Arg) {
-    return AsyncHttp::Get<TArray<FString>>(SDKConfig::GetApiUrl() +
-                                               TEXT("/bridge/rulesets"),
-                                           SDKConfig::GetApiKey());
-  };
-  return ForbocAiApi.injectEndpoint(Ep)(FEmptyPayload{});
+  return Detail::MakeGet<TArray<FDirectiveRuleSet>>(
+      TEXT("getRulesets"), SDKConfig::GetApiUrl() + TEXT("/rules"));
 }
 
 inline auto getRulePresets() {
-  ApiEndpoint<FEmptyPayload, TArray<FString>> Ep;
-  Ep.EndpointName = TEXT("getRulePresets");
-  Ep.RequestBuilder = [](const FEmptyPayload &Arg) {
-    return AsyncHttp::Get<TArray<FString>>(SDKConfig::GetApiUrl() +
-                                               TEXT("/bridge/presets"),
-                                           SDKConfig::GetApiKey());
-  };
-  return ForbocAiApi.injectEndpoint(Ep)(FEmptyPayload{});
+  return Detail::MakeGet<TArray<FString>>(TEXT("getRulePresets"),
+                                          SDKConfig::GetApiUrl() +
+                                              TEXT("/rules/presets"));
 }
 
-inline auto postRuleRegister(const FBridgeRule &Rule) {
-  ApiEndpoint<FBridgeRule, FBridgeRule> Ep;
-  Ep.EndpointName = TEXT("postRuleRegister");
-  Ep.InvalidatesTags = {{TEXT("Rule"), TEXT("LIST")}};
-  Ep.RequestBuilder = [Rule](const FBridgeRule &Arg) {
-    FString Payload;
-    FJsonObjectConverter::UStructToJsonObjectString(Arg, Payload);
-    return AsyncHttp::Post<FBridgeRule>(SDKConfig::GetApiUrl() +
-                                            TEXT("/bridge/rules"),
-                                        Payload, SDKConfig::GetApiKey());
-  };
-  return ForbocAiApi.injectEndpoint(Ep)(Rule);
+inline auto postRuleRegister(const FDirectiveRuleSet &Ruleset) {
+  return Detail::MakePost<FDirectiveRuleSet, FDirectiveRuleSet>(
+      TEXT("postRuleRegister"), SDKConfig::GetApiUrl() + TEXT("/rules"),
+      Ruleset);
 }
 
-inline auto deleteRule(FString RuleId) {
-  ApiEndpoint<FString, FEmptyPayload> Ep;
-  Ep.EndpointName = TEXT("deleteRule");
-  Ep.InvalidatesTags = {{TEXT("Rule"), TEXT("LIST")}};
-  Ep.RequestBuilder = [RuleId](const FString &Arg) {
-    return AsyncHttp::Delete(SDKConfig::GetApiUrl() + TEXT("/bridge/rules/") +
-                                 RuleId,
-                             SDKConfig::GetApiKey());
-  };
-  return ForbocAiApi.injectEndpoint(Ep)(RuleId);
+inline auto deleteRule(const FString &RulesetId) {
+  return Detail::MakeDelete<rtk::FEmptyPayload>(TEXT("deleteRule"),
+                                           SDKConfig::GetApiUrl() +
+                                               TEXT("/rules/") +
+                                               Detail::Encode(RulesetId));
 }
 
-/** System Endpoints */
-inline auto getApiStatus() {
-  ApiEndpoint<FEmptyPayload, FApiStatusResponse> Ep;
-  Ep.EndpointName = TEXT("getApiStatus");
-  Ep.RequestBuilder = [](const FEmptyPayload &Arg) {
-    return AsyncHttp::Get<FApiStatusResponse>(
-        SDKConfig::GetApiUrl() + TEXT("/status"), SDKConfig::GetApiKey());
-  };
-  return ForbocAiApi.injectEndpoint(Ep)(FEmptyPayload{});
+inline auto postGhostRun(const FGhostRunRequest &Request) {
+  return Detail::MakePost<FGhostRunRequest, FGhostRunResponse>(
+      TEXT("postGhostRun"), SDKConfig::GetApiUrl() + TEXT("/ghost/run"),
+      Request);
+}
+
+inline auto postGhostRun(const FGhostConfig &Config) {
+  return postGhostRun(
+      TypeFactory::GhostRunRequest(Config.TestSuite, Config.Duration));
+}
+
+inline auto getGhostStatus(const FString &SessionId) {
+  return Detail::MakeGet<FGhostStatusResponse>(
+      TEXT("getGhostStatus"),
+      SDKConfig::GetApiUrl() + TEXT("/ghost/") + Detail::Encode(SessionId) +
+          TEXT("/status"));
+}
+
+inline auto getGhostResults(const FString &SessionId) {
+  return Detail::MakeGet<FGhostResultsResponse>(
+      TEXT("getGhostResults"),
+      SDKConfig::GetApiUrl() + TEXT("/ghost/") + Detail::Encode(SessionId) +
+          TEXT("/results"));
+}
+
+inline auto postGhostStop(const FString &SessionId) {
+  return Detail::MakeEndpoint<rtk::FEmptyPayload, FGhostStopResponse>(
+      TEXT("postGhostStop"), rtk::FEmptyPayload{},
+      [SessionId](const rtk::FEmptyPayload &) {
+        return func::AsyncHttp::Post<FGhostStopResponse>(
+            SDKConfig::GetApiUrl() + TEXT("/ghost/") +
+                Detail::Encode(SessionId) + TEXT("/stop"),
+            TEXT("{}"), SDKConfig::GetApiKey());
+      });
+}
+
+inline auto getGhostHistory(int32 Limit = 10) {
+  return Detail::MakeGet<FGhostHistoryResponse>(
+      TEXT("getGhostHistory"),
+      SDKConfig::GetApiUrl() + TEXT("/ghost/history?limit=") +
+          FString::FromInt(Limit));
+}
+
+inline auto postSoulExport(const FString &NpcId,
+                           const FSoulExportPhase1Request &Request) {
+  return Detail::MakePost<FSoulExportPhase1Request, FSoulExportPhase1Response>(
+      TEXT("postSoulExport"),
+      SDKConfig::GetApiUrl() + TEXT("/npcs/") + Detail::Encode(NpcId) +
+          TEXT("/soul/export"),
+      Request);
+}
+
+inline auto postSoulExportConfirm(const FString &NpcId,
+                                  const FSoulExportConfirmRequest &Request) {
+  return Detail::MakePost<FSoulExportConfirmRequest, FSoulExportResponse>(
+      TEXT("postSoulExportConfirm"),
+      SDKConfig::GetApiUrl() + TEXT("/npcs/") + Detail::Encode(NpcId) +
+          TEXT("/soul/confirm"),
+      Request);
+}
+
+inline auto getSouls(int32 Limit = 50) {
+  return Detail::MakeGet<FSoulListResponse>(
+      TEXT("getSouls"), SDKConfig::GetApiUrl() + TEXT("/souls?limit=") +
+                            FString::FromInt(Limit));
+}
+
+inline auto getSoulImport(const FString &TxId) {
+  return Detail::MakeGet<FSoulImportPhase1Response>(
+      TEXT("getSoulImport"),
+      SDKConfig::GetApiUrl() + TEXT("/souls/") + Detail::Encode(TxId));
+}
+
+inline auto postSoulVerify(const FString &TxId) {
+  return Detail::MakeEndpoint<rtk::FEmptyPayload, FSoulVerifyResult>(
+      TEXT("postSoulVerify"), rtk::FEmptyPayload{},
+      [TxId](const rtk::FEmptyPayload &) {
+        return func::AsyncHttp::Post<FSoulVerifyResult>(
+            SDKConfig::GetApiUrl() + TEXT("/souls/") + Detail::Encode(TxId) +
+                TEXT("/verify"),
+            TEXT("{}"), SDKConfig::GetApiKey());
+      });
+}
+
+inline auto postNpcImport(const FSoulImportPhase1Request &Request) {
+  return Detail::MakePost<FSoulImportPhase1Request, FSoulImportPhase1Response>(
+      TEXT("postNpcImport"), SDKConfig::GetApiUrl() + TEXT("/npcs/import"),
+      Request);
+}
+
+inline auto postNpcImportConfirm(const FSoulImportConfirmRequest &Request) {
+  return Detail::MakePost<FSoulImportConfirmRequest, FImportedNpc>(
+      TEXT("postNpcImportConfirm"),
+      SDKConfig::GetApiUrl() + TEXT("/npcs/import/confirm"), Request);
 }
 
 } // namespace Endpoints
 
-// --- Slice Builder ---
 inline Slice<FAPIState> CreateAPISlice() {
-  return SliceBuilder<FAPIState>(TEXT("forbocApi"), FAPIState())
-      .addCase<CacheUpdateAction>(
-          [](FAPIState State, const CacheUpdateAction &Action) {
-            State.Queries.Add(Action.Payload.Key, Action.Payload.Data);
-            return State;
-          })
-      .build();
+  return SliceBuilder<FAPIState>(TEXT("forbocApi"), FAPIState()).build();
 }
 
 } // namespace APISlice

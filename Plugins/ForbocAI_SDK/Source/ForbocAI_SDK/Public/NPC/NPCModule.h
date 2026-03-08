@@ -5,7 +5,6 @@
 #include "Core/functional_core.hpp" // C++11 Functional Core Library
 #include "CoreMinimal.h"
 #include "Types.h"
-#include "Templates/TFunction.h"
 
 // ==========================================================
 // Agent Module — Strict FP with Enhanced Functional Patterns
@@ -128,8 +127,7 @@ FORBOCAI_SDK_API FSoul Export(const FAgent &Agent);
 namespace AgentHelpers {
 // Helper to create a lazy agent
 inline AgentTypes::Lazy<FAgent> createLazyAgent(const FAgentConfig &config) {
-  return func::lazy(
-      [config]() -> FAgent { return AgentFactory::Create(config).right; });
+  return func::lazy([config]() -> FAgent { return AgentFactory::Create(config); });
 }
 
 // Helper to create a validation pipeline for agent state
@@ -156,17 +154,17 @@ agentProcessingPipeline(const FAgent &agent) {
 }
 
 // Helper to create a curried agent creation function
-inline AgentTypes::Curried<
-    1, std::function<AgentTypes::AgentCreationResult(FAgentConfig)>>
-curriedAgentCreation() {
-  return func::curry<1>(
+inline auto curriedAgentCreation()
+    -> decltype(func::curry<1>(
+        std::function<AgentTypes::AgentCreationResult(FAgentConfig)>())) {
+  std::function<AgentTypes::AgentCreationResult(FAgentConfig)> Creator =
       [](FAgentConfig config) -> AgentTypes::AgentCreationResult {
-        try {
-          auto result = AgentFactory::Create(config);
-          return result;
-        } catch (const std::exception &e) {
-          return AgentTypes::make_left(FString(e.what()), FAgent{});
-        }
-      });
+    try {
+      return AgentTypes::make_right(FString(), AgentFactory::Create(config));
+    } catch (const std::exception &e) {
+      return AgentTypes::make_left(FString(e.what()), FAgent{});
+    }
+  };
+  return func::curry<1>(Creator);
 }
 } // namespace AgentHelpers

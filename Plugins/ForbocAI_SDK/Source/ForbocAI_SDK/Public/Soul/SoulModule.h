@@ -9,10 +9,10 @@
 #include <functional>
 
 // ==========================================================
-// Soul Module — IPFS/Serialization Logic (Strict FP)
+// Soul Module — Arweave Soul Serialization (Strict FP)
 // ==========================================================
 // Strict functional programming implementation for Soul
-// serialization, validation, and export.
+// serialization, validation, export, and import facades.
 // All operations are pure free functions.
 // Enhanced with functional core patterns for better
 // error handling and composition.
@@ -38,11 +38,11 @@ using SoulCreationResult = Either<FString, FSoul>;
 using SoulSerializationResult = Either<FString, FString>;
 using SoulDeserializationResult = Either<FString, FSoul>;
 using SoulValidationResult = Either<FString, FSoul>;
-using SoulExportResult = AsyncResult<FString>;
+using SoulExportResult = AsyncResult<FSoulExportResult>;
 } // namespace SoulTypes
 
 /**
- * Soul Operations - IPFS/Serialization Logic.
+ * Soul Operations - Arweave serialization and transport facade.
  */
 namespace SoulOps {
 
@@ -131,14 +131,15 @@ inline SoulTypes::Pipeline<FSoul> soulSerializationPipeline(const FSoul &soul) {
 }
 
 // Helper to create a curried soul creation function
-inline SoulTypes::Curried<
-    4, std::function<SoulTypes::SoulCreationResult(
-           FAgentState, TArray<FMemoryItem>, FString, FString)>>
-curriedSoulCreation() {
-  return func::curry<4>([](FAgentState state, TArray<FMemoryItem> memories,
-                           FString id,
-                           FString persona) -> SoulTypes::SoulCreationResult {
+inline auto curriedSoulCreation()
+    -> decltype(func::curry<4>(std::function<SoulTypes::SoulCreationResult(
+        FAgentState, TArray<FMemoryItem>, FString, FString)>())) {
+  std::function<SoulTypes::SoulCreationResult(
+      FAgentState, TArray<FMemoryItem>, FString, FString)>
+      Creator = [](FAgentState state, TArray<FMemoryItem> memories,
+                   FString id, FString persona) -> SoulTypes::SoulCreationResult {
     return SoulOps::FromAgent(state, memories, id, persona);
-  });
+  };
+  return func::curry<4>(Creator);
 }
 } // namespace SoulHelpers

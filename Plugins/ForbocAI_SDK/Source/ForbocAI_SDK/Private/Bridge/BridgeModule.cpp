@@ -14,28 +14,30 @@
 
 namespace BridgeRules {
 
-BridgeTypes::ValidationResult
-ValidateMovement(const FAgentAction &Action,
-                 const FBridgeValidationContext &Context) {
+FValidationResult ValidateMovement(const FAgentAction &Action,
+                                   const FBridgeRuleContext &Context) {
   if (Action.PayloadJson.Contains(TEXT("x")) &&
       Action.PayloadJson.Contains(TEXT("y"))) {
-    return BridgeTypes::make_right(
-        TypeFactory::Valid(TEXT("Valid coordinates")));
+    return TypeFactory::Valid(TEXT("Valid coordinates"));
   }
 
-  return BridgeTypes::make_left(TEXT("Missing x,y in payload"));
+  return TypeFactory::Invalid(TEXT("Missing x,y in payload"));
 }
 
-BridgeTypes::ValidationResult
-ValidateAttack(const FAgentAction &Action,
-               const FBridgeValidationContext &Context) {
+FValidationResult ValidateAttack(const FAgentAction &Action,
+                                 const FBridgeRuleContext &Context) {
   if (Action.Target.IsEmpty()) {
-    return BridgeTypes::make_left(TEXT("Missing target"));
+    return TypeFactory::Invalid(TEXT("Missing target"));
   }
-  return BridgeTypes::make_right(TypeFactory::Valid(TEXT("Target specified")));
+  return TypeFactory::Valid(TEXT("Target specified"));
 }
 
 } // namespace BridgeRules
+
+namespace BridgeHelpers {
+BridgeTypes::ValidationPipeline<FAgentAction, FString>
+bridgeValidationPipeline();
+}
 
 // ==========================================
 // BRIDGE OPERATIONS — Free functions
@@ -47,20 +49,20 @@ TArray<FValidationRule> BridgeOps::CreateDefaultRules() {
   return TArray<FValidationRule>();
 }
 
-BridgeTypes::ValidationResult
-BridgeOps::Validate(const FAgentAction &Action,
-                    const TArray<FValidationRule> &Rules,
-                    const FBridgeValidationContext &Context) {
+FValidationResult BridgeOps::Validate(const FAgentAction &Action,
+                                      const TArray<FValidationRule> &Rules,
+                                      const FBridgeRuleContext &Context) {
   // Use functional validation pipeline
   auto validationPipeline = BridgeHelpers::bridgeValidationPipeline();
   auto result = validationPipeline.run(Action);
 
   auto SDKStore = ConfigureSDKStore();
-  SDKStore.dispatch(BridgeActions::BridgeValidationPending());
+  SDKStore.dispatch(BridgeSlice::Actions::BridgeValidationPending());
 
   if (result.isLeft) {
-    SDKStore.dispatch(BridgeActions::BridgeValidationFailure(result.left));
-    return BridgeTypes::make_left(result.left);
+    SDKStore.dispatch(
+        BridgeSlice::Actions::BridgeValidationFailure(result.left));
+    return TypeFactory::Invalid(result.left);
   }
 
   FAgentAction validatedAction = result.right;
@@ -71,16 +73,17 @@ BridgeOps::Validate(const FAgentAction &Action,
           Rule.Validator(validatedAction, Context);
 
       if (!RuleResult.bValid) {
-        SDKStore.dispatch(
-            BridgeActions::BridgeValidationFailure(RuleResult.Reason));
-        return BridgeTypes::make_left(RuleResult.Reason);
+        SDKStore.dispatch(BridgeSlice::Actions::BridgeValidationFailure(
+            RuleResult.Reason));
+        return RuleResult;
       }
     }
   }
 
   FValidationResult FinalSuccess = TypeFactory::Valid(TEXT("All rules passed"));
-  SDKStore.dispatch(BridgeActions::BridgeValidationSuccess(FinalSuccess));
-  return BridgeTypes::make_right(FinalSuccess);
+  SDKStore.dispatch(BridgeSlice::Actions::BridgeValidationSuccess(
+      FinalSuccess));
+  return FinalSuccess;
 }
 
 TArray<FValidationRule> BridgeOps::CreateRPGRules() {
@@ -135,33 +138,37 @@ BridgeOps::RegisterRule(const FValidationRule &Rule, const FString &ApiUrl) {
 // Functional helper implementations
 namespace BridgeHelpers {
 // Implementation of lazy HTTP request creation
-BridgeTypes::Lazy<IHttpRequest *> createLazyHttpRequest(const FString &url) {
-  return func::lazy([url]() -> IHttpRequest * {
-    FHttpModule *HttpModule = &FHttpModule::Get();
-    IHttpRequest *Request = HttpModule->CreateRequest();
+BridgeTypes::Lazy<TSharedRef<IHttpRequest, ESPMode::ThreadSafe>>
+createLazyHttpRequest(const FString &url) {
+  return func::lazy([url]() -> TSharedRef<IHttpRequest, ESPMode::ThreadSafe> {
+    TSharedRef<IHttpRequest, ESPMode::ThreadSafe> Request =
+        FHttpModule::Get().CreateRequest();
     Request->SetURL(url);
     return Request;
   });
 }
 
 // Implementation of bridge validation pipeline
-BridgeTypes::ValidationPipeline<FAgentAction> bridgeValidationPipeline() {
-  return func::validationPipeline<FAgentAction>()
+BridgeTypes::ValidationPipeline<FAgentAction, FString>
+bridgeValidationPipeline() {
+  return func::validationPipeline<FAgentAction, FString>()
       .add([](const FAgentAction &action)
                -> BridgeTypes::Either<FString, FAgentAction> {
         if (action.Type.IsEmpty()) {
           return BridgeTypes::make_left(
-              FString(TEXT("Action type cannot be empty")));
+              FString(TEXT("Action type cannot be empty")),
+              FAgentAction{});
         }
-        return BridgeTypes::make_right(action);
+        return BridgeTypes::make_right(FString(), action);
       })
       .add([](const FAgentAction &action)
                -> BridgeTypes::Either<FString, FAgentAction> {
         if (action.Target.IsEmpty()) {
           return BridgeTypes::make_left(
-              FString(TEXT("Action target cannot be empty")));
+              FString(TEXT("Action target cannot be empty")),
+              FAgentAction{});
         }
-        return BridgeTypes::make_right(action);
+        return BridgeTypes::make_right(FString(), action);
       });
 }
 
@@ -172,20 +179,22 @@ bridgeProcessingPipeline(const FAgentAction &action) {
 }
 
 // Implementation of curried bridge validation
-BridgeTypes::Curried<2, std::function<BridgeTypes::ValidationResult(
-                            FAgentAction, FBridgeValidationContext)>>
-curriedBridgeValidation() {
-  return func::curry<2>(
-      [](FAgentAction action,
-         FBridgeValidationContext context) -> BridgeTypes::ValidationResult {
+inline auto curriedBridgeValidation()
+    -> decltype(func::curry<2>(std::function<BridgeTypes::ValidationResult(
+        FAgentAction, FBridgeRuleContext)>())) {
+  std::function<BridgeTypes::ValidationResult(FAgentAction, FBridgeRuleContext)>
+      Creator =
+          [](FAgentAction action,
+             FBridgeRuleContext context) -> BridgeTypes::ValidationResult {
         try {
           FValidationResult result =
               BridgeOps::Validate(action, TArray<FValidationRule>(), context);
           return BridgeTypes::make_right(FString(), result);
         } catch (const std::exception &e) {
-          return BridgeTypes::make_left(FString(e.what()));
+          return BridgeTypes::make_left(FString(e.what()), FValidationResult{});
         }
-      });
+      };
+  return func::curry<2>(Creator);
 }
 
 // Implementation of rule registration pipeline

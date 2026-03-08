@@ -1,6 +1,7 @@
 #pragma once
 
 #include "CoreMinimal.h"
+#include "Memory/MemoryTypes.h"
 
 /**
  * Native Engine Wrappers
@@ -23,7 +24,8 @@ FORBOCAI_SDK_API void FreeModel(Context Ctx);
 FORBOCAI_SDK_API FString Infer(Context Ctx, const FString &Prompt,
                                int32 MaxTokens = 512);
 
-FORBOCAI_SDK_API FString Embed(void *Handle, const FString &Text);
+/** Generates a deterministic embedding vector for text. */
+FORBOCAI_SDK_API TArray<float> Embed(Context Ctx, const FString &Text);
 
 } // namespace Llama
 
@@ -37,14 +39,20 @@ FORBOCAI_SDK_API DB Open(const FString &Path);
 /** Closes the database */
 FORBOCAI_SDK_API void Close(DB Database);
 
-/** Performs vector similarity search */
-FORBOCAI_SDK_API TArray<FString>
+/** Performs vector similarity search and returns full memory rows. */
+FORBOCAI_SDK_API TArray<FMemoryItem>
+SearchRows(DB Database, const TArray<float> &Vector, int32 TopK = 5);
+
+/** Inserts or updates a full memory row. */
+FORBOCAI_SDK_API bool Upsert(DB Database, const FMemoryItem &Item);
+
+/** Main row-based search entry point used by the SDK thunk path. */
+FORBOCAI_SDK_API TArray<FMemoryItem>
 Search(DB Database, const TArray<float> &Vector, int32 TopK = 5);
 
-/** Stores a vector embedding */
-FORBOCAI_SDK_API void Store(DB Database, const FString &Id,
-                            const TArray<float> &Vector,
-                            const FString &Metadata);
+/** Compatibility overload while callers finish collapsing onto full rows. */
+FORBOCAI_SDK_API bool Upsert(DB Database, const FMemoryItem &Item,
+                             const TArray<float> &Vector);
 
 } // namespace Sqlite
 } // namespace Native

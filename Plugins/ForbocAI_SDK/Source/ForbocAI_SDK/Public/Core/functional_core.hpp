@@ -2,6 +2,14 @@
 #ifndef FUNCTIONAL_CORE_HPP
 #define FUNCTIONAL_CORE_HPP
 
+#include "Dom/JsonObject.h"
+#include "HttpModule.h"
+#include "Interfaces/IHttpRequest.h"
+#include "Interfaces/IHttpResponse.h"
+#include "JsonObjectConverter.h"
+#include "Serialization/JsonReader.h"
+#include "Serialization/JsonSerializer.h"
+
 // ==========================================================
 // Functional Core Library — Strict C++11
 // ==========================================================
@@ -211,10 +219,10 @@ struct Curried {
   template <typename... NewArgs>
   auto operator()(NewArgs &&...new_args) const -> typename std::enable_if<
       (std::tuple_size<CapturedArgs>::value + sizeof...(NewArgs) >= Arity),
-      decltype(apply(func,
+      decltype(func::apply(func,
                      std::tuple_cat(args, std::make_tuple(std::forward<NewArgs>(
                                               new_args)...))))>::type {
-    return apply(
+    return func::apply(
         func, std::tuple_cat(
                   args, std::make_tuple(std::forward<NewArgs>(new_args)...)));
   }
@@ -309,7 +317,7 @@ public:
       return *lastResult;
     }
 
-    Result computed = apply(func, currentArgs);
+    Result computed = func::apply(func, currentArgs);
     lastArgs = currentArgs;
 
     if (!lastResult) {
@@ -867,10 +875,10 @@ auto then(const AsyncResult<T> &res, F f) -> AsyncResult<U> {
 } // namespace AsyncChain
 
 // ==========================================
-// 19. AsyncHttp (UE HttpModule Functional Wrapper)
+// 19. LegacyAsyncHttp (superseded by Core/AsyncHttp.h)
 // ==========================================
 
-namespace AsyncHttp {
+namespace LegacyAsyncHttp {
 
 template <typename T>
 AsyncResult<HttpResult<T>> Post(const FString &Url, const FString &Payload,
@@ -977,7 +985,7 @@ AsyncResult<HttpResult<T>> Get(const FString &Url,
   });
 }
 
-} // namespace AsyncHttp
+} // namespace LegacyAsyncHttp
 
 } // namespace func
 

@@ -1,5 +1,6 @@
 #pragma once
 
+#include "Ghost/GhostModule.h"
 #include "CoreMinimal.h"
 #include "Types.h"
 

@@ -6,7 +6,7 @@
 using namespace rtk;
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FRtkSelectorTest, "ForbocAI.Core.RTK.Selector",
-                                 EAutomationTestFlags::ApplicationContextMask |
+                                 EAutomationTestFlags_ApplicationContextMask |
                                      EAutomationTestFlags::EngineFilter)
 bool FRtkSelectorTest::RunTest(const FString &Parameters) {
   struct FTestState {

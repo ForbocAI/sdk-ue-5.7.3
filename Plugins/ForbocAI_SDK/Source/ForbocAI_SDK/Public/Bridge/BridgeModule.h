@@ -18,10 +18,24 @@
 // validation and composition.
 // ==========================================================
 
+namespace BridgeTypes {
+using func::AsyncResult;
+using func::Curried;
+using func::Either;
+using func::Lazy;
+using func::Pipeline;
+using func::ValidationPipeline;
+
+using func::make_left;
+using func::make_right;
+
+using ValidationResult = Either<FString, FValidationResult>;
+} // namespace BridgeTypes
+
 /**
  * Validation Context — Pure data.
  */
-struct FBridgeValidationContext {
+struct FBridgeRuleContext {
   /** Pointer to the Agent's state (optional). */
   const FAgentState *AgentState;
   /** Key-value map of the current world state. */
@@ -41,7 +55,7 @@ struct FValidationRule {
   TArray<FString> ActionTypes;
   /** The validation function to execute. */
   std::function<FValidationResult(const FAgentAction &,
-                                  const FBridgeValidationContext &)>
+                                  const FBridgeRuleContext &)>
       Validator;
 };
 
@@ -54,12 +68,12 @@ namespace BridgeFactory {
  * Factory: Creates a validation context.
  * @param State Optional pointer to agent state.
  * @param World Optional world state map.
- * @return A new FBridgeValidationContext.
+ * @return A new FBridgeRuleContext.
  */
-inline FBridgeValidationContext
+inline FBridgeRuleContext
 CreateContext(const FAgentState *State = nullptr,
               TMap<FString, FString> World = {}) {
-  return FBridgeValidationContext{State, MoveTemp(World)};
+  return FBridgeRuleContext{State, MoveTemp(World)};
 }
 
 /**
@@ -73,7 +87,7 @@ CreateContext(const FAgentState *State = nullptr,
 inline FValidationRule
 CreateRule(FString Id, FString Name, TArray<FString> Types,
            std::function<FValidationResult(const FAgentAction &,
-                                           const FBridgeValidationContext &)>
+                                           const FBridgeRuleContext &)>
                InValidator) {
   FValidationRule R;
   R.Id = MoveTemp(Id);
@@ -112,7 +126,7 @@ FORBOCAI_SDK_API TArray<FValidationRule> CreateRPGRules();
  */
 FORBOCAI_SDK_API FValidationResult
 Validate(const FAgentAction &Action, const TArray<FValidationRule> &Rules,
-         const FBridgeValidationContext &Context);
+         const FBridgeRuleContext &Context);
 
 /**
  * Registers a rule with the API.

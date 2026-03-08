@@ -4,13 +4,6 @@
 #include "CoreMinimal.h"
 #include "Types.h"
 
-// ==========================================================
-// Cortex Slice (UE RTK)
-// ==========================================================
-// Equivalent to `cortexSlice.ts`
-// Tracks the status of local/remote inference engines and model context.
-// ==========================================================
-
 namespace CortexSlice {
 
 using namespace rtk;
@@ -18,124 +11,136 @@ using namespace func;
 
 enum class ECortexEngineStatus : uint8 { Idle, Initializing, Ready, Error };
 
-// State for the Cortex slice
 struct FCortexSliceState {
   ECortexEngineStatus Status;
-  bool bIsInitializing;
-  Maybe<FString> Error;
   FCortexStatus EngineStatus;
+  FString LastPrompt;
+  FString LastResponseText;
+  FString Error;
 
-  FCortexSliceState()
-      : Status(ECortexEngineStatus::Idle), bIsInitializing(false) {}
+  FCortexSliceState() : Status(ECortexEngineStatus::Idle) {}
 };
-
-// --- Actions ---
-struct CortexInitPendingAction : public Action {
-  static const FString Type;
-  CortexInitPendingAction() : Action(Type) {}
-};
-inline const FString CortexInitPendingAction::Type = TEXT("cortex/initPending");
-
-struct CortexInitSuccessAction : public Action {
-  static const FString Type;
-  FCortexStatus Payload;
-  CortexInitSuccessAction(FCortexStatus InPayload)
-      : Action(Type), Payload(MoveTemp(InPayload)) {}
-};
-inline const FString CortexInitSuccessAction::Type = TEXT("cortex/initSuccess");
-
-struct CortexInitFailedAction : public Action {
-  static const FString Type;
-  FString Payload;
-  CortexInitFailedAction(FString InPayload)
-      : Action(Type), Payload(MoveTemp(InPayload)) {}
-};
-inline const FString CortexInitFailedAction::Type = TEXT("cortex/initFailed");
-
-struct CortexCompletePendingAction : public Action {
-  static const FString Type;
-  CortexCompletePendingAction() : Action(Type) {}
-};
-inline const FString CortexCompletePendingAction::Type =
-    TEXT("cortex/completePending");
-
-struct CortexCompleteSuccessAction : public Action {
-  static const FString Type;
-  CortexCompleteSuccessAction() : Action(Type) {}
-};
-inline const FString CortexCompleteSuccessAction::Type =
-    TEXT("cortex/completeSuccess");
-
-struct CortexCompleteFailedAction : public Action {
-  static const FString Type;
-  FString Payload;
-  CortexCompleteFailedAction(FString InPayload)
-      : Action(Type), Payload(MoveTemp(InPayload)) {}
-};
-inline const FString CortexCompleteFailedAction::Type =
-    TEXT("cortex/completeFailed");
 
 namespace Actions {
-inline CortexInitPendingAction CortexInitPending() {
-  return CortexInitPendingAction();
+
+inline const ActionCreator<FString> &CortexInitPendingActionCreator() {
+  static const ActionCreator<FString> ActionCreator =
+      createAction<FString>(TEXT("cortex/initPending"));
+  return ActionCreator;
 }
-inline CortexInitSuccessAction CortexInitFulfilled(FCortexStatus Status) {
-  return CortexInitSuccessAction(MoveTemp(Status));
+
+inline const ActionCreator<FCortexStatus> &CortexInitSuccessActionCreator() {
+  static const ActionCreator<FCortexStatus> ActionCreator =
+      createAction<FCortexStatus>(TEXT("cortex/initSuccess"));
+  return ActionCreator;
 }
-inline CortexInitFailedAction CortexInitRejected(FString Error) {
-  return CortexInitFailedAction(MoveTemp(Error));
+
+inline const ActionCreator<FString> &CortexInitFailedActionCreator() {
+  static const ActionCreator<FString> ActionCreator =
+      createAction<FString>(TEXT("cortex/initFailed"));
+  return ActionCreator;
 }
-inline CortexCompletePendingAction CortexCompletePending(FString Prompt) {
-  return CortexCompletePendingAction();
+
+inline const ActionCreator<FString> &CortexCompletePendingActionCreator() {
+  static const ActionCreator<FString> ActionCreator =
+      createAction<FString>(TEXT("cortex/completePending"));
+  return ActionCreator;
 }
-inline CortexCompleteSuccessAction CortexCompleteFulfilled() {
-  return CortexCompleteSuccessAction();
+
+inline const ActionCreator<FCortexResponse> &
+CortexCompleteSuccessActionCreator() {
+  static const ActionCreator<FCortexResponse> ActionCreator =
+      createAction<FCortexResponse>(TEXT("cortex/completeSuccess"));
+  return ActionCreator;
 }
-inline CortexCompleteFailedAction CortexCompleteRejected(FString Error) {
-  return CortexCompleteFailedAction(MoveTemp(Error));
+
+inline const ActionCreator<FString> &CortexCompleteFailedActionCreator() {
+  static const ActionCreator<FString> ActionCreator =
+      createAction<FString>(TEXT("cortex/completeFailed"));
+  return ActionCreator;
 }
+
+inline AnyAction CortexInitPending(const FString &ModelPath) {
+  return CortexInitPendingActionCreator()(ModelPath);
+}
+
+inline AnyAction CortexInitFulfilled(const FCortexStatus &Status) {
+  return CortexInitSuccessActionCreator()(Status);
+}
+
+inline AnyAction CortexInitRejected(const FString &Error) {
+  return CortexInitFailedActionCreator()(Error);
+}
+
+inline AnyAction CortexCompletePending(const FString &Prompt) {
+  return CortexCompletePendingActionCreator()(Prompt);
+}
+
+inline AnyAction CortexCompleteFulfilled(const FCortexResponse &Response) {
+  return CortexCompleteSuccessActionCreator()(Response);
+}
+
+inline AnyAction CortexCompleteRejected(const FString &Error) {
+  return CortexCompleteFailedActionCreator()(Error);
+}
+
 } // namespace Actions
 
-using namespace Actions;
-
-// --- Slice Builder ---
 inline Slice<FCortexSliceState> CreateCortexSlice() {
   return SliceBuilder<FCortexSliceState>(TEXT("cortex"), FCortexSliceState())
-      .addCase<CortexInitPendingAction>(
-          [](FCortexSliceState State, const CortexInitPendingAction &Action) {
-            State.Status = ECortexEngineStatus::Initializing;
-            State.bIsInitializing = true;
-            State.Error = nothing<FString>();
-            return State;
+      .addExtraCase(
+          Actions::CortexInitPendingActionCreator(),
+          [](const FCortexSliceState &State,
+             const Action<FString> &Action) -> FCortexSliceState {
+            FCortexSliceState Next = State;
+            Next.Status = ECortexEngineStatus::Initializing;
+            Next.Error.Empty();
+            Next.EngineStatus.Model = Action.PayloadValue;
+            return Next;
           })
-      .addCase<CortexInitSuccessAction>(
-          [](FCortexSliceState State, const CortexInitSuccessAction &Action) {
-            State.Status = ECortexEngineStatus::Ready;
-            State.bIsInitializing = false;
-            State.EngineStatus = Action.Payload;
-            return State;
+      .addExtraCase(
+          Actions::CortexInitSuccessActionCreator(),
+          [](const FCortexSliceState &State,
+             const Action<FCortexStatus> &Action) -> FCortexSliceState {
+            FCortexSliceState Next = State;
+            Next.Status = ECortexEngineStatus::Ready;
+            Next.EngineStatus = Action.PayloadValue;
+            return Next;
           })
-      .addCase<CortexInitFailedAction>(
-          [](FCortexSliceState State, const CortexInitFailedAction &Action) {
-            State.Status = ECortexEngineStatus::Error;
-            State.bIsInitializing = false;
-            State.Error = just(Action.Payload);
-            return State;
+      .addExtraCase(
+          Actions::CortexInitFailedActionCreator(),
+          [](const FCortexSliceState &State,
+             const Action<FString> &Action) -> FCortexSliceState {
+            FCortexSliceState Next = State;
+            Next.Status = ECortexEngineStatus::Error;
+            Next.Error = Action.PayloadValue;
+            Next.EngineStatus.Error = Action.PayloadValue;
+            return Next;
           })
-      .addCase<CortexCompletePendingAction>(
-          [](FCortexSliceState State,
-             const CortexCompletePendingAction &Action) {
-            State.Error = nothing<FString>();
-            return State;
+      .addExtraCase(
+          Actions::CortexCompletePendingActionCreator(),
+          [](const FCortexSliceState &State,
+             const Action<FString> &Action) -> FCortexSliceState {
+            FCortexSliceState Next = State;
+            Next.LastPrompt = Action.PayloadValue;
+            Next.Error.Empty();
+            return Next;
           })
-      .addCase<CortexCompleteSuccessAction>(
-          [](FCortexSliceState State,
-             const CortexCompleteSuccessAction &Action) { return State; })
-      .addCase<CortexCompleteFailedAction>(
-          [](FCortexSliceState State,
-             const CortexCompleteFailedAction &Action) {
-            State.Error = just(Action.Payload);
-            return State;
+      .addExtraCase(
+          Actions::CortexCompleteSuccessActionCreator(),
+          [](const FCortexSliceState &State,
+             const Action<FCortexResponse> &Action) -> FCortexSliceState {
+            FCortexSliceState Next = State;
+            Next.LastResponseText = Action.PayloadValue.Text;
+            return Next;
+          })
+      .addExtraCase(
+          Actions::CortexCompleteFailedActionCreator(),
+          [](const FCortexSliceState &State,
+             const Action<FString> &Action) -> FCortexSliceState {
+            FCortexSliceState Next = State;
+            Next.Error = Action.PayloadValue;
+            return Next;
           })
       .build();
 }

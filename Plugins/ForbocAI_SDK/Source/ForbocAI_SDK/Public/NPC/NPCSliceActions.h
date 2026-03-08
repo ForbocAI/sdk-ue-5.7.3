@@ -4,142 +4,151 @@
 
 namespace NPCSlice {
 
-// --- Actions ---
-struct SetNPCInfoAction : public Action {
-  static const FString Type;
-  FNPCInternalState Payload;
-  SetNPCInfoAction(FNPCInternalState InPayload)
-      : Action(Type), Payload(MoveTemp(InPayload)) {}
+struct FSetNPCStatePayload {
+  FString Id;
+  FAgentState State;
 };
-inline const FString SetNPCInfoAction::Type = TEXT("npc/setNPCInfo");
 
-struct SetActiveNPCAction : public Action {
-  static const FString Type;
-  FString Payload;
-  SetActiveNPCAction(FString InPayload)
-      : Action(Type), Payload(MoveTemp(InPayload)) {}
+struct FUpdateNPCStatePayload {
+  FString Id;
+  FAgentState Delta;
 };
-inline const FString SetActiveNPCAction::Type = TEXT("npc/setActiveNPC");
 
-struct SetNPCStateAction : public Action {
-  static const FString Type;
-  struct FPayload {
-    FString Id;
-    FAgentState State;
-  };
-  FPayload Payload;
-  SetNPCStateAction(FPayload InPayload)
-      : Action(Type), Payload(MoveTemp(InPayload)) {}
+struct FAddToHistoryPayload {
+  FString Id;
+  FString Role;
+  FString Content;
 };
-inline const FString SetNPCStateAction::Type = TEXT("npc/setNPCState");
 
-struct UpdateNPCStateAction : public Action {
-  static const FString Type;
-  struct FPayload {
-    FString Id;
-    FAgentState StateDelta;
-  };
-  FPayload Payload;
-  UpdateNPCStateAction(FPayload InPayload)
-      : Action(Type), Payload(MoveTemp(InPayload)) {}
+struct FSetHistoryPayload {
+  FString Id;
+  TArray<FNPCHistoryEntry> History;
 };
-inline const FString UpdateNPCStateAction::Type = TEXT("npc/updateNPCState");
 
-struct AddToHistoryAction : public Action {
-  static const FString Type;
-  struct FPayload {
-    FString Id;
-    FString Entry;
-  };
-  FPayload Payload;
-  AddToHistoryAction(FPayload InPayload)
-      : Action(Type), Payload(MoveTemp(InPayload)) {}
+struct FSetLastActionPayload {
+  FString Id;
+  FAgentAction Action;
+  bool bHasAction;
 };
-inline const FString AddToHistoryAction::Type = TEXT("npc/addToHistory");
 
-struct SetHistoryAction : public Action {
-  static const FString Type;
-  struct FPayload {
-    FString Id;
-    TArray<FString> History;
-  };
-  FPayload Payload;
-  SetHistoryAction(FPayload InPayload)
-      : Action(Type), Payload(MoveTemp(InPayload)) {}
+struct FBlockActionPayload {
+  FString Id;
+  FString Reason;
 };
-inline const FString SetHistoryAction::Type = TEXT("npc/setHistory");
-
-struct SetLastActionAction : public Action {
-  static const FString Type;
-  struct FPayload {
-    FString Id;
-    FAgentAction Action;
-  };
-  FPayload Payload;
-  SetLastActionAction(FPayload InPayload)
-      : Action(Type), Payload(MoveTemp(InPayload)) {}
-};
-inline const FString SetLastActionAction::Type = TEXT("npc/setLastAction");
-
-struct BlockActionAction : public Action {
-  static const FString Type;
-  struct FPayload {
-    FString Id;
-    FString Reason;
-  };
-  FPayload Payload;
-  BlockActionAction(FPayload InPayload)
-      : Action(Type), Payload(MoveTemp(InPayload)) {}
-};
-inline const FString BlockActionAction::Type = TEXT("npc/blockAction");
-
-struct ClearBlockAction : public Action {
-  static const FString Type;
-  FString Payload;
-  ClearBlockAction(FString InPayload)
-      : Action(Type), Payload(MoveTemp(InPayload)) {}
-};
-inline const FString ClearBlockAction::Type = TEXT("npc/clearBlock");
-
-struct RemoveNPCAction : public Action {
-  static const FString Type;
-  FString Payload;
-  RemoveNPCAction(FString InPayload)
-      : Action(Type), Payload(MoveTemp(InPayload)) {}
-};
-inline const FString RemoveNPCAction::Type = TEXT("npc/removeNPC");
 
 namespace Actions {
-inline SetNPCInfoAction SetNPCInfo(FNPCInternalState Info) {
-  return SetNPCInfoAction(MoveTemp(Info));
+
+inline const rtk::ActionCreator<FNPCInternalState> &SetNPCInfoActionCreator() {
+  static const rtk::ActionCreator<FNPCInternalState> ActionCreator =
+      rtk::createAction<FNPCInternalState>(TEXT("npc/setNPCInfo"));
+  return ActionCreator;
 }
-inline SetActiveNPCAction SetActiveNPC(FString Id) {
-  return SetActiveNPCAction(MoveTemp(Id));
+
+inline const rtk::ActionCreator<FString> &SetActiveNPCActionCreator() {
+  static const rtk::ActionCreator<FString> ActionCreator =
+      rtk::createAction<FString>(TEXT("npc/setActiveNPC"));
+  return ActionCreator;
 }
-inline SetNPCStateAction SetNPCState(FString Id, FAgentState State) {
-  return SetNPCStateAction({MoveTemp(Id), MoveTemp(State)});
+
+inline const rtk::ActionCreator<FSetNPCStatePayload> &
+SetNPCStateActionCreator() {
+  static const rtk::ActionCreator<FSetNPCStatePayload> ActionCreator =
+      rtk::createAction<FSetNPCStatePayload>(TEXT("npc/setNPCState"));
+  return ActionCreator;
 }
-inline UpdateNPCStateAction UpdateNPCState(FString Id, FAgentState Delta) {
-  return UpdateNPCStateAction({MoveTemp(Id), MoveTemp(Delta)});
+
+inline const rtk::ActionCreator<FUpdateNPCStatePayload> &
+UpdateNPCStateActionCreator() {
+  static const rtk::ActionCreator<FUpdateNPCStatePayload> ActionCreator =
+      rtk::createAction<FUpdateNPCStatePayload>(TEXT("npc/updateNPCState"));
+  return ActionCreator;
 }
-inline AddToHistoryAction AddToHistory(FString Id, FString Entry) {
-  return AddToHistoryAction({MoveTemp(Id), MoveTemp(Entry)});
+
+inline const rtk::ActionCreator<FAddToHistoryPayload> &
+AddToHistoryActionCreator() {
+  static const rtk::ActionCreator<FAddToHistoryPayload> ActionCreator =
+      rtk::createAction<FAddToHistoryPayload>(TEXT("npc/addToHistory"));
+  return ActionCreator;
 }
-inline SetHistoryAction SetHistory(FString Id, TArray<FString> History) {
-  return SetHistoryAction({MoveTemp(Id), MoveTemp(History)});
+
+inline const rtk::ActionCreator<FSetHistoryPayload> &SetHistoryActionCreator() {
+  static const rtk::ActionCreator<FSetHistoryPayload> ActionCreator =
+      rtk::createAction<FSetHistoryPayload>(TEXT("npc/setHistory"));
+  return ActionCreator;
 }
-inline SetLastActionAction SetLastAction(FString Id, FAgentAction LastAction) {
-  return SetLastActionAction({MoveTemp(Id), MoveTemp(LastAction)});
+
+inline const rtk::ActionCreator<FSetLastActionPayload> &
+SetLastActionActionCreator() {
+  static const rtk::ActionCreator<FSetLastActionPayload> ActionCreator =
+      rtk::createAction<FSetLastActionPayload>(TEXT("npc/setLastAction"));
+  return ActionCreator;
 }
-inline BlockActionAction BlockAction(FString Id, FString Reason) {
-  return BlockActionAction({MoveTemp(Id), MoveTemp(Reason)});
+
+inline const rtk::ActionCreator<FBlockActionPayload> &
+BlockActionActionCreator() {
+  static const rtk::ActionCreator<FBlockActionPayload> ActionCreator =
+      rtk::createAction<FBlockActionPayload>(TEXT("npc/blockAction"));
+  return ActionCreator;
 }
-inline ClearBlockAction ClearBlock(FString Id) {
-  return ClearBlockAction(MoveTemp(Id));
+
+inline const rtk::ActionCreator<FString> &ClearBlockActionCreator() {
+  static const rtk::ActionCreator<FString> ActionCreator =
+      rtk::createAction<FString>(TEXT("npc/clearBlock"));
+  return ActionCreator;
 }
-inline RemoveNPCAction RemoveNPC(FString Id) {
-  return RemoveNPCAction(MoveTemp(Id));
+
+inline const rtk::ActionCreator<FString> &RemoveNPCActionCreator() {
+  static const rtk::ActionCreator<FString> ActionCreator =
+      rtk::createAction<FString>(TEXT("npc/removeNPC"));
+  return ActionCreator;
 }
+
+inline rtk::AnyAction SetNPCInfo(const FNPCInternalState &Info) {
+  return SetNPCInfoActionCreator()(Info);
+}
+
+inline rtk::AnyAction SetActiveNPC(const FString &Id) {
+  return SetActiveNPCActionCreator()(Id);
+}
+
+inline rtk::AnyAction SetNPCState(const FString &Id, const FAgentState &State) {
+  return SetNPCStateActionCreator()(FSetNPCStatePayload{Id, State});
+}
+
+inline rtk::AnyAction UpdateNPCState(const FString &Id,
+                                     const FAgentState &Delta) {
+  return UpdateNPCStateActionCreator()(FUpdateNPCStatePayload{Id, Delta});
+}
+
+inline rtk::AnyAction AddToHistory(const FString &Id, const FString &Role,
+                                   const FString &Content) {
+  return AddToHistoryActionCreator()(FAddToHistoryPayload{Id, Role, Content});
+}
+
+inline rtk::AnyAction SetHistory(const FString &Id,
+                                 const TArray<FNPCHistoryEntry> &History) {
+  return SetHistoryActionCreator()(FSetHistoryPayload{Id, History});
+}
+
+inline rtk::AnyAction SetLastAction(const FString &Id,
+                                    const FAgentAction &LastAction,
+                                    bool bHasAction = true) {
+  return SetLastActionActionCreator()(
+      FSetLastActionPayload{Id, LastAction, bHasAction});
+}
+
+inline rtk::AnyAction BlockAction(const FString &Id, const FString &Reason) {
+  return BlockActionActionCreator()(FBlockActionPayload{Id, Reason});
+}
+
+inline rtk::AnyAction ClearBlock(const FString &Id) {
+  return ClearBlockActionCreator()(Id);
+}
+
+inline rtk::AnyAction RemoveNPC(const FString &Id) {
+  return RemoveNPCActionCreator()(Id);
+}
+
 } // namespace Actions
 
 } // namespace NPCSlice

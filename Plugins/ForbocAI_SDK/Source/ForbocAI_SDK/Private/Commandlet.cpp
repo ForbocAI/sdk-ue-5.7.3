@@ -1,8 +1,9 @@
-#include "Commandlet.h"
+#include "ForbocAISDKCommandlet.h"
 #include "CLI/CLIModule.h"
 #include "Misc/CommandLine.h"
 #include "Misc/Parse.h"
 #include "Core/functional_core.hpp"
+#include <type_traits>
 
 UForbocAI_SDKCommandlet::UForbocAI_SDKCommandlet() {
   IsClient = false;
@@ -35,42 +36,60 @@ int32 UForbocAI_SDKCommandlet::Main(const FString &Params) {
 }
 
 // Command execution helpers
-CLITypes::CommandResult UForbocAI_SDKCommandlet::executeDoctor(const FString& apiUrl) {
+UForbocAI_SDKCommandlet::CommandResult
+UForbocAI_SDKCommandlet::executeDoctor(const FString& apiUrl) {
     return CLIOps::Doctor(apiUrl);
 }
 
-CLITypes::CommandResult UForbocAI_SDKCommandlet::executeAgentList(const FString& apiUrl) {
+UForbocAI_SDKCommandlet::CommandResult
+UForbocAI_SDKCommandlet::executeAgentList(const FString& apiUrl) {
     return CLIOps::ListAgents(apiUrl);
 }
 
-CLITypes::CommandResult UForbocAI_SDKCommandlet::executeAgentCreate(const FString& apiUrl, const FString& persona) {
+UForbocAI_SDKCommandlet::CommandResult
+UForbocAI_SDKCommandlet::executeAgentCreate(const FString& apiUrl, const FString& persona) {
     return CLIOps::CreateAgent(apiUrl, persona);
 }
 
-CLITypes::CommandResult UForbocAI_SDKCommandlet::executeAgentProcess(const FString& apiUrl, const FString& id, const FString& input) {
+UForbocAI_SDKCommandlet::CommandResult
+UForbocAI_SDKCommandlet::executeAgentProcess(const FString& apiUrl, const FString& id, const FString& input) {
     return CLIOps::ProcessAgent(apiUrl, id, input);
 }
 
-CLITypes::CommandResult UForbocAI_SDKCommandlet::executeSoulExport(const FString& apiUrl, const FString& id) {
+UForbocAI_SDKCommandlet::CommandResult
+UForbocAI_SDKCommandlet::executeSoulExport(const FString& apiUrl, const FString& id) {
     return CLIOps::ExportSoul(apiUrl, id);
 }
 
 // Command pipeline helpers
-CLITypes::CommandExecution UForbocAI_SDKCommandlet::createCommandPipeline(const FString& command, const FString& apiUrl, const FString& param1, const FString& param2) {
-    return CLITypes::CommandExecution::create([this, command, apiUrl, param1, param2](auto resolve, auto reject) {
+UForbocAI_SDKCommandlet::CommandExecution
+UForbocAI_SDKCommandlet::createCommandPipeline(const FString& command, const FString& apiUrl, const FString& param1, const FString& param2) {
+    return UForbocAI_SDKCommandlet::CommandExecution::create(
+        [this, command, apiUrl, param1, param2](
+            std::function<void()> resolve,
+            std::function<void(std::string)> reject) {
+        const auto RejectMessage = [&reject](const auto &Error) {
+            using ErrorType = std::decay_t<decltype(Error)>;
+            if constexpr (std::is_same_v<ErrorType, FString>) {
+                reject(TCHAR_TO_UTF8(*Error));
+            } else {
+                reject(Error);
+            }
+        };
+
         if (command == TEXT("doctor")) {
             auto result = executeDoctor(apiUrl);
             if (result.isSuccessful()) {
                 resolve();
             } else {
-                reject(result.message);
+                RejectMessage(result.message);
             }
         } else if (command == TEXT("agent_list")) {
             auto result = executeAgentList(apiUrl);
             if (result.isSuccessful()) {
                 resolve();
             } else {
-                reject(result.message);
+                RejectMessage(result.message);
             }
         } else if (command == TEXT("agent_create")) {
             FString persona;
@@ -82,7 +101,7 @@ CLITypes::CommandExecution UForbocAI_SDKCommandlet::createCommandPipeline(const 
             if (result.isSuccessful()) {
                 resolve();
             } else {
-                reject(result.message);
+                RejectMessage(result.message);
             }
         } else if (command == TEXT("agent_process")) {
             FString id, input;
@@ -94,11 +113,11 @@ CLITypes::CommandExecution UForbocAI_SDKCommandlet::createCommandPipeline(const 
                 if (result.isSuccessful()) {
                     resolve();
                 } else {
-                    reject(result.message);
+                    RejectMessage(result.message);
                 }
             } else {
                 FString error = FString::Printf(TEXT("Missing Id or Input for agent_process: Id=%s, Input=%s"), *id, *input);
-                reject(error);
+                RejectMessage(error);
             }
         } else if (command == TEXT("soul_export")) {
             FString id;
@@ -109,14 +128,14 @@ CLITypes::CommandExecution UForbocAI_SDKCommandlet::createCommandPipeline(const 
                 if (result.isSuccessful()) {
                     resolve();
                 } else {
-                    reject(result.message);
+                    RejectMessage(result.message);
                 }
             } else {
-                reject(FString(TEXT("Missing Id for soul_export")));
+                RejectMessage(FString(TEXT("Missing Id for soul_export")));
             }
         } else {
             FString error = FString::Printf(TEXT("Unknown Command or No Command Specified. usage: -Command=doctor"));
-            reject(error);
+            RejectMessage(error);
         }
     });
 }
@@ -126,9 +145,10 @@ CLITypes::ValidationPipeline<FString, FString> UForbocAI_SDKCommandlet::commandV
     return CLITypes::ValidationPipeline<FString, FString>()
         .add([](const FString& command) -> CLITypes::Either<FString, FString> {
             if (command.IsEmpty()) {
-                return CLITypes::make_left(FString(TEXT("Command cannot be empty")));
+                return CLITypes::make_left(FString(TEXT("Command cannot be empty")),
+                                           FString());
             }
-            return CLITypes::make_right(command);
+            return CLITypes::make_right(FString(), command);
         })
         .add([](const FString& command) -> CLITypes::Either<FString, FString> {
             static const TArray<FString> validCommands = {
@@ -140,8 +160,10 @@ CLITypes::ValidationPipeline<FString, FString> UForbocAI_SDKCommandlet::commandV
             };
             
             if (!validCommands.Contains(command)) {
-                return CLITypes::make_left(FString::Printf(TEXT("Invalid command: %s"), *command));
+                return CLITypes::make_left(
+                    FString::Printf(TEXT("Invalid command: %s"), *command),
+                    FString());
             }
-            return CLITypes::make_right(command);
+            return CLITypes::make_right(FString(), command);
         });
 }

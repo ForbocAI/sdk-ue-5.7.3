@@ -5,26 +5,74 @@
 #include "NPC/AgentTypes.h"
 #include "SoulTypes.generated.h"
 
-/**
- * Arweave Types (Opaque stubs for parity)
- */
 USTRUCT(BlueprintType)
-struct FArweaveInstruction {
+struct FArweaveUploadInstruction {
   GENERATED_BODY()
-  UPROPERTY(BlueprintReadOnly) FString Type;
-  FArweaveInstruction() {}
+
+  UPROPERTY(BlueprintReadOnly)
+  FString UploadUrl;
+
+  UPROPERTY(BlueprintReadOnly)
+  FString GatewayUrl;
+
+  UPROPERTY(BlueprintReadOnly)
+  FString ContentType;
+
+  UPROPERTY(BlueprintReadOnly)
+  FString AuiAuthHeader;
+
+  UPROPERTY(BlueprintReadOnly)
+  FString TagsJson;
 };
 
 USTRUCT(BlueprintType)
-struct FArweaveResult {
+struct FArweaveUploadResult {
   GENERATED_BODY()
-  UPROPERTY(BlueprintReadOnly) FString Status;
-  FArweaveResult() {}
+
+  UPROPERTY(BlueprintReadOnly)
+  FString TxId;
+
+  UPROPERTY(BlueprintReadOnly)
+  FString Status;
+
+  UPROPERTY(BlueprintReadOnly)
+  FString ArweaveUrl;
+
+  UPROPERTY(BlueprintReadOnly)
+  FString ResponseJson;
 };
 
-/**
- * Soul (Portable Identity) — Immutable data.
- */
+USTRUCT(BlueprintType)
+struct FArweaveDownloadInstruction {
+  GENERATED_BODY()
+
+  UPROPERTY(BlueprintReadOnly)
+  FString TxId;
+
+  UPROPERTY(BlueprintReadOnly)
+  FString GatewayUrl;
+
+  UPROPERTY(BlueprintReadOnly)
+  FString DownloadUrl;
+};
+
+USTRUCT(BlueprintType)
+struct FArweaveDownloadResult {
+  GENERATED_BODY()
+
+  UPROPERTY(BlueprintReadOnly)
+  FString TxId;
+
+  UPROPERTY(BlueprintReadOnly)
+  FString Payload;
+
+  UPROPERTY(BlueprintReadOnly)
+  FString Status;
+
+  UPROPERTY(BlueprintReadOnly)
+  FString ResponseJson;
+};
+
 USTRUCT(BlueprintType)
 struct FSoul {
   GENERATED_BODY()
@@ -42,52 +90,57 @@ struct FSoul {
   FString Persona;
 
   UPROPERTY(BlueprintReadOnly)
-  FAgentState State;
-
-  UPROPERTY(BlueprintReadOnly)
   TArray<FMemoryItem> Memories;
 
   UPROPERTY(BlueprintReadOnly)
-  FString Signature;
+  FAgentState State;
 
-  FSoul() {}
+  UPROPERTY(BlueprintReadOnly)
+  FString Signature;
 };
 
-/**
- * Soul Export Phase 1 Response
- */
+USTRUCT(BlueprintType)
+struct FSoulExportPhase1Request {
+  GENERATED_BODY()
+
+  UPROPERTY(BlueprintReadOnly)
+  FString NpcIdRef;
+
+  UPROPERTY(BlueprintReadOnly)
+  FString Persona;
+
+  UPROPERTY(BlueprintReadOnly)
+  FAgentState NpcState;
+};
+
 USTRUCT(BlueprintType)
 struct FSoulExportPhase1Response {
   GENERATED_BODY()
 
   UPROPERTY(BlueprintReadOnly)
-  FArweaveInstruction se1Instruction;
+  FArweaveUploadInstruction se1Instruction;
+
+  UPROPERTY(BlueprintReadOnly)
+  FString se1SignedPayload;
 
   UPROPERTY(BlueprintReadOnly)
   FString se1Signature;
-
-  FSoulExportPhase1Response() {}
 };
 
-/**
- * Soul Export Confirm Request
- */
 USTRUCT(BlueprintType)
 struct FSoulExportConfirmRequest {
   GENERATED_BODY()
 
   UPROPERTY(BlueprintReadOnly)
-  FArweaveResult secUploadResult;
+  FArweaveUploadResult secUploadResult;
+
+  UPROPERTY(BlueprintReadOnly)
+  FString secSignedPayload;
 
   UPROPERTY(BlueprintReadOnly)
   FString secSignature;
-
-  FSoulExportConfirmRequest() {}
 };
 
-/**
- * Soul Export Response
- */
 USTRUCT(BlueprintType)
 struct FSoulExportResponse {
   GENERATED_BODY()
@@ -103,26 +156,24 @@ struct FSoulExportResponse {
 
   UPROPERTY(BlueprintReadOnly)
   FSoul Soul;
-
-  FSoulExportResponse() {}
 };
 
-/**
- * Soul Import Phase 1 Response
- */
+USTRUCT(BlueprintType)
+struct FSoulImportPhase1Request {
+  GENERATED_BODY()
+
+  UPROPERTY(BlueprintReadOnly)
+  FString TxIdRef;
+};
+
 USTRUCT(BlueprintType)
 struct FSoulImportPhase1Response {
   GENERATED_BODY()
 
   UPROPERTY(BlueprintReadOnly)
-  FArweaveInstruction si1Instruction;
-
-  FSoulImportPhase1Response() {}
+  FArweaveDownloadInstruction si1Instruction;
 };
 
-/**
- * Soul Import Confirm Request
- */
 USTRUCT(BlueprintType)
 struct FSoulImportConfirmRequest {
   GENERATED_BODY()
@@ -131,14 +182,23 @@ struct FSoulImportConfirmRequest {
   FString sicTxId;
 
   UPROPERTY(BlueprintReadOnly)
-  FArweaveResult sicDownloadResult;
-
-  FSoulImportConfirmRequest() {}
+  FArweaveDownloadResult sicDownloadResult;
 };
 
-/**
- * Soul List Item
- */
+USTRUCT(BlueprintType)
+struct FSoulExportResult {
+  GENERATED_BODY()
+
+  UPROPERTY(BlueprintReadOnly)
+  FString TxId;
+
+  UPROPERTY(BlueprintReadOnly)
+  FString Url;
+
+  UPROPERTY(BlueprintReadOnly)
+  FSoul Soul;
+};
+
 USTRUCT(BlueprintType)
 struct FSoulListItem {
   GENERATED_BODY()
@@ -157,26 +217,16 @@ struct FSoulListItem {
 
   UPROPERTY(BlueprintReadOnly)
   FString ArweaveUrl;
-
-  FSoulListItem() {}
 };
 
-/**
- * Soul List Response
- */
 USTRUCT(BlueprintType)
 struct FSoulListResponse {
   GENERATED_BODY()
 
   UPROPERTY(BlueprintReadOnly)
   TArray<FSoulListItem> Souls;
-
-  FSoulListResponse() {}
 };
 
-/**
- * Soul Verify Result
- */
 USTRUCT(BlueprintType)
 struct FSoulVerifyResult {
   GENERATED_BODY()
@@ -192,34 +242,73 @@ struct FSoulVerifyResult {
 
 namespace TypeFactory {
 
-inline FSoul Soul(FString Id, FString Version, FString Name, FString Persona,
-                  FAgentState State, TArray<FMemoryItem> Memories,
-                  FString Signature = TEXT("")) {
-  FSoul S;
-  S.Id = MoveTemp(Id);
-  S.Version = MoveTemp(Version);
-  S.Name = MoveTemp(Name);
-  S.Persona = MoveTemp(Persona);
-  S.State = MoveTemp(State);
-  S.Memories = MoveTemp(Memories);
-  S.Signature = MoveTemp(Signature);
-  return S;
+inline FSoul Soul(const FString &Id, const FString &Version, const FString &Name,
+                  const FString &Persona, const FAgentState &State,
+                  const TArray<FMemoryItem> &Memories,
+                  const FString &Signature = TEXT("")) {
+  FSoul Value;
+  Value.Id = Id;
+  Value.Version = Version;
+  Value.Name = Name;
+  Value.Persona = Persona;
+  Value.State = State;
+  Value.Memories = Memories;
+  Value.Signature = Signature;
+  return Value;
+}
+
+inline FSoulExportPhase1Request
+SoulExportPhase1Request(const FString &NpcIdRef, const FString &Persona,
+                        const FAgentState &NpcState) {
+  FSoulExportPhase1Request Value;
+  Value.NpcIdRef = NpcIdRef;
+  Value.Persona = Persona;
+  Value.NpcState = NpcState;
+  return Value;
 }
 
 inline FSoulExportConfirmRequest
-SoulExportConfirmRequest(FArweaveResult UploadResult, FString Signature) {
-  FSoulExportConfirmRequest R;
-  R.secUploadResult = MoveTemp(UploadResult);
-  R.secSignature = MoveTemp(Signature);
-  return R;
+SoulExportConfirmRequest(const FArweaveUploadResult &UploadResult,
+                         const FString &SignedPayload,
+                         const FString &Signature) {
+  FSoulExportConfirmRequest Value;
+  Value.secUploadResult = UploadResult;
+  Value.secSignedPayload = SignedPayload;
+  Value.secSignature = Signature;
+  return Value;
+}
+
+inline FSoulImportPhase1Request SoulImportPhase1Request(const FString &TxIdRef) {
+  FSoulImportPhase1Request Value;
+  Value.TxIdRef = TxIdRef;
+  return Value;
 }
 
 inline FSoulImportConfirmRequest
-SoulImportConfirmRequest(FString TxId, FArweaveResult DownloadResult) {
-  FSoulImportConfirmRequest R;
-  R.sicTxId = MoveTemp(TxId);
-  R.sicDownloadResult = MoveTemp(DownloadResult);
-  return R;
+SoulImportConfirmRequest(const FString &TxId,
+                         const FArweaveDownloadResult &DownloadResult) {
+  FSoulImportConfirmRequest Value;
+  Value.sicTxId = TxId;
+  Value.sicDownloadResult = DownloadResult;
+  return Value;
+}
+
+inline FSoulExportResult SoulExportResult(const FString &TxId,
+                                          const FString &Url,
+                                          const FSoul &SoulValue) {
+  FSoulExportResult Value;
+  Value.TxId = TxId;
+  Value.Url = Url;
+  Value.Soul = SoulValue;
+  return Value;
+}
+
+inline FSoulVerifyResult SoulVerifyResult(bool bValid,
+                                          const FString &Reason = TEXT("")) {
+  FSoulVerifyResult Value;
+  Value.bValid = bValid;
+  Value.Reason = Reason;
+  return Value;
 }
 
 } // namespace TypeFactory

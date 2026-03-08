@@ -7,12 +7,7 @@ namespace Sqlite {
 
 TArray<FMemoryItem> VssSearch(Connection Db, const TArray<float> &Vector,
                               int32 Limit) {
-#if WITH_FORBOC_NATIVE
-  // sqlite_vss::search(...)
-  return {};
-#else
-  return {}; // Mock results
-#endif
+  return ::Native::Sqlite::SearchRows(Db, Vector, Limit);
 }
 
 } // namespace Sqlite
@@ -23,27 +18,35 @@ namespace SQLiteVSS {
 MemoryTypes::MemoryStoreRecallResult
 VectorSearch(void *Handle, const FString &Query, int32 Limit) {
   try {
-    TArray<FMemoryItem> Results;
-    TArray<float> DummyVec;
-    DummyVec.Init(0.0f, 384);
-    Results = Native::Sqlite::VssSearch(Handle, DummyVec, Limit);
-    return MemoryTypes::make_right(FString(), Results);
+    if (Handle == nullptr) {
+      return MemoryTypes::MemoryStoreRecallResult{
+          true, TEXT("Memory database is not open"), TArray<FMemoryItem>()};
+    }
+
+    const MemoryTypes::MemoryStoreEmbeddingResult EmbeddingResult =
+        GenerateEmbedding(Handle, Query);
+    if (EmbeddingResult.isLeft) {
+      return MemoryTypes::MemoryStoreRecallResult{true, EmbeddingResult.left,
+                                                  TArray<FMemoryItem>()};
+    }
+
+    const TArray<FMemoryItem> Results =
+        Native::Sqlite::VssSearch(Handle, EmbeddingResult.right, Limit);
+    return MemoryTypes::MemoryStoreRecallResult{false, FString(), Results};
   } catch (const std::exception &e) {
-    return MemoryTypes::make_left(FString(e.what()));
+    return MemoryTypes::MemoryStoreRecallResult{
+        true, FString(e.what()), TArray<FMemoryItem>()};
   }
 }
 
 MemoryTypes::MemoryStoreEmbeddingResult GenerateEmbedding(void *Handle,
                                                           const FString &Text) {
   try {
-    TArray<float> Vector;
-    Vector.Init(0.0f, 384);
-    for (int i = 0; i < 384; i++) {
-      Vector[i] = FMath::FRand();
-    }
-    return MemoryTypes::make_right(FString(), Vector);
+    const TArray<float> Vector = ::Native::Llama::Embed(Handle, Text);
+    return MemoryTypes::MemoryStoreEmbeddingResult{false, FString(), Vector};
   } catch (const std::exception &e) {
-    return MemoryTypes::make_left(FString(e.what()));
+    return MemoryTypes::MemoryStoreEmbeddingResult{
+        true, FString(e.what()), TArray<float>()};
   }
 }
 

@@ -6,6 +6,7 @@
 #include "functional_core.hpp"
 #include <functional>
 #include <memory>
+#include <utility>
 #include <vector>
 
 namespace rtk {
@@ -34,7 +35,21 @@ inline Action<FEmptyPayload> makeAction(const FString &Type) {
 // Type-erased envelope for heterogeneous root dispatch
 struct AnyAction {
   FString Type;
+  FString type;
   std::shared_ptr<void> PayloadWrapper;
+
+  AnyAction() {}
+
+  AnyAction(const FString &InType, std::shared_ptr<void> InPayloadWrapper)
+      : Type(InType), type(InType),
+        PayloadWrapper(std::move(InPayloadWrapper)) {}
+
+  template <typename Payload> func::Maybe<Payload> getPayload() const {
+    if (!PayloadWrapper) {
+      return func::nothing<Payload>();
+    }
+    return func::just(*static_cast<Payload *>(PayloadWrapper.get()));
+  }
 };
 
 // 1.2 Reducer
@@ -141,7 +156,7 @@ template <typename Payload> struct ActionCreator {
   FString Type;
 
   AnyAction operator()(const Payload &payload) const {
-    return AnyAction{Type, std::make_shared<Payload>(payload)};
+    return AnyAction(Type, std::make_shared<Payload>(payload));
   }
 
   bool match(const AnyAction &action) const { return action.Type == Type; }
@@ -163,7 +178,7 @@ struct EmptyActionCreator {
   FString Type;
 
   AnyAction operator()() const {
-    return AnyAction{Type, std::make_shared<FEmptyPayload>()};
+    return AnyAction(Type, std::make_shared<FEmptyPayload>());
   }
 
   bool match(const AnyAction &action) const { return action.Type == Type; }
@@ -177,6 +192,8 @@ inline EmptyActionCreator createAction(const FString &Type) {
 template <typename State> struct Slice {
   FString Name;
   CaseReducer<State> Reducer;
+  FString name;
+  CaseReducer<State> reducer;
 };
 
 // 2.1 SliceBuilder for generating slices and binding action creators locally
@@ -231,17 +248,17 @@ public:
     return Creator;
   }
 
-  template <typename Payload>
+  template <typename Payload, typename ReducerFn>
   SliceBuilder &
-  addExtraCase(const ActionCreator<Payload> &Creator,
-               std::function<State(const State &, const Action<Payload> &)>
-                   ReducerFunc) {
+  addExtraCase(const ActionCreator<Payload> &Creator, ReducerFn ReducerFunc) {
+    std::function<State(const State &, const Action<Payload> &)> WrappedReducer =
+        ReducerFunc;
     Reducers.Add(Creator.Type,
-                 [Creator, ReducerFunc](const State &prevState,
-                                        const AnyAction &anyAction) -> State {
+                 [Creator, WrappedReducer](const State &prevState,
+                                           const AnyAction &anyAction) -> State {
                    auto payloadOpt = Creator.extract(anyAction);
                    if (payloadOpt.hasValue) {
-                     return ReducerFunc(
+                     return WrappedReducer(
                          prevState,
                          makeAction(anyAction.Type, payloadOpt.value));
                    }
@@ -250,15 +267,17 @@ public:
     return *this;
   }
 
-  SliceBuilder &addExtraCase(
-      const EmptyActionCreator &Creator,
-      std::function<State(const State &, const Action<FEmptyPayload> &)>
-          ReducerFunc) {
+  template <typename ReducerFn>
+  SliceBuilder &addExtraCase(const EmptyActionCreator &Creator,
+                             ReducerFn ReducerFunc) {
+    std::function<State(const State &, const Action<FEmptyPayload> &)>
+        WrappedReducer = ReducerFunc;
     Reducers.Add(Creator.Type,
-                 [Creator, ReducerFunc](const State &prevState,
-                                        const AnyAction &anyAction) -> State {
+                 [Creator, WrappedReducer](const State &prevState,
+                                           const AnyAction &anyAction) -> State {
                    if (Creator.match(anyAction)) {
-                     return ReducerFunc(prevState, makeAction(anyAction.Type));
+                     return WrappedReducer(prevState,
+                                           makeAction(anyAction.Type));
                    }
                    return prevState;
                  });
@@ -268,6 +287,7 @@ public:
   Slice<State> build() const {
     Slice<State> S;
     S.Name = Name;
+    S.name = Name;
     auto DefaultState = InitialState;
     auto Map = Reducers;
 
@@ -278,6 +298,7 @@ public:
       }
       return prevState;
     };
+    S.reducer = S.Reducer;
     return S;
   }
 };
@@ -313,7 +334,7 @@ template <typename T> struct EntityAdapterOps {
     EntityState<T> next = state;
     FString id = selectId(entity);
     if (!next.entities.Find(id)) {
-      next.ids.push_back(id);
+      next.ids.Add(id);
       next.entities.Add(id, entity);
     }
     return next;
@@ -325,7 +346,7 @@ template <typename T> struct EntityAdapterOps {
     for (const auto &entity : newEntities) {
       FString id = selectId(entity);
       if (!next.entities.Find(id)) {
-        next.ids.push_back(id);
+        next.ids.Add(id);
         next.entities.Add(id, entity);
       }
     }
@@ -336,7 +357,7 @@ template <typename T> struct EntityAdapterOps {
     EntityState<T> next = state;
     FString id = selectId(entity);
     if (!next.entities.Find(id)) {
-      next.ids.push_back(id);
+      next.ids.Add(id);
     }
     next.entities.Add(id, entity);
     return next;
@@ -347,8 +368,21 @@ template <typename T> struct EntityAdapterOps {
     EntityState<T> next;
     for (const auto &entity : newEntities) {
       FString id = selectId(entity);
-      next.ids.push_back(id);
+      next.ids.Add(id);
       next.entities.Add(id, entity);
+    }
+    return next;
+  }
+
+  EntityState<T> upsertOne(const EntityState<T> &state, const T &entity) const {
+    return setOne(state, entity);
+  }
+
+  EntityState<T> upsertMany(const EntityState<T> &state,
+                            const TArray<T> &entitiesToUpsert) const {
+    EntityState<T> next = state;
+    for (const auto &entity : entitiesToUpsert) {
+      next = setOne(next, entity);
     }
     return next;
   }
@@ -394,7 +428,7 @@ template <typename T> struct EntityAdapterOps {
           TArray<T> result;
           for (const auto &id : state.ids) {
             if (const T *ent = state.entities.Find(id)) {
-              result.push_back(*ent);
+              result.Add(*ent);
             }
           }
           return result;
@@ -412,7 +446,7 @@ template <typename T> struct EntityAdapterOps {
         },
         /* selectTotal */
         [](const EntityState<T> &state) -> int32_t {
-          return static_cast<int32_t>(state.ids.size());
+          return state.ids.Num();
         }};
   }
 };
@@ -490,7 +524,7 @@ AsyncThunkConfig<Result, Arg, State> createAsyncThunk(
                        });
                  })
           .catch_([dispatch, rejected](std::string err) {
-            dispatch(rejected(err));
+            dispatch(rejected(FString(UTF8_TO_TCHAR(err.c_str()))));
           });
     };
   };
@@ -517,7 +551,8 @@ using NextDispatcher = std::function<AnyAction(const AnyAction &)>;
 
 template <typename State>
 using Middleware =
-    std::function<NextDispatcher<State>(const MiddlewareApi<State> &)>;
+    std::function<std::function<NextDispatcher<State>(NextDispatcher<State>)>(
+        const MiddlewareApi<State> &)>;
 
 template <typename State>
 std::function<AnyAction(const AnyAction &)>
@@ -548,7 +583,7 @@ template <typename State> struct ListenerMiddleware {
   TMap<FString, TArray<EffectCallback>> listeners;
 
   void addListener(const FString &actionType, EffectCallback effect) {
-    listeners.FindOrAdd(actionType).push_back(effect);
+    listeners.FindOrAdd(actionType).Add(effect);
   }
 
   Middleware<State> getMiddleware() const {
@@ -594,7 +629,8 @@ template <typename State, typename Result, typename... InSelectors>
 std::function<Result(const State &)> createSelector(
     const std::tuple<InSelectors...> &inputSelectors,
     std::function<
-        Result(typename std::result_of<InSelectors(const State &)>::type...)>
+        Result(decltype(std::declval<InSelectors>()(
+            std::declval<const State &>()))...)>
         combiner) {
   // Memoize the combiner using FP core's memoizeLast.
   // It will automatically track the tuple of inputs across calls.
@@ -646,25 +682,25 @@ template <typename State> struct ApiSlice {
   injectEndpoint(const ApiEndpoint<Arg, Result> &EndpointDesc) {
     FString ThunkPrefix = ReducerPath + TEXT("/") + EndpointDesc.EndpointName;
 
-    return createAsyncThunk<Result, Arg, State>(
-        ThunkPrefix,
-        [EndpointDesc](const Arg &arg, const ThunkApi<State> &api)
-            -> func::AsyncResult<Result> {
+      return createAsyncThunk<Result, Arg, State>(
+          ThunkPrefix,
+          [EndpointDesc](const Arg &arg, const ThunkApi<State> &api)
+              -> func::AsyncResult<Result> {
           // Execute the provided HTTP Request
           return func::AsyncChain::then<func::HttpResult<Result>, Result>(
               EndpointDesc.RequestBuilder(arg),
               [](func::HttpResult<Result> httpRes) {
                 // RTK Query unwraps the payload on success or rejects on HTTP
                 // failure
-                if (httpRes.IsSuccess) {
+                if (httpRes.bSuccess) {
                   return func::AsyncResult<Result>::create(
                       [httpRes](auto Resolve, auto Reject) {
-                        Resolve(httpRes.Payload);
+                        Resolve(httpRes.data);
                       });
                 } else {
                   return func::AsyncResult<Result>::create(
                       [httpRes](auto Resolve, auto Reject) {
-                        Reject(TCHAR_TO_UTF8(*httpRes.ErrorMessage));
+                        Reject(httpRes.error);
                       });
                 }
               });
@@ -691,6 +727,14 @@ template <typename State> struct EnhancedStore {
   }
 
   AnyAction dispatch(const AnyAction &action) const { return Dispatch(action); }
+
+  template <typename Result>
+  func::AsyncResult<Result>
+  dispatch(const ThunkAction<Result, State> &thunk) const {
+    auto dispatchAny = Dispatch;
+    auto getState = [this]() -> State { return CoreStore->getState(); };
+    return thunk(dispatchAny, getState);
+  }
 };
 
 template <typename State>
@@ -712,6 +756,13 @@ configureStore(CaseReducer<State> rootReducer, State preloadedState,
       applyMiddleware<State>(coreDispatch, getState, middlewares);
 
   return enhanced;
+}
+
+template <typename State>
+EnhancedStore<State> configureStore(CaseReducer<State> rootReducer,
+                                    State preloadedState) {
+  return configureStore<State>(rootReducer, preloadedState,
+                               std::vector<Middleware<State>>());
 }
 
 } // namespace rtk

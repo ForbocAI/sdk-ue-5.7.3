@@ -4,7 +4,6 @@
 #include "Core/functional_core.hpp"
 #include "CoreMinimal.h"
 #include "Types.h"
-#include "Memory/MemoryModule.generated.h"
 
 // ==========================================================
 // Memory Module — Full Embedding-Based Memory (UE SDK)
@@ -153,33 +152,37 @@ memoryConfigValidationPipeline() {
                -> MemoryTypes::Either<FString, FMemoryConfig> {
         if (config.DatabasePath.IsEmpty()) {
           return MemoryTypes::make_left(
-              FString(TEXT("Database path cannot be empty")));
+              FString(TEXT("Database path cannot be empty")),
+              FMemoryConfig{});
         }
-        return MemoryTypes::make_right(config);
+        return MemoryTypes::make_right(FString(), config);
       })
       .add([](const FMemoryConfig &config)
                -> MemoryTypes::Either<FString, FMemoryConfig> {
         if (config.MaxMemories < 1) {
           return MemoryTypes::make_left(
-              FString(TEXT("Max memories must be at least 1")));
+              FString(TEXT("Max memories must be at least 1")),
+              FMemoryConfig{});
         }
-        return MemoryTypes::make_right(config);
+        return MemoryTypes::make_right(FString(), config);
       })
       .add([](const FMemoryConfig &config)
                -> MemoryTypes::Either<FString, FMemoryConfig> {
         if (config.VectorDimension != 384) {
           return MemoryTypes::make_left(
-              FString(TEXT("Vector dimension must be 384")));
+              FString(TEXT("Vector dimension must be 384")),
+              FMemoryConfig{});
         }
-        return MemoryTypes::make_right(config);
+        return MemoryTypes::make_right(FString(), config);
       })
       .add([](const FMemoryConfig &config)
                -> MemoryTypes::Either<FString, FMemoryConfig> {
         if (config.MaxRecallResults < 1) {
           return MemoryTypes::make_left(
-              FString(TEXT("Max recall results must be at least 1")));
+              FString(TEXT("Max recall results must be at least 1")),
+              FMemoryConfig{});
         }
-        return MemoryTypes::make_right(config);
+        return MemoryTypes::make_right(FString(), config);
       });
 }
 
@@ -190,17 +193,18 @@ memoryStoreCreationPipeline(const FMemoryStore &store) {
 }
 
 // Helper to create a curried memory store creation function
-inline MemoryTypes::Curried<
-    1, std::function<MemoryTypes::MemoryStoreCreationResult(FMemoryConfig)>>
-curriedMemoryStoreCreation() {
-  return func::curry<1>(
+inline auto curriedMemoryStoreCreation()
+    -> decltype(func::curry<1>(
+        std::function<MemoryTypes::MemoryStoreCreationResult(FMemoryConfig)>())) {
+  std::function<MemoryTypes::MemoryStoreCreationResult(FMemoryConfig)> Creator =
       [](FMemoryConfig config) -> MemoryTypes::MemoryStoreCreationResult {
-        try {
-          FMemoryStore store = MemoryFactory::CreateStore(config);
-          return MemoryTypes::make_right(FString(), store);
-        } catch (const std::exception &e) {
-          return MemoryTypes::make_left(FString(e.what()));
-        }
-      });
+    try {
+      FMemoryStore store = MemoryFactory::CreateStore(config);
+      return MemoryTypes::make_right(FString(), store);
+    } catch (const std::exception &e) {
+      return MemoryTypes::make_left(FString(e.what()), FMemoryStore{});
+    }
+  };
+  return func::curry<1>(Creator);
 }
 } // namespace MemoryHelpers

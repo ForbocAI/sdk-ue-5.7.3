@@ -31,7 +31,7 @@ struct FMemoryItem {
   UPROPERTY(BlueprintReadOnly)
   float Similarity;
 
-  FMemoryItem() : Importance(0.5f), Timestamp(0), Similarity(0.0f) {}
+  FMemoryItem() : Timestamp(0), Importance(0.5f), Similarity(0.0f) {}
 };
 
 /**
@@ -62,22 +62,13 @@ struct FMemoryConfig {
 };
 
 /**
- * Memory Store — Immutable data.
+ * Memory Store — runtime-only data.
+ * Native handles remain outside reflected UE types.
  */
-USTRUCT(BlueprintType)
 struct FMemoryStore {
-  GENERATED_BODY()
-
-  UPROPERTY(BlueprintReadOnly)
   FMemoryConfig Config;
-
-  UPROPERTY(BlueprintReadOnly)
   TArray<FMemoryItem> Items;
-
-  /** Database connection handle. */
   void *DatabaseHandle;
-
-  UPROPERTY(BlueprintReadOnly)
   bool bInitialized;
 
   FMemoryStore() : DatabaseHandle(nullptr), bInitialized(false) {}
@@ -100,6 +91,32 @@ struct FMemoryRecallRequest {
   float Threshold;
 
   FMemoryRecallRequest() : Limit(10), Threshold(0.7f) {}
+};
+
+USTRUCT(BlueprintType)
+struct FRemoteMemoryStoreRequest {
+  GENERATED_BODY()
+
+  UPROPERTY(BlueprintReadOnly)
+  FString Observation;
+
+  UPROPERTY(BlueprintReadOnly)
+  float Importance;
+
+  FRemoteMemoryStoreRequest() : Importance(0.8f) {}
+};
+
+USTRUCT(BlueprintType)
+struct FRemoteMemoryRecallRequest {
+  GENERATED_BODY()
+
+  UPROPERTY(BlueprintReadOnly)
+  FString Query;
+
+  UPROPERTY(BlueprintReadOnly)
+  float Similarity;
+
+  FRemoteMemoryRecallRequest() : Similarity(0.0f) {}
 };
 
 namespace TypeFactory {
@@ -126,6 +143,22 @@ MemoryConfig(FString DatabasePath = TEXT("ForbocAI_Memory.db"),
   C.UseGPU = UseGPU;
   C.MaxRecallResults = MaxRecallResults;
   return C;
+}
+
+inline FRemoteMemoryStoreRequest
+RemoteMemoryStoreRequest(FString Observation, float Importance = 0.8f) {
+  FRemoteMemoryStoreRequest Request;
+  Request.Observation = MoveTemp(Observation);
+  Request.Importance = Importance;
+  return Request;
+}
+
+inline FRemoteMemoryRecallRequest
+RemoteMemoryRecallRequest(FString Query, float Similarity = 0.0f) {
+  FRemoteMemoryRecallRequest Request;
+  Request.Query = MoveTemp(Query);
+  Request.Similarity = Similarity;
+  return Request;
 }
 
 } // namespace TypeFactory

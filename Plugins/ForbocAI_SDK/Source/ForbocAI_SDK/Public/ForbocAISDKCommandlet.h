@@ -1,9 +1,10 @@
 #pragma once
 
+#include "CLI/CLIModule.h"
 #include "CoreMinimal.h"
 #include "Commandlets/Commandlet.h"
 #include "Core/functional_core.hpp"
-#include "Commandlet.generated.h"
+#include "ForbocAISDKCommandlet.generated.h"
 
 /**
  * ForbocAI SDK Commandlet.

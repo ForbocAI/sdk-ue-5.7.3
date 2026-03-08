@@ -4,7 +4,6 @@
 #include "Core/functional_core.hpp"
 #include "CoreMinimal.h"
 #include "Types.h"
-#include "Ghost/GhostModule.generated.h"
 
 // ==========================================================
 // Ghost Module — Automated QA Testing (UE SDK)
@@ -35,8 +34,8 @@ using func::nothing;
 
 // Type aliases for Ghost operations
 using GhostCreationResult = Either<FString, FGhost>;
-using GhostTestRunResult = Either<FString, FGhostTestResult>;
-using GhostTestRunAllResult = Either<FString, FGhostTestReport>;
+using GhostTestRunResult = AsyncResult<FGhostTestResult>;
+using GhostTestRunAllResult = AsyncResult<FGhostTestReport>;
 using GhostValidationResult = Either<FString, FGhostConfig>;
 } // namespace GhostTypes
 
@@ -135,25 +134,28 @@ ghostConfigValidationPipeline() {
                -> GhostTypes::Either<FString, FGhostConfig> {
         if (config.Agent.Id.IsEmpty() || config.Agent.Persona.IsEmpty()) {
           return GhostTypes::make_left(
-              FString(TEXT("Agent must have valid Id and Persona")));
+              FString(TEXT("Agent must have valid Id and Persona")),
+              FGhostConfig{});
         }
-        return GhostTypes::make_right(config);
+        return GhostTypes::make_right(FString(), config);
       })
       .add([](const FGhostConfig &config)
                -> GhostTypes::Either<FString, FGhostConfig> {
         if (config.Scenarios.Num() == 0) {
           return GhostTypes::make_left(
-              FString(TEXT("At least one test scenario must be provided")));
+              FString(TEXT("At least one test scenario must be provided")),
+              FGhostConfig{});
         }
-        return GhostTypes::make_right(config);
+        return GhostTypes::make_right(FString(), config);
       })
       .add([](const FGhostConfig &config)
                -> GhostTypes::Either<FString, FGhostConfig> {
         if (config.MaxIterations < 1) {
           return GhostTypes::make_left(
-              FString(TEXT("Max iterations must be at least 1")));
+              FString(TEXT("Max iterations must be at least 1")),
+              FGhostConfig{});
         }
-        return GhostTypes::make_right(config);
+        return GhostTypes::make_right(FString(), config);
       });
 }
 
@@ -163,17 +165,18 @@ inline GhostTypes::Pipeline<FGhost> ghostTestPipeline(const FGhost &ghost) {
 }
 
 // Helper to create a curried ghost creation function
-inline GhostTypes::Curried<
-    1, std::function<GhostTypes::GhostCreationResult(FGhostConfig)>>
-curriedGhostCreation() {
-  return func::curry<1>(
+inline auto curriedGhostCreation()
+    -> decltype(func::curry<1>(
+        std::function<GhostTypes::GhostCreationResult(FGhostConfig)>())) {
+  std::function<GhostTypes::GhostCreationResult(FGhostConfig)> Creator =
       [](FGhostConfig config) -> GhostTypes::GhostCreationResult {
-        try {
-          FGhost ghost = GhostOps::Create(config);
-          return GhostTypes::make_right(FString(), ghost);
-        } catch (const std::exception &e) {
-          return GhostTypes::make_left(FString(e.what()));
-        }
-      });
+    try {
+      FGhost ghost = GhostOps::Create(config);
+      return GhostTypes::make_right(FString(), ghost);
+    } catch (const std::exception &e) {
+      return GhostTypes::make_left(FString(e.what()), FGhost{});
+    }
+  };
+  return func::curry<1>(Creator);
 }
 } // namespace GhostHelpers

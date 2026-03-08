@@ -14,8 +14,6 @@
 #include "Protocol/ProtocolTypes.h"
 #include "Soul/SoulTypes.h"
 
-#include "Types.generated.h" // UHT generated
-
 // ==========================================================
 // ForbocAI SDK — Data Types (Strict FP with Master Include)
 // ==========================================================

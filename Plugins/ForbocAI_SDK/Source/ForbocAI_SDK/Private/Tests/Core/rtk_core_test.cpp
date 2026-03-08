@@ -7,7 +7,7 @@ using namespace rtk;
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FRtkStoreAndSliceTest,
                                  "ForbocAI.Core.RTK.StoreAndSlice",
-                                 EAutomationTestFlags::ApplicationContextMask |
+                                 EAutomationTestFlags_ApplicationContextMask |
                                      EAutomationTestFlags::EngineFilter)
 bool FRtkStoreAndSliceTest::RunTest(const FString &Parameters) {
   // Build Slice
@@ -22,7 +22,8 @@ bool FRtkStoreAndSliceTest::RunTest(const FString &Parameters) {
 
   auto ResetAction = Builder.createCase(
       TEXT("reset"),
-      [](const FNpcMockState &State, const Action<FEmptyPayload> &Action) {
+      [](const FNpcMockState &State,
+         const Action<rtk::FEmptyPayload> &Action) {
         return FNpcMockState{TEXT(""), 100};
       });
 
@@ -62,7 +63,7 @@ bool FRtkStoreAndSliceTest::RunTest(const FString &Parameters) {
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FRtkConfigureStoreTest,
                                  "ForbocAI.Core.RTK.ConfigureStore",
-                                 EAutomationTestFlags::ApplicationContextMask |
+                                 EAutomationTestFlags_ApplicationContextMask |
                                      EAutomationTestFlags::EngineFilter)
 bool FRtkConfigureStoreTest::RunTest(const FString &Parameters) {
   // 1. Setup Reducer
@@ -98,7 +99,8 @@ bool FRtkConfigureStoreTest::RunTest(const FString &Parameters) {
   TestEqual("Preloaded Health", Store.getState().ActiveNpc.Health, 100);
 
   // 5. Dispatch Action & Validate Middleware Chain + State update
-  Store.dispatch(AnyAction{TEXT("trigger"), std::make_shared<FEmptyPayload>()});
+  Store.dispatch(
+      AnyAction{TEXT("trigger"), std::make_shared<rtk::FEmptyPayload>()});
 
   TestEqual("State Updated", Store.getState().ActiveNpc.Health, 90);
   TestEqual("Middleware Log Length", EventLog.Num(), 1);
