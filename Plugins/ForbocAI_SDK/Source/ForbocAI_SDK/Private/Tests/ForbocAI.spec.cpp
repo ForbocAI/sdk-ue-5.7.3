@@ -1,4 +1,4 @@
-#include "BridgeModule.h"
+#include "Bridge/BridgeModule.h"
 #include "Misc/AutomationTest.h"
 
 DEFINE_SPEC(FForbocAIBridgeSpec, "ForbocAI.Bridge.Validation",

@@ -1,0 +1,67 @@
+#pragma once
+
+#include "CoreMinimal.h"
+#include "Subsystem.generated.h"
+#include "Types.h"
+#include "Subsystems/GameInstanceSubsystem.h"
+
+DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FOnNPCActionReceived, FAgentAction,
+                                            Action);
+DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FOnSoulExportComplete, FString,
+                                            TxId);
+
+/**
+ * Forboc AI SDK Subsystem
+ *
+ * High-level Blueprint-friendly interface to the underlying RTK store and
+ * thunks. Provides a bridge between Unreal's object-oriented visual scripting
+ * and the functional Redux-style core.
+ */
+UCLASS(BlueprintType, Blueprintable)
+class FORBOCAI_SDK_API UForbocAISDKSubsystem : public UGameInstanceSubsystem {
+  GENERATED_BODY()
+
+public:
+  virtual void Initialize(FSubsystemCollectionBase &Collection) override;
+  virtual void Deinitialize() override;
+
+  /**
+   * Initializes the SDK with the provided configuration.
+   */
+  UFUNCTION(BlueprintCallable, Category = "Forboc AI|SDK")
+  void InitSDK(FString ApiKey, FString ApiUrl = TEXT("https://api.forboc.ai"));
+
+  /**
+   * Triggers the recursive protocol loop for an NPC.
+   * This is an asynchronous operation.
+   */
+  UFUNCTION(BlueprintCallable, Category = "Forboc AI|NPC")
+  void ProcessNPC(FString NpcId);
+
+  /**
+   * Exports an NPC's Soul to Arweave.
+   */
+  UFUNCTION(BlueprintCallable, Category = "Forboc AI|Soul")
+  void ExportSoul(FString AgentId);
+
+  /**
+   * Gets the current state of an NPC.
+   */
+  UFUNCTION(BlueprintPure, Category = "Forboc AI|NPC")
+  FAgentState GetNPCState(FString NpcId) const;
+
+  /** Delegate triggered when a new action is received from the NPC. */
+  UPROPERTY(BlueprintAssignable, Category = "Forboc AI|Events")
+  FOnNPCActionReceived OnNPCActionReceived;
+
+  /** Delegate triggered when soul export is complete. */
+  UPROPERTY(BlueprintAssignable, Category = "Forboc AI|Events")
+  FOnSoulExportComplete OnSoulExportComplete;
+
+private:
+  /** The underlying functional Redux store. */
+  TSharedPtr<rtk::EnhancedStore<FSDKState>> SDKStore;
+
+  /** Internal callback for the RTK listener middleware. */
+  void HandleAction(const rtk::AnyAction &Action);
+};

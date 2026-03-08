@@ -23,6 +23,8 @@ FORBOCAI_SDK_API void FreeModel(Context Ctx);
 FORBOCAI_SDK_API FString Infer(Context Ctx, const FString &Prompt,
                                int32 MaxTokens = 512);
 
+FORBOCAI_SDK_API FString Embed(void *Handle, const FString &Text);
+
 } // namespace Llama
 
 namespace Sqlite {

@@ -1,0 +1,67 @@
+#include "Core/rtk.hpp"
+#include "CoreMinimal.h"
+#include "Misc/AutomationTest.h"
+#include "rtk_test_mocks.h"
+
+using namespace rtk;
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FRtkMiddlewareTest,
+                                 "ForbocAI.Core.RTK.Middleware",
+                                 EAutomationTestFlags::ApplicationContextMask |
+                                     EAutomationTestFlags::EngineFilter)
+bool FRtkMiddlewareTest::RunTest(const FString &Parameters) {
+  TArray<FString> EventLog;
+
+  // 1. Setup Base Dispatch and GetState
+  std::function<AnyAction(const AnyAction &)> BaseDispatch =
+      [&EventLog](const AnyAction &Action) {
+        EventLog.Add(FString::Printf(TEXT("BaseDispatch:%s"), *Action.Type));
+        return Action;
+      };
+
+  std::function<FAppMockState()> GetState = []() { return FAppMockState{}; };
+
+  // 2. Setup Middleware A (Logging before and after)
+  Middleware<FAppMockState> MiddlewareA =
+      [&EventLog](const MiddlewareApi<FAppMockState> &Api) {
+        return [&EventLog](NextDispatcher<FAppMockState> Next) {
+          return [&EventLog, Next](const AnyAction &Action) -> AnyAction {
+            EventLog.Add(TEXT("MwA_Before"));
+            auto Result = Next(Action);
+            EventLog.Add(TEXT("MwA_After"));
+            return Result;
+          };
+        };
+      };
+
+  // 3. Setup Listener Middleware (MwB)
+  ListenerMiddleware<FAppMockState> Listeners;
+  Listeners.addListener(TEXT("trigger"),
+                        [&EventLog](const AnyAction &Action,
+                                    const MiddlewareApi<FAppMockState> &Api) {
+                          EventLog.Add(TEXT("Listener_Triggered"));
+                        });
+
+  // 4. Compose
+  std::vector<Middleware<FAppMockState>> Chain = {MiddlewareA,
+                                                  Listeners.getMiddleware()};
+  auto EnhancedDispatch = applyMiddleware(BaseDispatch, GetState, Chain);
+
+  // 5. Execute
+  EnhancedDispatch(
+      AnyAction{TEXT("trigger"), std::make_shared<FEmptyPayload>()});
+
+  // Validate Order
+  TestEqual("Event Log Length", EventLog.Num(), 4);
+  if (EventLog.Num() == 4) {
+    TestEqual("0: MwA wraps everything", EventLog[0],
+              FString(TEXT("MwA_Before")));
+    TestEqual("1: Base runs inside", EventLog[1],
+              FString(TEXT("BaseDispatch:trigger")));
+    TestEqual("2: Listener runs post-reducer inside MwB", EventLog[2],
+              FString(TEXT("Listener_Triggered")));
+    TestEqual("3: MwA finishes", EventLog[3], FString(TEXT("MwA_After")));
+  }
+
+  return true;
+}

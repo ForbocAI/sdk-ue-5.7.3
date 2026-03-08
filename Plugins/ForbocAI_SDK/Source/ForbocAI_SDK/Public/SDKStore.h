@@ -1,15 +1,15 @@
 #pragma once
 
-#include "APISlice.h"
-#include "BridgeSlice.h"
+#include "API/APISlice.h"
+#include "Bridge/BridgeSlice.h"
 #include "Core/rtk.hpp"
 #include "CoreMinimal.h"
-#include "CortexSlice.h"
+#include "Cortex/CortexSlice.h"
 #include "DirectiveSlice.h"
-#include "GhostSlice.h"
-#include "MemorySlice.h"
-#include "NPCSlice.h"
-#include "SoulSlice.h"
+#include "Ghost/GhostSlice.h"
+#include "Memory/MemorySlice.h"
+#include "NPC/NPCSlice.h"
+#include "Soul/SoulSlice.h"
 #include "Thunks.h"
 
 // ===================================
