@@ -35,15 +35,19 @@ inline Action<FEmptyPayload> makeAction(const FString &Type) {
 // Type-erased envelope for heterogeneous root dispatch
 struct AnyAction {
   FString Type;
-  FString type;
   std::shared_ptr<void> PayloadWrapper;
 
   AnyAction() {}
 
   AnyAction(const FString &InType, std::shared_ptr<void> InPayloadWrapper)
-      : Type(InType), type(InType),
+      : Type(InType),
         PayloadWrapper(std::move(InPayloadWrapper)) {}
 
+  // WARNING: This performs an unchecked static_cast on the type-erased
+  // payload. Callers must ensure the requested Payload type matches
+  // the type originally stored. Mismatched types are undefined behavior.
+  // Prefer ActionCreator::extract() which pairs type-string matching
+  // with extraction for safer access.
   template <typename Payload> func::Maybe<Payload> getPayload() const {
     if (!PayloadWrapper) {
       return func::nothing<Payload>();
@@ -151,7 +155,7 @@ template <typename RootState> ReducerCombiner<RootState> combineReducers() {
 // Phase 2: Slice Pattern
 // ==========================================
 
-// 2.3 createAction<P> and Matchers
+// 2.1 createAction<P> and Matchers
 template <typename Payload> struct ActionCreator {
   FString Type;
 
@@ -192,11 +196,9 @@ inline EmptyActionCreator createAction(const FString &Type) {
 template <typename State> struct Slice {
   FString Name;
   CaseReducer<State> Reducer;
-  FString name;
-  CaseReducer<State> reducer;
 };
 
-// 2.1 SliceBuilder for generating slices and binding action creators locally
+// 2.3 SliceBuilder for generating slices and binding action creators locally
 template <typename State> class SliceBuilder {
   FString Name;
   State InitialState;
@@ -287,7 +289,6 @@ public:
   Slice<State> build() const {
     Slice<State> S;
     S.Name = Name;
-    S.name = Name;
     auto DefaultState = InitialState;
     auto Map = Reducers;
 
@@ -298,18 +299,13 @@ public:
       }
       return prevState;
     };
-    S.reducer = S.Reducer;
     return S;
   }
 };
 
-} // namespace rtk
-
 // ==========================================
 // Phase 3: Entity Adapter
 // ==========================================
-
-namespace rtk {
 
 template <typename T> struct EntityState {
   TArray<FString> ids;
@@ -407,7 +403,7 @@ template <typename T> struct EntityAdapterOps {
     return next;
   }
 
-  EntityState<T> removeAll(const EntityState<T> &state) const {
+  EntityState<T> removeAll(const EntityState<T> & /*state*/) const {
     return getInitialState();
   }
 
@@ -457,13 +453,9 @@ createEntityAdapter(std::function<FString(const T &)> selectId) {
   return EntityAdapterOps<T>{std::move(selectId)};
 }
 
-} // namespace rtk
-
 // ==========================================
 // Phase 4: Async Thunks
 // ==========================================
-
-namespace rtk {
 
 template <typename State> struct ThunkApi {
   std::function<AnyAction(const AnyAction &)> dispatch;
@@ -512,7 +504,10 @@ AsyncThunkConfig<Result, Arg, State> createAsyncThunk(
       // 3. Execute payload creator
       auto result = PayloadCreator(arg, api);
 
-      // 4. Chain lifecycle actions using FP core AsyncChain
+      // 4. Chain lifecycle actions using FP core AsyncChain.
+      //    The returned AsyncResult carries both the fulfilled chain and
+      //    the catch_ error handler. The caller is responsible for calling
+      //    .execute() on the returned result to trigger the full chain.
       return func::AsyncChain::then<Result, Result>(
                  result,
                  [dispatch, fulfilled](Result res) {
@@ -533,45 +528,49 @@ AsyncThunkConfig<Result, Arg, State> createAsyncThunk(
                                               rejected, thunkActionCreator};
 }
 
-} // namespace rtk
-
 // ==========================================
 // Phase 5: Middleware
 // ==========================================
-
-namespace rtk {
 
 template <typename State> struct MiddlewareApi {
   std::function<AnyAction(const AnyAction &)> dispatch;
   std::function<State()> getState;
 };
 
-template <typename State>
-using NextDispatcher = std::function<AnyAction(const AnyAction &)>;
+// Dispatch function type used throughout the middleware chain.
+using Dispatcher = std::function<AnyAction(const AnyAction &)>;
 
 template <typename State>
 using Middleware =
-    std::function<std::function<NextDispatcher<State>(NextDispatcher<State>)>(
+    std::function<std::function<Dispatcher(Dispatcher)>(
         const MiddlewareApi<State> &)>;
 
 template <typename State>
-std::function<AnyAction(const AnyAction &)>
-applyMiddleware(std::function<AnyAction(const AnyAction &)> baseDispatch,
+Dispatcher
+applyMiddleware(Dispatcher baseDispatch,
                 std::function<State()> getState,
                 const std::vector<Middleware<State>> &middlewares) {
+  // Use shared_ptr so middleware closures can reference the final enhanced
+  // dispatch through indirection, matching RTK's actual behavior.
+  auto enhancedDispatch = std::make_shared<Dispatcher>(baseDispatch);
+
   auto api = MiddlewareApi<State>{
-      baseDispatch, // Usually overwritten by the composed chain in actual TS
-                    // `applyMiddleware` implementation, but simplified here to
-                    // match UE constraints.
+      // Trampoline: always calls through the fully composed chain
+      [enhancedDispatch](const AnyAction &action) -> AnyAction {
+        return (*enhancedDispatch)(action);
+      },
       getState};
 
-  NextDispatcher<State> currentDispatch = baseDispatch;
+  Dispatcher currentDispatch = baseDispatch;
 
   // Compose in reverse so that the first middleware in the vector wraps the
   // later ones
   for (auto it = middlewares.rbegin(); it != middlewares.rend(); ++it) {
     currentDispatch = (*it)(api)(currentDispatch);
   }
+
+  // Point the shared dispatch at the fully composed chain
+  *enhancedDispatch = currentDispatch;
 
   return currentDispatch;
 }
@@ -587,15 +586,17 @@ template <typename State> struct ListenerMiddleware {
   }
 
   Middleware<State> getMiddleware() const {
-    return [this](const MiddlewareApi<State> &api)
-               -> std::function<NextDispatcher<State>(NextDispatcher<State>)> {
-      return [this, api](NextDispatcher<State> next) -> NextDispatcher<State> {
-        return [this, api, next](const AnyAction &action) -> AnyAction {
+    // Capture listeners by value to avoid lifetime dependence on this
+    auto listenersCopy = listeners;
+    return [listenersCopy](const MiddlewareApi<State> &api)
+               -> std::function<Dispatcher(Dispatcher)> {
+      return [listenersCopy, api](Dispatcher next) -> Dispatcher {
+        return [listenersCopy, api, next](const AnyAction &action) -> AnyAction {
           // Propagate to reducers first
           auto resultAction = next(action);
 
           // Then execute listener effects
-          if (const auto *activeListeners = listeners.Find(action.Type)) {
+          if (const auto *activeListeners = listenersCopy.Find(action.Type)) {
             for (const auto &effect : *activeListeners) {
               effect(action, api);
             }
@@ -608,13 +609,9 @@ template <typename State> struct ListenerMiddleware {
   }
 };
 
-} // namespace rtk
-
 // ==========================================
 // Phase 6: Selectors
 // ==========================================
-
-namespace rtk {
 
 namespace detail {
 template <typename Result, typename State, typename Combiner,
@@ -644,13 +641,9 @@ std::function<Result(const State &)> createSelector(
       };
 }
 
-} // namespace rtk
-
 // ==========================================
 // Phase 7: RTK Query Equivalent (API Slice)
 // ==========================================
-
-namespace rtk {
 
 struct FApiEndpointTag {
   FString Type;
@@ -682,24 +675,26 @@ template <typename State> struct ApiSlice {
   injectEndpoint(const ApiEndpoint<Arg, Result> &EndpointDesc) {
     FString ThunkPrefix = ReducerPath + TEXT("/") + EndpointDesc.EndpointName;
 
-      return createAsyncThunk<Result, Arg, State>(
-          ThunkPrefix,
-          [EndpointDesc](const Arg &arg, const ThunkApi<State> &api)
-              -> func::AsyncResult<Result> {
+    return createAsyncThunk<Result, Arg, State>(
+        ThunkPrefix,
+        [EndpointDesc](const Arg &arg, const ThunkApi<State> &api)
+            -> func::AsyncResult<Result> {
           // Execute the provided HTTP Request
           return func::AsyncChain::then<func::HttpResult<Result>, Result>(
               EndpointDesc.RequestBuilder(arg),
               [](func::HttpResult<Result> httpRes) {
-                // RTK Query unwraps the payload on success or rejects on HTTP
-                // failure
+                // RTK Query unwraps the payload on success or rejects on
+                // HTTP failure
                 if (httpRes.bSuccess) {
                   return func::AsyncResult<Result>::create(
-                      [httpRes](auto Resolve, auto Reject) {
+                      [httpRes](std::function<void(Result)> Resolve,
+                                std::function<void(std::string)> Reject) {
                         Resolve(httpRes.data);
                       });
                 } else {
                   return func::AsyncResult<Result>::create(
-                      [httpRes](auto Resolve, auto Reject) {
+                      [httpRes](std::function<void(Result)> Resolve,
+                                std::function<void(std::string)> Reject) {
                         Reject(httpRes.error);
                       });
                 }
@@ -708,17 +703,13 @@ template <typename State> struct ApiSlice {
   }
 };
 
-} // namespace rtk
-
 // ==========================================
 // Phase 8: Store Configuration
 // ==========================================
 
-namespace rtk {
-
 template <typename State> struct EnhancedStore {
   std::shared_ptr<Store<State>> CoreStore;
-  std::function<AnyAction(const AnyAction &)> Dispatch;
+  Dispatcher Dispatch;
 
   const State &getState() const { return CoreStore->getState(); }
 
@@ -746,7 +737,7 @@ configureStore(CaseReducer<State> rootReducer, State preloadedState,
                                                   std::move(rootReducer));
   enhanced.CoreStore = coreStore;
 
-  auto coreDispatch = [coreStore](const AnyAction &action) -> AnyAction {
+  Dispatcher coreDispatch = [coreStore](const AnyAction &action) -> AnyAction {
     return coreStore->dispatch(action);
   };
 

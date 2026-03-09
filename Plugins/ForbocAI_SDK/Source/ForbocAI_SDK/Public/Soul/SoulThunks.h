@@ -1,0 +1,246 @@
+#pragma once
+
+#include "Core/ThunkDetail.h"
+#include "Memory/MemorySlice.h"
+#include "NPC/NPCSlice.h"
+#include "Soul/SoulSlice.h"
+
+namespace rtk {
+
+// ---------------------------------------------------------------------------
+// Soul thunks (mirrors TS soulSlice.ts)
+// ---------------------------------------------------------------------------
+
+inline ThunkAction<FSoulExportResult, FSDKState>
+exportSoulThunk(const FString &NpcId) {
+  return [NpcId](std::function<AnyAction(const AnyAction &)> Dispatch,
+                 std::function<FSDKState()> GetState)
+             -> func::AsyncResult<FSoulExportResult> {
+    const auto Npc = NPCSlice::SelectNPCById(GetState().NPCs, NpcId);
+    if (!Npc.hasValue) {
+      return detail::RejectAsync<FSoulExportResult>(TEXT("NPC not found"));
+    }
+
+    Dispatch(SoulSlice::Actions::RemoteExportSoulPending());
+
+    const FSoulExportPhase1Request Request =
+        TypeFactory::SoulExportPhase1Request(NpcId, Npc.value.Persona,
+                                             Npc.value.State);
+
+    return func::AsyncChain::then<FSoulExportPhase1Response, FSoulExportResult>(
+        APISlice::Endpoints::postSoulExport(NpcId, Request)(Dispatch, GetState),
+        [NpcId, Dispatch, GetState](const FSoulExportPhase1Response &Phase1) {
+          return func::AsyncChain::then<FArweaveUploadResult, FSoulExportResult>(
+              detail::UploadSignedSoul(Phase1.se1Instruction,
+                                       Phase1.se1SignedPayload),
+              [NpcId, Phase1, Dispatch,
+               GetState](const FArweaveUploadResult &UploadResult) {
+                const FSoulExportConfirmRequest Confirm =
+                    TypeFactory::SoulExportConfirmRequest(
+                        UploadResult, Phase1.se1SignedPayload,
+                        Phase1.se1Signature);
+
+                return func::AsyncChain::then<FSoulExportResponse,
+                                              FSoulExportResult>(
+                    APISlice::Endpoints::postSoulExportConfirm(NpcId, Confirm)(
+                        Dispatch, GetState),
+                    [Dispatch](const FSoulExportResponse &Response) {
+                      const FSoulExportResult Result =
+                          TypeFactory::SoulExportResult(Response.TxId,
+                                                        Response.ArweaveUrl,
+                                                        Response.Soul);
+                      Dispatch(
+                          SoulSlice::Actions::RemoteExportSoulSuccess(Result));
+                      return detail::ResolveAsync(Result);
+                    });
+              });
+        })
+        .catch_([Dispatch](std::string Error) {
+          Dispatch(SoulSlice::Actions::RemoteExportSoulFailed(
+              FString(UTF8_TO_TCHAR(Error.c_str()))));
+        });
+  };
+}
+
+inline ThunkAction<FSoulExportResult, FSDKState>
+exportSoulThunk(const FSoul &Soul) {
+  return [Soul](std::function<AnyAction(const AnyAction &)> Dispatch,
+                std::function<FSDKState()> GetState)
+             -> func::AsyncResult<FSoulExportResult> {
+    if (Soul.Id.IsEmpty()) {
+      return detail::RejectAsync<FSoulExportResult>(TEXT("Soul ID is required"));
+    }
+
+    Dispatch(SoulSlice::Actions::RemoteExportSoulPending());
+
+    const FSoulExportPhase1Request Request =
+        TypeFactory::SoulExportPhase1Request(Soul.Id, Soul.Persona, Soul.State);
+
+    return func::AsyncChain::then<FSoulExportPhase1Response, FSoulExportResult>(
+        APISlice::Endpoints::postSoulExport(Soul.Id, Request)(Dispatch, GetState),
+        [Soul, Dispatch, GetState](const FSoulExportPhase1Response &Phase1) {
+          return func::AsyncChain::then<FArweaveUploadResult, FSoulExportResult>(
+              detail::UploadSignedSoul(Phase1.se1Instruction,
+                                       Phase1.se1SignedPayload),
+              [Soul, Phase1, Dispatch,
+               GetState](const FArweaveUploadResult &UploadResult) {
+                const FSoulExportConfirmRequest Confirm =
+                    TypeFactory::SoulExportConfirmRequest(
+                        UploadResult, Phase1.se1SignedPayload,
+                        Phase1.se1Signature);
+
+                return func::AsyncChain::then<FSoulExportResponse,
+                                              FSoulExportResult>(
+                    APISlice::Endpoints::postSoulExportConfirm(Soul.Id, Confirm)(
+                        Dispatch, GetState),
+                    [Soul, Dispatch](const FSoulExportResponse &Response) {
+                      const FSoulExportResult Result =
+                          TypeFactory::SoulExportResult(
+                              Response.TxId, Response.ArweaveUrl,
+                              Response.Soul.Id.IsEmpty() ? Soul : Response.Soul);
+                      Dispatch(
+                          SoulSlice::Actions::RemoteExportSoulSuccess(Result));
+                      return detail::ResolveAsync(Result);
+                    });
+              });
+        })
+        .catch_([Dispatch](std::string Error) {
+          Dispatch(SoulSlice::Actions::RemoteExportSoulFailed(
+              FString(UTF8_TO_TCHAR(Error.c_str()))));
+        });
+  };
+}
+
+inline ThunkAction<FSoul, FSDKState>
+importSoulThunk(const FString &TxId) {
+  return [TxId](std::function<AnyAction(const AnyAction &)> Dispatch,
+                std::function<FSDKState()> GetState)
+             -> func::AsyncResult<FSoul> {
+    Dispatch(SoulSlice::Actions::ImportSoulPending());
+
+    return func::AsyncChain::then<FSoulImportPhase1Response, FSoul>(
+        APISlice::Endpoints::postNpcImport(
+            TypeFactory::SoulImportPhase1Request(TxId))(Dispatch, GetState),
+        [TxId, Dispatch, GetState](const FSoulImportPhase1Response &Phase1) {
+          return func::AsyncChain::then<FArweaveDownloadResult, FSoul>(
+              detail::DownloadSoulPayload(Phase1.si1Instruction),
+              [TxId, Dispatch,
+               GetState](const FArweaveDownloadResult &DownloadResult) {
+                return func::AsyncChain::then<FImportedNpc, FSoul>(
+                    APISlice::Endpoints::postNpcImportConfirm(
+                        TypeFactory::SoulImportConfirmRequest(
+                            TxId, DownloadResult))(Dispatch, GetState),
+                    [Dispatch, TxId](const FImportedNpc &ImportedNpc) {
+                      FSoul Soul = TypeFactory::Soul(
+                          ImportedNpc.NpcId.IsEmpty() ? TxId : ImportedNpc.NpcId,
+                          TEXT("2.0.0"), ImportedNpc.NpcId,
+                          ImportedNpc.Persona,
+                          TypeFactory::AgentState(ImportedNpc.DataJson),
+                          TArray<FMemoryItem>());
+                      Dispatch(SoulSlice::Actions::ImportSoulSuccess(Soul));
+                      return detail::ResolveAsync(Soul);
+                    });
+              });
+        })
+        .catch_([Dispatch](std::string Error) {
+          Dispatch(SoulSlice::Actions::ImportSoulFailed(
+              FString(UTF8_TO_TCHAR(Error.c_str()))));
+        });
+  };
+}
+
+// ---------------------------------------------------------------------------
+// Soul convenience thunks
+// ---------------------------------------------------------------------------
+
+inline ThunkAction<FSoul, FSDKState>
+localExportSoulThunk(const FString &NpcId = TEXT("")) {
+  return [NpcId](std::function<AnyAction(const AnyAction &)> Dispatch,
+                 std::function<FSDKState()> GetState)
+             -> func::AsyncResult<FSoul> {
+    const FString TargetNpcId =
+        NpcId.IsEmpty() ? NPCSlice::SelectActiveNpcId(GetState().NPCs) : NpcId;
+    const auto Npc = NPCSlice::SelectNPCById(GetState().NPCs, TargetNpcId);
+    if (!Npc.hasValue) {
+      return detail::RejectAsync<FSoul>(TEXT("NPC not found"));
+    }
+
+    return detail::ResolveAsync(TypeFactory::Soul(
+        TargetNpcId, SDKConfig::GetSdkVersion(),
+        Npc.value.Persona.IsEmpty() ? TargetNpcId : Npc.value.Persona,
+        Npc.value.Persona, Npc.value.State,
+        MemorySlice::SelectAllMemories(GetState().Memory)));
+  };
+}
+
+inline ThunkAction<FSoulExportResult, FSDKState>
+remoteExportSoulThunk(const FString &NpcId = TEXT("")) {
+  return [NpcId](std::function<AnyAction(const AnyAction &)> Dispatch,
+                 std::function<FSDKState()> GetState)
+             -> func::AsyncResult<FSoulExportResult> {
+    const FString TargetNpcId =
+        NpcId.IsEmpty() ? NPCSlice::SelectActiveNpcId(GetState().NPCs) : NpcId;
+    return exportSoulThunk(TargetNpcId)(Dispatch, GetState);
+  };
+}
+
+inline ThunkAction<FSoul, FSDKState>
+importSoulFromArweaveThunk(const FString &TxId) {
+  return importSoulThunk(TxId);
+}
+
+inline ThunkAction<TArray<FSoulListItem>, FSDKState>
+getSoulListThunk(int32 Limit = 50) {
+  return [Limit](std::function<AnyAction(const AnyAction &)> Dispatch,
+                 std::function<FSDKState()> GetState)
+             -> func::AsyncResult<TArray<FSoulListItem>> {
+    return func::AsyncChain::then<FSoulListResponse, TArray<FSoulListItem>>(
+        APISlice::Endpoints::getSouls(Limit)(Dispatch, GetState),
+        [Dispatch](const FSoulListResponse &Response) {
+          Dispatch(SoulSlice::Actions::SetSoulList(Response.Souls));
+          return detail::ResolveAsync(Response.Souls);
+        });
+  };
+}
+
+inline ThunkAction<FSoulVerifyResult, FSDKState>
+verifySoulThunk(const FString &TxId) {
+  return [TxId](std::function<AnyAction(const AnyAction &)> Dispatch,
+                std::function<FSDKState()> GetState)
+             -> func::AsyncResult<FSoulVerifyResult> {
+    return APISlice::Endpoints::postSoulVerify(TxId)(Dispatch, GetState);
+  };
+}
+
+inline ThunkAction<FImportedNpc, FSDKState>
+importNpcFromSoulThunk(const FString &TxId) {
+  return [TxId](std::function<AnyAction(const AnyAction &)> Dispatch,
+                std::function<FSDKState()> GetState)
+             -> func::AsyncResult<FImportedNpc> {
+    return func::AsyncChain::then<FSoulImportPhase1Response, FImportedNpc>(
+        APISlice::Endpoints::postNpcImport(
+            TypeFactory::SoulImportPhase1Request(TxId))(Dispatch, GetState),
+        [TxId, Dispatch, GetState](const FSoulImportPhase1Response &Phase1) {
+          return func::AsyncChain::then<FArweaveDownloadResult, FImportedNpc>(
+              detail::DownloadSoulPayload(Phase1.si1Instruction),
+              [TxId, Dispatch,
+               GetState](const FArweaveDownloadResult &DownloadResult) {
+                return func::AsyncChain::then<FImportedNpc, FImportedNpc>(
+                    APISlice::Endpoints::postNpcImportConfirm(
+                        TypeFactory::SoulImportConfirmRequest(
+                            TxId, DownloadResult))(Dispatch, GetState),
+                    [Dispatch, TxId](const FImportedNpc &ImportedNpc) {
+                      FNPCInternalState Npc;
+                      Npc.Id = ImportedNpc.NpcId.IsEmpty() ? TxId
+                                                           : ImportedNpc.NpcId;
+                      Npc.Persona = ImportedNpc.Persona;
+                      Npc.State = TypeFactory::AgentState(ImportedNpc.DataJson);
+                      Dispatch(NPCSlice::Actions::SetNPCInfo(Npc));
+                      return detail::ResolveAsync(ImportedNpc);
+                    });
+              });
+        });
+  };
+}
+
+} // namespace rtk

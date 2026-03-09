@@ -2,7 +2,8 @@
 #include "NPC/NPCSlice.h"
 #include "SDKConfig.h"
 #include "SDKStore.h"
-#include "Thunks.h"
+#include "Protocol/ProtocolThunks.h"
+#include "Soul/SoulThunks.h"
 
 void UForbocAISDKSubsystem::Initialize(FSubsystemCollectionBase &Collection) {
   Super::Initialize(Collection);

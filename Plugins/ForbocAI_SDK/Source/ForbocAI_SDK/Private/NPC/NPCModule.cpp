@@ -92,7 +92,7 @@ FAgentState AgentOps::CalculateNewState(const FAgentState &Current,
 }
 
 #include "SDKStore.h"
-#include "Thunks.h"
+#include "Protocol/ProtocolThunks.h"
 
 AgentTypes::AsyncResult<FAgentResponse>
 AgentOps::Process(const FAgent &Agent, const FString &Input,

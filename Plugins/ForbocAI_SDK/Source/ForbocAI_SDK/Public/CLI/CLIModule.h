@@ -1,67 +1,25 @@
 #pragma once
 
 #include "CoreMinimal.h"
-#include "Types.h"
 #include "Core/functional_core.hpp"
 
-// Functional Core Type Aliases for CLI operations
-namespace CLITypes {
-using func::AsyncResult;
-using func::Either;
-using func::Maybe;
-using func::TestResult;
-using func::ValidationPipeline;
-
-using func::make_left;
-using func::make_right;
-} // namespace CLITypes
-
 /**
- * CLI Operations - Functional implementation of CLI commands.
+ * CLI Module — Pure command router.
+ *
+ * Parses command keys and delegates to SDKOps functions.
+ * No business logic lives here — all operations go through the store.
+ * Mirrors TS cli.ts which routes to sdkOps.ts.
  */
 namespace CLIOps {
 
 /**
- * Prints status of the system (Doctor).
- * @param ApiUrl The API endpoint to check.
- * @return A TestResult indicating success or failure.
+ * Dispatches a CLI command through the SDK store.
+ * @param CommandKey  Command in "domain_action" format (e.g. "npc_create",
+ *                    "memory_list", "ghost_run", "soul_export").
+ * @param Args        Positional arguments for the command.
+ * @return TestResult indicating success or failure with message.
  */
-FORBOCAI_SDK_API CLITypes::TestResult<void> Doctor(const FString &ApiUrl);
-
-/**
- * Lists all agents.
- * @param ApiUrl The API endpoint.
- * @return A TestResult indicating success or failure.
- */
-FORBOCAI_SDK_API CLITypes::TestResult<void> ListAgents(const FString &ApiUrl);
-
-/**
- * Creates an agent.
- * @param ApiUrl The API endpoint.
- * @param Persona The persona of the new agent.
- * @return A TestResult indicating success or failure.
- */
-FORBOCAI_SDK_API CLITypes::TestResult<void> CreateAgent(const FString &ApiUrl,
-                                                        const FString &Persona);
-
-/**
- * Sends a single message to an agent.
- * @param ApiUrl The API endpoint.
- * @param AgentId The ID of the target agent.
- * @param Input The input message/command.
- * @return A TestResult indicating success or failure.
- */
-FORBOCAI_SDK_API CLITypes::TestResult<void> ProcessAgent(const FString &ApiUrl,
-                                                         const FString &AgentId,
-                                                         const FString &Input);
-
-/**
- * Exports a soul.
- * @param ApiUrl The API endpoint.
- * @param AgentId The ID of the agent to export.
- * @return A TestResult indicating success or failure.
- */
-FORBOCAI_SDK_API CLITypes::TestResult<void> ExportSoul(const FString &ApiUrl,
-                                                       const FString &AgentId);
+FORBOCAI_SDK_API func::TestResult<void>
+DispatchCommand(const FString &CommandKey, const TArray<FString> &Args);
 
 } // namespace CLIOps

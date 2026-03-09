@@ -1,0 +1,117 @@
+#pragma once
+
+#include "Core/ThunkDetail.h"
+#include "Ghost/GhostSlice.h"
+
+namespace rtk {
+
+// ---------------------------------------------------------------------------
+// Ghost thunks (mirrors TS ghostSlice.ts)
+// ---------------------------------------------------------------------------
+
+inline ThunkAction<FGhostRunResponse, FSDKState>
+startGhostThunk(const FGhostConfig &Config) {
+  return [Config](std::function<AnyAction(const AnyAction &)> Dispatch,
+                  std::function<FSDKState()> GetState)
+             -> func::AsyncResult<FGhostRunResponse> {
+    return func::AsyncChain::then<FGhostRunResponse, FGhostRunResponse>(
+        APISlice::Endpoints::postGhostRun(Config)(Dispatch, GetState),
+        [Dispatch](const FGhostRunResponse &Response) {
+          Dispatch(GhostSlice::Actions::GhostSessionStarted(
+              Response.SessionId, Response.RunStatus));
+          return detail::ResolveAsync(Response);
+        });
+  };
+}
+
+inline ThunkAction<FGhostStatusResponse, FSDKState>
+getGhostStatusThunk(const FString &SessionId) {
+  return [SessionId](std::function<AnyAction(const AnyAction &)> Dispatch,
+                     std::function<FSDKState()> GetState)
+             -> func::AsyncResult<FGhostStatusResponse> {
+    return func::AsyncChain::then<FGhostStatusResponse, FGhostStatusResponse>(
+        APISlice::Endpoints::getGhostStatus(SessionId)(Dispatch, GetState),
+        [Dispatch](const FGhostStatusResponse &Response) {
+          Dispatch(GhostSlice::Actions::GhostSessionProgress(
+              Response.GhostSessionId.IsEmpty() ? TEXT("") : Response.GhostSessionId,
+              Response.GhostStatus, Response.GhostProgress));
+          return detail::ResolveAsync(Response);
+        });
+  };
+}
+
+inline ThunkAction<FGhostResultsResponse, FSDKState>
+getGhostResultsThunk(const FString &SessionId) {
+  return [SessionId](std::function<AnyAction(const AnyAction &)> Dispatch,
+                     std::function<FSDKState()> GetState)
+             -> func::AsyncResult<FGhostResultsResponse> {
+    return func::AsyncChain::then<FGhostResultsResponse,
+                                  FGhostResultsResponse>(
+        APISlice::Endpoints::getGhostResults(SessionId)(Dispatch, GetState),
+        [Dispatch](const FGhostResultsResponse &Response) {
+          FGhostTestReport Report;
+          Report.TotalTests = Response.ResultsTotalTests;
+          Report.PassedTests = Response.ResultsPassed;
+          Report.FailedTests = Response.ResultsFailed;
+          Report.SuccessRate =
+              Response.ResultsTotalTests > 0
+                  ? static_cast<float>(Response.ResultsPassed) /
+                        static_cast<float>(Response.ResultsTotalTests)
+                  : 0.0f;
+          Report.Summary = FString::Printf(TEXT("%d/%d passed"),
+                                           Response.ResultsPassed,
+                                           Response.ResultsTotalTests);
+
+          for (int32 Index = 0; Index < Response.ResultsTests.Num(); ++Index) {
+            const FGhostResultRecord &Record = Response.ResultsTests[Index];
+            FGhostTestResult TestResult;
+            TestResult.Scenario = Record.TestName;
+            TestResult.bPassed = Record.bTestPassed;
+            TestResult.Duration = Record.TestDuration;
+            TestResult.ErrorMessage = Record.TestError;
+            Report.Results.Add(TestResult);
+          }
+
+          Dispatch(GhostSlice::Actions::GhostSessionCompleted(Report));
+          return detail::ResolveAsync(Response);
+        });
+  };
+}
+
+inline ThunkAction<FGhostStopResponse, FSDKState>
+stopGhostThunk(const FString &SessionId) {
+  return [SessionId](std::function<AnyAction(const AnyAction &)> Dispatch,
+                     std::function<FSDKState()> GetState)
+             -> func::AsyncResult<FGhostStopResponse> {
+    return func::AsyncChain::then<FGhostStopResponse, FGhostStopResponse>(
+        APISlice::Endpoints::postGhostStop(SessionId)(Dispatch, GetState),
+        [Dispatch, SessionId](const FGhostStopResponse &Response) {
+          if (Response.bStopped) {
+            Dispatch(GhostSlice::Actions::GhostSessionProgress(
+                Response.StopSessionId.IsEmpty() ? SessionId
+                                                 : Response.StopSessionId,
+                Response.StopStatus.IsEmpty() ? TEXT("stopped")
+                                              : Response.StopStatus,
+                1.0f));
+          }
+          return detail::ResolveAsync(Response);
+        });
+  };
+}
+
+inline ThunkAction<TArray<FGhostHistoryEntry>, FSDKState>
+getGhostHistoryThunk(int32 Limit = 10) {
+  return [Limit](std::function<AnyAction(const AnyAction &)> Dispatch,
+                 std::function<FSDKState()> GetState)
+             -> func::AsyncResult<TArray<FGhostHistoryEntry>> {
+    return func::AsyncChain::then<FGhostHistoryResponse,
+                                  TArray<FGhostHistoryEntry>>(
+        APISlice::Endpoints::getGhostHistory(Limit)(Dispatch, GetState),
+        [Dispatch](const FGhostHistoryResponse &Response) {
+          Dispatch(GhostSlice::Actions::GhostHistoryLoaded(Response.Sessions));
+          return detail::ResolveAsync(Response.Sessions);
+        });
+  };
+}
+
+} // namespace rtk

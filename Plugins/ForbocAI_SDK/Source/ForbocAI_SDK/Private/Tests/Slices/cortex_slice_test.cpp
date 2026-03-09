@@ -1,0 +1,121 @@
+#include "Core/rtk.hpp"
+#include "CoreMinimal.h"
+#include "Cortex/CortexSlice.h"
+#include "Misc/AutomationTest.h"
+
+using namespace rtk;
+using namespace CortexSlice;
+
+// ---------------------------------------------------------------------------
+// Test: CortexInit Pending / Success / Failed lifecycle
+// ---------------------------------------------------------------------------
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FCortexSliceInitTest,
+                                 "ForbocAI.Slices.Cortex.InitLifecycle",
+                                 EAutomationTestFlags_ApplicationContextMask |
+                                     EAutomationTestFlags::EngineFilter)
+bool FCortexSliceInitTest::RunTest(const FString &Parameters) {
+  Slice<FCortexSliceState> CSlice = CreateCortexSlice();
+  FCortexSliceState State;
+
+  // Initial
+  TestTrue("Initial status Idle",
+           State.Status == ECortexEngineStatus::Idle);
+
+  // Pending
+  State = CSlice.Reducer(
+      State, Actions::CortexInitPending(TEXT("llama-3.2-1b")));
+  TestTrue("Status Initializing",
+           State.Status == ECortexEngineStatus::Initializing);
+  TestEqual("Model set", State.EngineStatus.Model,
+            FString(TEXT("llama-3.2-1b")));
+  TestTrue("Error cleared", State.Error.IsEmpty());
+
+  // Success
+  FCortexStatus CortexStatus;
+  CortexStatus.Model = TEXT("llama-3.2-1b");
+  CortexStatus.bReady = true;
+  State = CSlice.Reducer(State, Actions::CortexInitFulfilled(CortexStatus));
+  TestTrue("Status Ready", State.Status == ECortexEngineStatus::Ready);
+  TestTrue("Engine ready", State.EngineStatus.bReady);
+
+  return true;
+}
+
+// ---------------------------------------------------------------------------
+// Test: CortexInit Failed
+// ---------------------------------------------------------------------------
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FCortexSliceInitFailTest,
+                                 "ForbocAI.Slices.Cortex.InitFailed",
+                                 EAutomationTestFlags_ApplicationContextMask |
+                                     EAutomationTestFlags::EngineFilter)
+bool FCortexSliceInitFailTest::RunTest(const FString &Parameters) {
+  Slice<FCortexSliceState> CSlice = CreateCortexSlice();
+  FCortexSliceState State;
+
+  State = CSlice.Reducer(
+      State, Actions::CortexInitPending(TEXT("bad-model")));
+  State = CSlice.Reducer(
+      State, Actions::CortexInitRejected(TEXT("Model not found")));
+
+  TestTrue("Status Error", State.Status == ECortexEngineStatus::Error);
+  TestEqual("Error message", State.Error, FString(TEXT("Model not found")));
+  TestEqual("EngineStatus error", State.EngineStatus.Error,
+            FString(TEXT("Model not found")));
+
+  return true;
+}
+
+// ---------------------------------------------------------------------------
+// Test: CortexComplete Pending / Success / Failed lifecycle
+// ---------------------------------------------------------------------------
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FCortexSliceCompleteTest,
+                                 "ForbocAI.Slices.Cortex.CompleteLifecycle",
+                                 EAutomationTestFlags_ApplicationContextMask |
+                                     EAutomationTestFlags::EngineFilter)
+bool FCortexSliceCompleteTest::RunTest(const FString &Parameters) {
+  Slice<FCortexSliceState> CSlice = CreateCortexSlice();
+  FCortexSliceState State;
+
+  // Init first
+  FCortexStatus CortexStatus;
+  CortexStatus.Model = TEXT("llama-3.2-1b");
+  CortexStatus.bReady = true;
+  State = CSlice.Reducer(State, Actions::CortexInitFulfilled(CortexStatus));
+
+  // Complete Pending
+  State = CSlice.Reducer(
+      State, Actions::CortexCompletePending(TEXT("What is the meaning?")));
+  TestEqual("LastPrompt set", State.LastPrompt,
+            FString(TEXT("What is the meaning?")));
+  TestTrue("Error cleared on pending", State.Error.IsEmpty());
+
+  // Complete Success
+  FCortexResponse Response;
+  Response.Text = TEXT("42");
+  State = CSlice.Reducer(State, Actions::CortexCompleteFulfilled(Response));
+  TestEqual("LastResponseText set", State.LastResponseText,
+            FString(TEXT("42")));
+
+  return true;
+}
+
+// ---------------------------------------------------------------------------
+// Test: CortexComplete Failed
+// ---------------------------------------------------------------------------
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FCortexSliceCompleteFailTest,
+                                 "ForbocAI.Slices.Cortex.CompleteFailed",
+                                 EAutomationTestFlags_ApplicationContextMask |
+                                     EAutomationTestFlags::EngineFilter)
+bool FCortexSliceCompleteFailTest::RunTest(const FString &Parameters) {
+  Slice<FCortexSliceState> CSlice = CreateCortexSlice();
+  FCortexSliceState State;
+
+  State = CSlice.Reducer(
+      State, Actions::CortexCompletePending(TEXT("Hello")));
+  State = CSlice.Reducer(
+      State, Actions::CortexCompleteRejected(TEXT("OOM")));
+
+  TestEqual("Error set", State.Error, FString(TEXT("OOM")));
+
+  return true;
+}

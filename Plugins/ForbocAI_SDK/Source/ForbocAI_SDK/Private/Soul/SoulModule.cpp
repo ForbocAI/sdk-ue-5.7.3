@@ -7,7 +7,7 @@
 #include "SDKStore.h"
 #include "Serialization/JsonSerializer.h"
 #include "Soul/SoulSlice.h"
-#include "Thunks.h"
+#include "Soul/SoulThunks.h"
 
 // ==========================================
 // SOUL OPERATIONS — Pure free functions

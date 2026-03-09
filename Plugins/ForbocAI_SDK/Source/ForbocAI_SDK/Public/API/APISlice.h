@@ -56,34 +56,40 @@ MakeEndpoint(const FString &EndpointName, const Arg &ArgValue,
 
 template <typename Result>
 inline ThunkAction<Result, FSDKState>
-MakeGet(const FString &EndpointName, const FString &Url) {
+MakeGet(const FString &EndpointName, const FString &Url,
+        const TArray<FApiEndpointTag> &Tags = TArray<FApiEndpointTag>()) {
   return MakeEndpoint<rtk::FEmptyPayload, Result>(
       EndpointName, rtk::FEmptyPayload{},
       [Url](const rtk::FEmptyPayload &) {
         return func::AsyncHttp::Get<Result>(Url, SDKConfig::GetApiKey());
-      });
+      },
+      Tags);
 }
 
 template <typename Request, typename Result>
 inline ThunkAction<Result, FSDKState>
 MakePost(const FString &EndpointName, const FString &Url,
-         const Request &RequestValue) {
+         const Request &RequestValue,
+         const TArray<FApiEndpointTag> &Invalidates = TArray<FApiEndpointTag>()) {
   return MakeEndpoint<Request, Result>(
       EndpointName, RequestValue,
       [Url](const Request &Arg) {
         return func::AsyncHttp::Post<Result>(Url, ToJson(Arg),
                                              SDKConfig::GetApiKey());
-      });
+      },
+      TArray<FApiEndpointTag>(), Invalidates);
 }
 
 template <typename Result>
 inline ThunkAction<Result, FSDKState>
-MakeDelete(const FString &EndpointName, const FString &Url) {
+MakeDelete(const FString &EndpointName, const FString &Url,
+           const TArray<FApiEndpointTag> &Invalidates = TArray<FApiEndpointTag>()) {
   return MakeEndpoint<rtk::FEmptyPayload, Result>(
       EndpointName, rtk::FEmptyPayload{},
       [Url](const rtk::FEmptyPayload &) {
         return func::AsyncHttp::Delete<Result>(Url, SDKConfig::GetApiKey());
-      });
+      },
+      TArray<FApiEndpointTag>(), Invalidates);
 }
 
 } // namespace Detail
@@ -91,9 +97,12 @@ MakeDelete(const FString &EndpointName, const FString &Url) {
 namespace Endpoints {
 
 inline auto getNPCs() {
+  TArray<FApiEndpointTag> Tags;
+  Tags.Add(FApiEndpointTag{TEXT("NPC"), TEXT("LIST")});
   return Detail::MakeGet<TArray<FAgent>>(TEXT("getNPCs"),
                                          SDKConfig::GetApiUrl() +
-                                             TEXT("/npcs"));
+                                             TEXT("/npcs"),
+                                         Tags);
 }
 
 inline auto getNPC(const FString &NpcId) {
@@ -103,8 +112,11 @@ inline auto getNPC(const FString &NpcId) {
 }
 
 inline auto postNPC(const FAgentConfig &Config) {
+  TArray<FApiEndpointTag> Invalidates;
+  Invalidates.Add(FApiEndpointTag{TEXT("NPC"), TEXT("LIST")});
   return Detail::MakePost<FAgentConfig, FAgent>(
-      TEXT("postNPC"), SDKConfig::GetApiUrl() + TEXT("/npcs"), Config);
+      TEXT("postNPC"), SDKConfig::GetApiUrl() + TEXT("/npcs"), Config,
+      Invalidates);
 }
 
 inline auto getApiStatus() {
@@ -167,11 +179,13 @@ inline auto postVerdict(const FString &NpcId, const FVerdictRequest &Request) {
 
 inline auto postMemoryStore(const FString &NpcId,
                             const FRemoteMemoryStoreRequest &Request) {
+  TArray<FApiEndpointTag> Invalidates;
+  Invalidates.Add(FApiEndpointTag{TEXT("Memory"), NpcId});
   return Detail::MakePost<FRemoteMemoryStoreRequest, rtk::FEmptyPayload>(
       TEXT("postMemoryStore"),
       SDKConfig::GetApiUrl() + TEXT("/npcs/") + Detail::Encode(NpcId) +
           TEXT("/memory"),
-      Request);
+      Request, Invalidates);
 }
 
 inline auto getMemoryList(const FString &NpcId) {
@@ -191,10 +205,13 @@ inline auto postMemoryRecall(const FString &NpcId,
 }
 
 inline auto deleteMemoryClear(const FString &NpcId) {
+  TArray<FApiEndpointTag> Invalidates;
+  Invalidates.Add(FApiEndpointTag{TEXT("Memory"), NpcId});
   return Detail::MakeDelete<rtk::FEmptyPayload>(
       TEXT("deleteMemoryClear"),
       SDKConfig::GetApiUrl() + TEXT("/npcs/") + Detail::Encode(NpcId) +
-          TEXT("/memory/clear"));
+          TEXT("/memory/clear"),
+      Invalidates);
 }
 
 inline auto postBridgeValidate(const FString &NpcId,
@@ -250,16 +267,21 @@ inline auto getRulePresets() {
 }
 
 inline auto postRuleRegister(const FDirectiveRuleSet &Ruleset) {
+  TArray<FApiEndpointTag> Invalidates;
+  Invalidates.Add(FApiEndpointTag{TEXT("Rule"), TEXT("LIST")});
   return Detail::MakePost<FDirectiveRuleSet, FDirectiveRuleSet>(
       TEXT("postRuleRegister"), SDKConfig::GetApiUrl() + TEXT("/rules"),
-      Ruleset);
+      Ruleset, Invalidates);
 }
 
 inline auto deleteRule(const FString &RulesetId) {
+  TArray<FApiEndpointTag> Invalidates;
+  Invalidates.Add(FApiEndpointTag{TEXT("Rule"), TEXT("LIST")});
   return Detail::MakeDelete<rtk::FEmptyPayload>(TEXT("deleteRule"),
                                            SDKConfig::GetApiUrl() +
                                                TEXT("/rules/") +
-                                               Detail::Encode(RulesetId));
+                                               Detail::Encode(RulesetId),
+                                           Invalidates);
 }
 
 inline auto postGhostRun(const FGhostRunRequest &Request) {

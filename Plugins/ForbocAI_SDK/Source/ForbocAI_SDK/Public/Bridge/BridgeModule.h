@@ -135,7 +135,7 @@ Validate(const FAgentAction &Action, const TArray<FValidationRule> &Rules,
  * @param ApiUrl The API endpoint.
  * @return An AsyncResult indicating success/failure.
  */
-FORBOCAI_SDK_API BridgeTypes::AsyncResult<void>
+FORBOCAI_SDK_API BridgeTypes::AsyncResult<FDirectiveRuleSet>
 RegisterRule(const FValidationRule &Rule, const FString &ApiUrl);
 
 } // namespace BridgeOps

@@ -7,6 +7,7 @@
 #include "Misc/Paths.h"
 #include "SDKStore.h"
 #include "Serialization/JsonSerializer.h"
+#include "Bridge/BridgeThunks.h"
 
 // ==========================================
 // PURE VALIDATION FUNCTIONS
@@ -100,39 +101,14 @@ TArray<FValidationRule> BridgeOps::CreateRPGRules() {
   return Rules;
 }
 
-BridgeTypes::AsyncResult<void>
-BridgeOps::RegisterRule(const FValidationRule &Rule, const FString &ApiUrl) {
-  return BridgeTypes::AsyncResult<void>::create(
-      [Rule, ApiUrl](std::function<void()> resolve,
-                     std::function<void(std::string)> reject) {
-        if (ApiUrl.IsEmpty()) {
-          reject("Missing API URL");
-          return;
-        }
-
-        TSharedRef<IHttpRequest, ESPMode::ThreadSafe> Request =
-            FHttpModule::Get().CreateRequest();
-        Request->SetVerb(TEXT("POST"));
-        Request->SetURL(ApiUrl + TEXT("/rules/register"));
-        Request->SetHeader(TEXT("Content-Type"), TEXT("application/json"));
-
-        FString Content = FString::Printf(
-            TEXT("{\"id\":\"%s\",\"name\":\"%s\"}"), *Rule.Id, *Rule.Name);
-        Request->SetContentAsString(Content);
-
-        Request->OnProcessRequestComplete().BindLambda(
-            [resolve, reject](FHttpRequestPtr Req, FHttpResponsePtr Res,
-                              bool bSuccess) {
-              if (bSuccess && Res.IsValid() &&
-                  EHttpResponseCodes::IsOk(Res->GetResponseCode())) {
-                resolve();
-              } else {
-                reject("Failed to register rule");
-              }
-            });
-
-        Request->ProcessRequest();
-      });
+BridgeTypes::AsyncResult<FDirectiveRuleSet>
+BridgeOps::RegisterRule(const FValidationRule &Rule, const FString & /*ApiUrl*/) {
+  // Dispatch through the store — no direct HTTP calls.
+  auto Store = ConfigureSDKStore();
+  FDirectiveRuleSet Ruleset;
+  Ruleset.Id = Rule.Id;
+  Ruleset.Name = Rule.Name;
+  return Store.dispatch(rtk::registerRulesetThunk(Ruleset));
 }
 
 // Functional helper implementations

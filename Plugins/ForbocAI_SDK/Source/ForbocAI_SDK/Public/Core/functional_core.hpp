@@ -2,20 +2,12 @@
 #ifndef FUNCTIONAL_CORE_HPP
 #define FUNCTIONAL_CORE_HPP
 
-#include "Dom/JsonObject.h"
-#include "HttpModule.h"
-#include "Interfaces/IHttpRequest.h"
-#include "Interfaces/IHttpResponse.h"
-#include "JsonObjectConverter.h"
-#include "Serialization/JsonReader.h"
-#include "Serialization/JsonSerializer.h"
-
 // ==========================================================
 // Functional Core Library — Strict C++11
 // ==========================================================
 // Pure C++11 functional programming primitives.
 // No C++14, C++17, or later features are used.
-// This header is the canonical source of truth for the UE SDK's
+// This header is the canonical source of truth for the
 // functional substrate. If surrounding docs disagree, this file wins.
 //
 // DESIGN PRINCIPLES:
@@ -26,7 +18,7 @@
 //     member APIs where C++11 ergonomics would otherwise become
 //     unreadable (`MemoizedLast`, `ValidationPipeline`,
 //     `ConfigBuilder`, `AsyncResult`).
-//   - Immutable value semantics throughout.
+//   - Value semantics throughout.
 //
 // CONTENTS:
 //   1. seq / gen_seq        — Index sequence (C++14 backport)
@@ -48,12 +40,15 @@
 //  17. HttpResult           — Functional HTTP result wrapper
 //  18. AsyncChain           — AsyncResult chaining helpers
 //
+// NOTE: LegacyAsyncHttp (formerly §19) has been removed.
+//       UE-specific HTTP helpers now live in Core/AsyncHttp.h.
+//
 // REQUIREMENTS:
 //   Several helpers default-construct inactive payloads or
 //   error branches as a deliberate C++11 trade-off:
 //   `Maybe<T>`, `Either<E, T>`, `ValidationPipeline<T, E>`,
 //   `TestResult<T>`, and `HttpResult<T>`.
-//   All Unreal Engine USTRUCTs used by this SDK are expected
+//   All host types used with these primitives are expected
 //   to satisfy that requirement.
 //
 // See also: C++11-FP-GUIDE.md for patterns and usage.
@@ -269,7 +264,7 @@ template <typename T> const T &eval(const Lazy<T> &lz) {
 // ==========================================
 // Memoizes the most recent invocation of a pure function.
 // This is the canonical primitive for selector-style
-// derived-data memoization in the UE SDK.
+// derived-data memoization.
 //
 // Construction: use the memoizeLast<Signature>() factory
 // function, optionally with a custom comparator.
@@ -873,119 +868,6 @@ auto then(const AsyncResult<T> &res, F f) -> AsyncResult<U> {
       });
 }
 } // namespace AsyncChain
-
-// ==========================================
-// 19. LegacyAsyncHttp (superseded by Core/AsyncHttp.h)
-// ==========================================
-
-namespace LegacyAsyncHttp {
-
-template <typename T>
-AsyncResult<HttpResult<T>> Post(const FString &Url, const FString &Payload,
-                                const FString &ApiKey = TEXT("")) {
-  return AsyncResult<HttpResult<T>>::create([Url, Payload, ApiKey](
-                                                auto resolve, auto reject) {
-    TSharedRef<IHttpRequest, ESPMode::ThreadSafe> Request =
-        FHttpModule::Get().CreateRequest();
-    Request->SetURL(Url);
-    Request->SetVerb(TEXT("POST"));
-    Request->SetHeader(TEXT("Content-Type"),
-                       TEXT("application/json; charset=utf-8"));
-    if (!ApiKey.IsEmpty()) {
-      Request->SetHeader(TEXT("Authorization"),
-                         FString::Printf(TEXT("Bearer %s"), *ApiKey));
-    }
-    Request->SetContentAsString(Payload);
-
-    Request->OnProcessRequestComplete().BindLambda(
-        [resolve, reject](FHttpRequestPtr Req, FHttpResponsePtr Res,
-                          bool bWasSuccessful) {
-          if (!bWasSuccessful || !Res.IsValid()) {
-            resolve(HttpResult<T>::Failure("Network failure", 0));
-            return;
-          }
-
-          HttpStatusCode Code = Res->GetResponseCode();
-          FString Content = Res->GetContentAsString();
-
-          if (Code >= 200 && Code < 300) {
-            TSharedPtr<FJsonObject> JsonObject;
-            TSharedRef<TJsonReader<>> Reader =
-                TJsonReaderFactory<>::Create(Content);
-            if (FJsonSerializer::Deserialize(Reader, JsonObject) &&
-                JsonObject.IsValid()) {
-              T ResultPayload;
-              if (FJsonObjectConverter::JsonObjectToUStruct(
-                      JsonObject.ToSharedRef(), T::StaticStruct(),
-                      &ResultPayload)) {
-                resolve(HttpResult<T>::Success(ResultPayload, Code));
-              } else {
-                resolve(HttpResult<T>::Failure("JSON Mapping failed", Code));
-              }
-            } else {
-              resolve(HttpResult<T>::Failure("JSON Parsing failed", Code));
-            }
-          } else {
-            resolve(HttpResult<T>::Failure(TCHAR_TO_UTF8(*Content), Code));
-          }
-        });
-
-    Request->ProcessRequest();
-  });
-}
-
-template <typename T>
-AsyncResult<HttpResult<T>> Get(const FString &Url,
-                               const FString &ApiKey = TEXT("")) {
-  return AsyncResult<HttpResult<T>>::create([Url, ApiKey](auto resolve,
-                                                          auto reject) {
-    TSharedRef<IHttpRequest, ESPMode::ThreadSafe> Request =
-        FHttpModule::Get().CreateRequest();
-    Request->SetURL(Url);
-    Request->SetVerb(TEXT("GET"));
-    if (!ApiKey.IsEmpty()) {
-      Request->SetHeader(TEXT("Authorization"),
-                         FString::Printf(TEXT("Bearer %s"), *ApiKey));
-    }
-
-    Request->OnProcessRequestComplete().BindLambda(
-        [resolve, reject](FHttpRequestPtr Req, FHttpResponsePtr Res,
-                          bool bWasSuccessful) {
-          if (!bWasSuccessful || !Res.IsValid()) {
-            resolve(HttpResult<T>::Failure("Network failure", 0));
-            return;
-          }
-
-          HttpStatusCode Code = Res->GetResponseCode();
-          FString Content = Res->GetContentAsString();
-
-          if (Code >= 200 && Code < 300) {
-            TSharedPtr<FJsonObject> JsonObject;
-            TSharedRef<TJsonReader<>> Reader =
-                TJsonReaderFactory<>::Create(Content);
-            if (FJsonSerializer::Deserialize(Reader, JsonObject) &&
-                JsonObject.IsValid()) {
-              T ResultPayload;
-              if (FJsonObjectConverter::JsonObjectToUStruct(
-                      JsonObject.ToSharedRef(), T::StaticStruct(),
-                      &ResultPayload)) {
-                resolve(HttpResult<T>::Success(ResultPayload, Code));
-              } else {
-                resolve(HttpResult<T>::Failure("JSON Mapping failed", Code));
-              }
-            } else {
-              resolve(HttpResult<T>::Failure("JSON Parsing failed", Code));
-            }
-          } else {
-            resolve(HttpResult<T>::Failure(TCHAR_TO_UTF8(*Content), Code));
-          }
-        });
-
-    Request->ProcessRequest();
-  });
-}
-
-} // namespace LegacyAsyncHttp
 
 } // namespace func
 

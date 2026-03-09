@@ -7,7 +7,7 @@
 #include "Misc/Paths.h"
 #include "SDKStore.h"
 #include "Serialization/JsonSerializer.h"
-#include "Thunks.h"
+#include "Memory/MemoryThunks.h"
 
 // ==========================================================
 // Memory Module Implementation — Full Embedding-Based Memory
