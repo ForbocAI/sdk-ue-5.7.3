@@ -23,7 +23,7 @@ bool FCortexSliceInitTest::RunTest(const FString &Parameters) {
 
   // Pending
   State = CSlice.Reducer(
-      State, Actions::CortexInitPending(TEXT("llama-3.2-1b")));
+      State, CortexSlice::Actions::CortexInitPending(TEXT("llama-3.2-1b")));
   TestTrue("Status Initializing",
            State.Status == ECortexEngineStatus::Initializing);
   TestEqual("Model set", State.EngineStatus.Model,
@@ -34,7 +34,7 @@ bool FCortexSliceInitTest::RunTest(const FString &Parameters) {
   FCortexStatus CortexStatus;
   CortexStatus.Model = TEXT("llama-3.2-1b");
   CortexStatus.bReady = true;
-  State = CSlice.Reducer(State, Actions::CortexInitFulfilled(CortexStatus));
+  State = CSlice.Reducer(State, CortexSlice::Actions::CortexInitFulfilled(CortexStatus));
   TestTrue("Status Ready", State.Status == ECortexEngineStatus::Ready);
   TestTrue("Engine ready", State.EngineStatus.bReady);
 
@@ -53,9 +53,9 @@ bool FCortexSliceInitFailTest::RunTest(const FString &Parameters) {
   FCortexSliceState State;
 
   State = CSlice.Reducer(
-      State, Actions::CortexInitPending(TEXT("bad-model")));
+      State, CortexSlice::Actions::CortexInitPending(TEXT("bad-model")));
   State = CSlice.Reducer(
-      State, Actions::CortexInitRejected(TEXT("Model not found")));
+      State, CortexSlice::Actions::CortexInitRejected(TEXT("Model not found")));
 
   TestTrue("Status Error", State.Status == ECortexEngineStatus::Error);
   TestEqual("Error message", State.Error, FString(TEXT("Model not found")));
@@ -80,11 +80,11 @@ bool FCortexSliceCompleteTest::RunTest(const FString &Parameters) {
   FCortexStatus CortexStatus;
   CortexStatus.Model = TEXT("llama-3.2-1b");
   CortexStatus.bReady = true;
-  State = CSlice.Reducer(State, Actions::CortexInitFulfilled(CortexStatus));
+  State = CSlice.Reducer(State, CortexSlice::Actions::CortexInitFulfilled(CortexStatus));
 
   // Complete Pending
   State = CSlice.Reducer(
-      State, Actions::CortexCompletePending(TEXT("What is the meaning?")));
+      State, CortexSlice::Actions::CortexCompletePending(TEXT("What is the meaning?")));
   TestEqual("LastPrompt set", State.LastPrompt,
             FString(TEXT("What is the meaning?")));
   TestTrue("Error cleared on pending", State.Error.IsEmpty());
@@ -92,7 +92,7 @@ bool FCortexSliceCompleteTest::RunTest(const FString &Parameters) {
   // Complete Success
   FCortexResponse Response;
   Response.Text = TEXT("42");
-  State = CSlice.Reducer(State, Actions::CortexCompleteFulfilled(Response));
+  State = CSlice.Reducer(State, CortexSlice::Actions::CortexCompleteFulfilled(Response));
   TestEqual("LastResponseText set", State.LastResponseText,
             FString(TEXT("42")));
 
@@ -111,9 +111,9 @@ bool FCortexSliceCompleteFailTest::RunTest(const FString &Parameters) {
   FCortexSliceState State;
 
   State = CSlice.Reducer(
-      State, Actions::CortexCompletePending(TEXT("Hello")));
+      State, CortexSlice::Actions::CortexCompletePending(TEXT("Hello")));
   State = CSlice.Reducer(
-      State, Actions::CortexCompleteRejected(TEXT("OOM")));
+      State, CortexSlice::Actions::CortexCompleteRejected(TEXT("OOM")));
 
   TestEqual("Error set", State.Error, FString(TEXT("OOM")));
 

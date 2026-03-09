@@ -3,7 +3,7 @@
 #include "Core/functional_core.hpp"
 #include "Misc/FileHelper.h"
 #include "Misc/Paths.h"
-#include "SDKStore.h"
+#include "RuntimeStore.h"
 #include "Types.h"
 
 #if WITH_FORBOC_NATIVE
@@ -109,12 +109,25 @@ CortexOps::Complete(const FCortex &Cortex, const FString &Prompt,
 CortexTypes::CortexStreamResult
 CortexOps::CompleteStream(const FCortex &Cortex, const FString &Prompt,
                           const TMap<FString, FString> &Context) {
+  static_cast<void>(Context);
   try {
-    // Stream text generation
+    if (Cortex.EngineHandle == nullptr) {
+      return CortexTypes::make_left(
+          FString(TEXT("Cortex engine not initialized")), TArray<FString>{});
+    }
+
+    const FString Generated =
+        Native::Llama::Infer(Cortex.EngineHandle, Prompt, Cortex.Config);
     TArray<FString> chunks;
-    chunks.Add(TEXT("Chunk 1: Starting generation..."));
-    chunks.Add(TEXT("Chunk 2: Continuing generation..."));
-    chunks.Add(TEXT("Chunk 3: Finalizing generation..."));
+    if (Generated.IsEmpty()) {
+      chunks.Add(TEXT(""));
+      return CortexTypes::make_right(FString(), chunks);
+    }
+
+    constexpr int32 ChunkSize = 64;
+    for (int32 Offset = 0; Offset < Generated.Len(); Offset += ChunkSize) {
+      chunks.Add(Generated.Mid(Offset, ChunkSize));
+    }
 
     return CortexTypes::make_right(FString(), chunks);
   } catch (const std::exception &e) {

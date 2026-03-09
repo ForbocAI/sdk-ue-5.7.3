@@ -6,7 +6,7 @@
 #include "HAL/PlatformFilemanager.h"
 #include "Misc/FileHelper.h"
 #include "Misc/Paths.h"
-#include "SDKStore.h"
+#include "RuntimeStore.h"
 #include "Serialization/JsonSerializer.h"
 
 // ==========================================================
@@ -65,7 +65,8 @@ GhostTypes::GhostTestRunResult GhostOps::RunTest(const FGhost &Ghost,
               SDKStore.dispatch(GhostSlice::Actions::GhostSessionFailed(
                   Scenario, Failure.ErrorMessage));
               reject(Error);
-            });
+            })
+            .execute();
       });
 }
 

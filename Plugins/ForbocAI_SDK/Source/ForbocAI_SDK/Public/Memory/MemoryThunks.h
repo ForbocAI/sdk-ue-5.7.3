@@ -61,7 +61,7 @@ nodeMemoryStoreThunk(const FMemoryItem &Item) {
           Async(EAsyncExecution::Thread, [Item, Dispatch, Resolve, Reject]() {
             Native::Sqlite::DB Db = detail::EnsureNodeMemoryDatabase();
             if (!Db) {
-              const FString Error = TEXT("Failed to open node memory database");
+              const FString Error = TEXT("Local memory is not initialized");
               AsyncTask(ENamedThreads::GameThread, [Dispatch, Reject, Error]() {
                 Dispatch(MemorySlice::Actions::MemoryStoreFailed(Error));
                 Reject(TCHAR_TO_UTF8(*Error));
@@ -107,7 +107,7 @@ nodeMemoryRecallThunk(const FMemoryRecallRequest &Request) {
           Async(EAsyncExecution::Thread, [Request, Dispatch, Resolve, Reject]() {
             Native::Sqlite::DB Db = detail::EnsureNodeMemoryDatabase();
             if (!Db) {
-              const FString Error = TEXT("Failed to open node memory database");
+              const FString Error = TEXT("Local memory is not initialized");
               AsyncTask(ENamedThreads::GameThread, [Dispatch, Reject, Error]() {
                 Dispatch(MemorySlice::Actions::MemoryRecallFailed(Error));
                 Reject(TCHAR_TO_UTF8(*Error));
@@ -169,8 +169,11 @@ inline ThunkAction<rtk::FEmptyPayload, FSDKState> clearNodeMemoryThunk() {
           Async(EAsyncExecution::Thread, [Dispatch, Resolve]() {
             Native::Sqlite::DB &Handle = detail::NodeMemoryHandle();
             if (Handle) {
+              Native::Sqlite::Clear(Handle);
               Native::Sqlite::Close(Handle);
               Handle = nullptr;
+            } else {
+              Native::Sqlite::ClearPath(detail::DefaultNodeMemoryPath());
             }
 
             IFileManager::Get().Delete(*detail::DefaultNodeMemoryPath(), false,

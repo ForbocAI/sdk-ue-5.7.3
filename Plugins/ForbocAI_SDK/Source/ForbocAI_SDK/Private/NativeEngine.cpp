@@ -265,6 +265,26 @@ void Close(DB Database) {
   delete AsMockSqliteHandle(Database);
 }
 
+void Clear(DB Database) {
+  const FMockSqliteHandle *Handle = AsMockSqliteHandle(Database);
+  if (!Handle) {
+    return;
+  }
+
+  FScopeLock Lock(&GMockSqliteMutex);
+  GMockSqliteRowsByPath.Remove(Handle->Path);
+  GMockSqliteRowsByPath.FindOrAdd(Handle->Path);
+}
+
+void ClearPath(const FString &Path) {
+  const FString NormalizedPath =
+      Path.IsEmpty() ? TEXT(":memory:") : FPaths::ConvertRelativePathToFull(Path);
+
+  FScopeLock Lock(&GMockSqliteMutex);
+  GMockSqliteRowsByPath.Remove(NormalizedPath);
+  GMockSqliteRowsByPath.FindOrAdd(NormalizedPath);
+}
+
 TArray<FMemoryItem> SearchRows(DB Database, const TArray<float> &Vector,
                                int32 TopK) {
   TArray<FMemoryItem> Results;

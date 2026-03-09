@@ -80,8 +80,9 @@ bool FRtkConfigureStoreTest::RunTest(const FString &Parameters) {
   // 2. Setup Middleware
   TArray<FString> EventLog;
   Middleware<FAppMockState> AuditMw =
-      [&EventLog](const MiddlewareApi<FAppMockState> &Api) {
-        return [&EventLog](NextDispatcher<FAppMockState> Next) {
+      [&EventLog](const MiddlewareApi<FAppMockState> &Api)
+          -> std::function<Dispatcher(Dispatcher)> {
+        return [&EventLog](Dispatcher Next) -> Dispatcher {
           return [&EventLog, Next](const AnyAction &Action) -> AnyAction {
             EventLog.Add(FString::Printf(TEXT("MW:%s"), *Action.Type));
             return Next(Action);

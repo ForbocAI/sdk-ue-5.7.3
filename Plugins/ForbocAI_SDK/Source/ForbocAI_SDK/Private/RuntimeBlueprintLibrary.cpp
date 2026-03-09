@@ -1,6 +1,6 @@
-#include "ForbocAIBlueprintLibrary.h"
-#include "CLI/SDKOps.h"
-#include "SDKStore.h"
+#include "RuntimeBlueprintLibrary.h"
+#include "CLI/CliOperations.h"
+#include "RuntimeStore.h"
 
 namespace {
 rtk::EnhancedStore<FSDKState> &GetBPStore() {
@@ -47,7 +47,7 @@ FString UForbocAIBlueprintLibrary::GhostRun(const FString &TestSuite,
 
 FString UForbocAIBlueprintLibrary::GhostStop(const FString &SessionId) {
   FGhostStopResponse Resp = SDKOps::GhostStop(GetBPStore(), SessionId);
-  return Resp.Status;
+  return Resp.StopStatus;
 }
 
 FString UForbocAIBlueprintLibrary::ExportSoul(const FString &NpcId) {

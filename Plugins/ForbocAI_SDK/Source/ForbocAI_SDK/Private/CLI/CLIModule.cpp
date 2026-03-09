@@ -1,7 +1,8 @@
 #include "CLI/CLIModule.h"
-#include "CLI/SDKOps.h"
-#include "SDKConfig.h"
-#include "SDKStore.h"
+#include "CLI/CliOperations.h"
+#include "RuntimeConfig.h"
+#include "RuntimeStore.h"
+#include <exception>
 
 namespace CLIOps {
 
@@ -32,6 +33,7 @@ func::TestResult<void> DispatchCommand(const FString &CommandKey,
                                        const TArray<FString> &Args) {
   using Result = func::TestResult<void>;
   rtk::EnhancedStore<FSDKState> &Store = GetStore();
+  try {
 
   // ---- System ----
   if (CommandKey == TEXT("doctor") || CommandKey == TEXT("system_status")) {
@@ -166,7 +168,7 @@ func::TestResult<void> DispatchCommand(const FString &CommandKey,
       return Result::Failure("Usage: ghost_status <sessionId>");
     }
     FGhostStatusResponse Resp = SDKOps::GhostStatus(Store, Args[0]);
-    UE_LOG(LogTemp, Display, TEXT("Ghost status: %s"), *Resp.Status);
+    UE_LOG(LogTemp, Display, TEXT("Ghost status: %s"), *Resp.GhostStatus);
     return Result::Success("Ghost status retrieved");
   }
 
@@ -184,7 +186,7 @@ func::TestResult<void> DispatchCommand(const FString &CommandKey,
       return Result::Failure("Usage: ghost_stop <sessionId>");
     }
     FGhostStopResponse Resp = SDKOps::GhostStop(Store, Args[0]);
-    UE_LOG(LogTemp, Display, TEXT("Ghost stopped: %s"), *Resp.Status);
+    UE_LOG(LogTemp, Display, TEXT("Ghost stopped: %s"), *Resp.StopStatus);
     return Result::Success("Ghost stopped");
   }
 
@@ -327,6 +329,9 @@ func::TestResult<void> DispatchCommand(const FString &CommandKey,
   // ---- Unknown ----
   return Result::Failure(
       TCHAR_TO_UTF8(*FString::Printf(TEXT("Unknown command: %s"), *CommandKey)));
+  } catch (const std::exception &Error) {
+    return Result::Failure(FString(UTF8_TO_TCHAR(Error.what())));
+  }
 }
 
 } // namespace CLIOps

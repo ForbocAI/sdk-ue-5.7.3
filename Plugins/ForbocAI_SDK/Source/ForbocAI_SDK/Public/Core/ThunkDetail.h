@@ -12,7 +12,8 @@
 #include "JsonObjectConverter.h"
 #include "Misc/Paths.h"
 #include "NativeEngine.h"
-#include "SDKStore.h"
+#include "RuntimeStore.h"
+#include "Core/JsonInterop.h"
 #include "Serialization/JsonSerializer.h"
 
 namespace rtk {
@@ -70,10 +71,7 @@ inline bool HasStatePayload(const FAgentState &State) {
 }
 
 inline FString JsonObjectToString(const TSharedPtr<FJsonObject> &Object) {
-  FString Output;
-  TSharedRef<TJsonWriter<>> Writer = TJsonWriterFactory<>::Create(&Output);
-  FJsonSerializer::Serialize(Object.ToSharedRef(), Writer);
-  return Output;
+  return JsonInterop::StringifyObject(Object);
 }
 
 // ---------------------------------------------------------------------------
@@ -84,7 +82,7 @@ inline FString SerializeIdentifyActorResult(const FNPCActorInfo &Actor) {
   const TSharedPtr<FJsonObject> ActorObject = MakeShared<FJsonObject>();
   ActorObject->SetStringField(TEXT("npcId"), Actor.NpcId);
   ActorObject->SetStringField(TEXT("persona"), Actor.Persona);
-  ActorObject->SetStringField(TEXT("data"), SafeStateJson(Actor.Data));
+  ActorObject->SetObjectField(TEXT("data"), JsonInterop::StateToObject(Actor.Data));
 
   const TSharedPtr<FJsonObject> Root = MakeShared<FJsonObject>();
   Root->SetStringField(TEXT("type"), TEXT("IdentifyActorResult"));
@@ -126,11 +124,7 @@ inline FString DefaultNodeMemoryPath() {
 }
 
 inline Native::Sqlite::DB EnsureNodeMemoryDatabase() {
-  Native::Sqlite::DB &Handle = NodeMemoryHandle();
-  if (!Handle) {
-    Handle = Native::Sqlite::Open(DefaultNodeMemoryPath());
-  }
-  return Handle;
+  return NodeMemoryHandle();
 }
 
 inline FMemoryItem MakeMemoryItem(const FMemoryStoreInstruction &Instruction) {
@@ -172,6 +166,9 @@ UploadSignedSoul(const FArweaveUploadInstruction &Instruction,
         const FString Url = !Instruction.UploadUrl.IsEmpty()
                                 ? Instruction.UploadUrl
                                 : Instruction.GatewayUrl;
+        const FString Payload =
+            !Instruction.PayloadJson.IsEmpty() ? Instruction.PayloadJson
+                                               : SignedPayload;
         if (Url.IsEmpty()) {
           Reject("Missing Arweave upload URL");
           return;
@@ -191,7 +188,7 @@ UploadSignedSoul(const FArweaveUploadInstruction &Instruction,
         if (!Instruction.TagsJson.IsEmpty()) {
           Request->SetHeader(TEXT("X-Forboc-Tags"), Instruction.TagsJson);
         }
-        Request->SetContentAsString(SignedPayload);
+        Request->SetContentAsString(Payload);
         Request->OnProcessRequestComplete().BindLambda(
             [Instruction, Resolve, Reject](FHttpRequestPtr Req,
                                            FHttpResponsePtr Res,
@@ -203,8 +200,21 @@ UploadSignedSoul(const FArweaveUploadInstruction &Instruction,
 
               FArweaveUploadResult Result;
               Result.ResponseJson = Res->GetContentAsString();
-              Result.Status = TEXT("uploaded");
+              Result.StatusCode = Res->GetResponseCode();
+              Result.bSuccess = Result.StatusCode >= 200 && Result.StatusCode < 300;
+              Result.Status = FString::FromInt(Result.StatusCode);
+              Result.Error = Result.bSuccess
+                                 ? TEXT("")
+                                 : FString::Printf(TEXT("upload_failed_status_%d"),
+                                                   Result.StatusCode);
               Result.TxId = Res->GetHeader(TEXT("x-id"));
+              if (Result.TxId.IsEmpty()) {
+                TSharedPtr<FJsonObject> ResponseObject;
+                if (JsonInterop::ParseJsonObject(Result.ResponseJson, ResponseObject) &&
+                    ResponseObject.IsValid()) {
+                  Result.TxId = ResponseObject->GetStringField(TEXT("id"));
+                }
+              }
               if (Result.TxId.IsEmpty()) {
                 Result.TxId = LexToString(GetTypeHash(Result.ResponseJson));
               }
@@ -248,9 +258,19 @@ DownloadSoulPayload(const FArweaveDownloadInstruction &Instruction) {
               }
 
               FArweaveDownloadResult Result;
-              Result.TxId = Instruction.TxId;
+              Result.TxId = !Instruction.ExpectedTxId.IsEmpty()
+                                ? Instruction.ExpectedTxId
+                                : Instruction.TxId;
               Result.Payload = Res->GetContentAsString();
-              Result.Status = TEXT("downloaded");
+              Result.BodyJson = Result.Payload;
+              Result.StatusCode = Res->GetResponseCode();
+              Result.bSuccess =
+                  Result.StatusCode >= 200 && Result.StatusCode < 300;
+              Result.Status = FString::FromInt(Result.StatusCode);
+              Result.Error = Result.bSuccess
+                                 ? TEXT("")
+                                 : FString::Printf(TEXT("download_failed_status_%d"),
+                                                   Result.StatusCode);
               Result.ResponseJson = Result.Payload;
               Resolve(Result);
             });

@@ -93,8 +93,9 @@ inline FSDKState SDKReducer(const FSDKState &State,
 }
 
 inline rtk::Middleware<FSDKState> createNpcRemovalListener() {
-  return [](const rtk::MiddlewareApi<FSDKState> &Api) {
-    return [Api](rtk::NextDispatcher<FSDKState> Next) {
+  return [](const rtk::MiddlewareApi<FSDKState> &Api)
+             -> std::function<rtk::Dispatcher(rtk::Dispatcher)> {
+    return [Api](rtk::Dispatcher Next) -> rtk::Dispatcher {
       return [Api, Next](const rtk::AnyAction &Action) -> rtk::AnyAction {
         const FString ActiveNpcIdBefore = Api.getState().NPCs.ActiveNpcId;
         const rtk::AnyAction Result = Next(Action);

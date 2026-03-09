@@ -22,7 +22,8 @@ RunScenarioTest(const FAgent &Agent, const FString &Scenario) {
               Result.bPassed = !Response.Dialogue.IsEmpty();
               resolve(Result);
             })
-            .catch_([reject](std::string Error) { reject(Error); });
+            .catch_([reject](std::string Error) { reject(Error); })
+            .execute();
       });
 }
 
@@ -70,7 +71,8 @@ void RunTestsSequentially(const FGhost &Ghost,
         Report->FailedTests++;
 
         RunTestsSequentially(Ghost, Report, Index + 1, OnComplete, OnError);
-      });
+      })
+      .execute();
 }
 
 } // namespace GhostInternal

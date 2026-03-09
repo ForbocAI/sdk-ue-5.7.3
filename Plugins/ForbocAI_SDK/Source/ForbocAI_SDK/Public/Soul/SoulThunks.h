@@ -4,7 +4,7 @@
 #include "Errors.h"
 #include "Memory/MemorySlice.h"
 #include "NPC/NPCSlice.h"
-#include "SDKConfig.h"
+#include "RuntimeConfig.h"
 #include "Soul/SoulSlice.h"
 
 namespace rtk {

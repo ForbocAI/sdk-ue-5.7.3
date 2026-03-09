@@ -16,6 +16,9 @@ struct FArweaveUploadInstruction {
   FString GatewayUrl;
 
   UPROPERTY(BlueprintReadOnly)
+  FString PayloadJson;
+
+  UPROPERTY(BlueprintReadOnly)
   FString ContentType;
 
   UPROPERTY(BlueprintReadOnly)
@@ -36,10 +39,21 @@ struct FArweaveUploadResult {
   FString Status;
 
   UPROPERTY(BlueprintReadOnly)
+  int32 StatusCode;
+
+  UPROPERTY(BlueprintReadOnly)
+  bool bSuccess;
+
+  UPROPERTY(BlueprintReadOnly)
+  FString Error;
+
+  UPROPERTY(BlueprintReadOnly)
   FString ArweaveUrl;
 
   UPROPERTY(BlueprintReadOnly)
   FString ResponseJson;
+
+  FArweaveUploadResult() : StatusCode(0), bSuccess(false) {}
 };
 
 USTRUCT(BlueprintType)
@@ -48,6 +62,9 @@ struct FArweaveDownloadInstruction {
 
   UPROPERTY(BlueprintReadOnly)
   FString TxId;
+
+  UPROPERTY(BlueprintReadOnly)
+  FString ExpectedTxId;
 
   UPROPERTY(BlueprintReadOnly)
   FString GatewayUrl;
@@ -64,13 +81,27 @@ struct FArweaveDownloadResult {
   FString TxId;
 
   UPROPERTY(BlueprintReadOnly)
+  FString BodyJson;
+
+  UPROPERTY(BlueprintReadOnly)
   FString Payload;
 
   UPROPERTY(BlueprintReadOnly)
   FString Status;
 
   UPROPERTY(BlueprintReadOnly)
+  int32 StatusCode;
+
+  UPROPERTY(BlueprintReadOnly)
+  bool bSuccess;
+
+  UPROPERTY(BlueprintReadOnly)
+  FString Error;
+
+  UPROPERTY(BlueprintReadOnly)
   FString ResponseJson;
+
+  FArweaveDownloadResult() : StatusCode(0), bSuccess(false) {}
 };
 
 USTRUCT(BlueprintType)

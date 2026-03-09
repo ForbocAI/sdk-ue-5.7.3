@@ -21,6 +21,9 @@ struct FGhostTestResult {
   FString ErrorMessage;
 
   UPROPERTY(BlueprintReadOnly)
+  FString Screenshot;
+
+  UPROPERTY(BlueprintReadOnly)
   int32 Iteration;
 
   UPROPERTY(BlueprintReadOnly)
@@ -114,6 +117,9 @@ struct FGhostTestReport {
   GENERATED_BODY()
 
   UPROPERTY(BlueprintReadOnly)
+  FString SessionId;
+
+  UPROPERTY(BlueprintReadOnly)
   FGhostConfig Config;
 
   UPROPERTY(BlueprintReadOnly)
@@ -129,13 +135,26 @@ struct FGhostTestReport {
   int32 FailedTests;
 
   UPROPERTY(BlueprintReadOnly)
+  int32 SkippedTests;
+
+  UPROPERTY(BlueprintReadOnly)
+  int64 Duration;
+
+  UPROPERTY(BlueprintReadOnly)
+  float Coverage;
+
+  UPROPERTY(BlueprintReadOnly)
+  TMap<FString, float> Metrics;
+
+  UPROPERTY(BlueprintReadOnly)
   float SuccessRate;
 
   UPROPERTY(BlueprintReadOnly)
   FString Summary;
 
   FGhostTestReport()
-      : TotalTests(0), PassedTests(0), FailedTests(0), SuccessRate(0.0f) {}
+      : TotalTests(0), PassedTests(0), FailedTests(0), SkippedTests(0),
+        Duration(0), Coverage(0.0f), SuccessRate(0.0f) {}
 };
 
 struct FGhost {
@@ -222,7 +241,7 @@ struct FGhostResultsResponse {
   float ResultsCoverage;
 
   UPROPERTY(BlueprintReadOnly)
-  TMap<FString, FString> ResultsMetrics;
+  TMap<FString, float> ResultsMetrics;
 
   FGhostResultsResponse()
       : ResultsTotalTests(0), ResultsPassed(0), ResultsFailed(0),

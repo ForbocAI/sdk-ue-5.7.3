@@ -1,11 +1,11 @@
 #pragma once
 
 #include "CoreMinimal.h"
-#include "SDKConfig.h"
-#include "SDKStore.h"
+#include "RuntimeConfig.h"
+#include "RuntimeStore.h"
 #include "Types.h"
 #include "Subsystems/GameInstanceSubsystem.h"
-#include "ForbocAISDKSubsystem.generated.h"
+#include "RuntimeSubsystem.generated.h"
 
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FOnNPCActionReceived, FAgentAction,
                                             Action);
@@ -35,7 +35,7 @@ public:
    * Initializes the SDK with the provided configuration.
    */
   UFUNCTION(BlueprintCallable, Category = "Forboc AI|SDK")
-  void InitSDK(FString ApiKey, FString ApiUrl = SDKConfig::DEFAULT_API_URL);
+  void InitSDK(FString ApiKey, FString ApiUrl = TEXT("http://localhost:8080"));
 
   /**
    * Triggers the recursive protocol loop for an NPC.

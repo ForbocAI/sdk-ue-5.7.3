@@ -1,7 +1,7 @@
-#include "ForbocAISDKSubsystem.h"
+#include "RuntimeSubsystem.h"
 #include "NPC/NPCSlice.h"
-#include "SDKConfig.h"
-#include "SDKStore.h"
+#include "RuntimeConfig.h"
+#include "RuntimeStore.h"
 #include "Protocol/ProtocolThunks.h"
 #include "Soul/SoulThunks.h"
 
@@ -13,8 +13,9 @@ void UForbocAISDKSubsystem::Initialize(FSubsystemCollectionBase &Collection) {
   Middlewares.push_back(createNpcRemovalListener());
 
   // Action broadcast middleware
-  Middlewares.push_back([this](const rtk::MiddlewareApi<FSDKState> &Api) {
-    return [this](rtk::NextDispatcher<FSDKState> Next) {
+  Middlewares.push_back([this](const rtk::MiddlewareApi<FSDKState> &Api)
+                            -> std::function<rtk::Dispatcher(rtk::Dispatcher)> {
+    return [this](rtk::Dispatcher Next) -> rtk::Dispatcher {
       return [this, Next](const rtk::AnyAction &Action) {
         this->HandleAction(Action);
         return Next(Action);
@@ -41,7 +42,9 @@ void UForbocAISDKSubsystem::ProcessNPC(FString NpcId, FString Input) {
 
   OnTypingStart.Broadcast();
 
-  SDKStore->dispatch(rtk::processNPC(NpcId, Input))
+  SDKStore->dispatch(
+              rtk::processNPC(NpcId, Input, TEXT("{}"), TEXT(""),
+                              FAgentState(), rtk::LocalProtocolRuntime()))
       .then([this](const FAgentResponse &Result) {
         if (!Result.Dialogue.IsEmpty()) {
           OnMessageReceived.Broadcast(Result.Dialogue);
@@ -54,7 +57,8 @@ void UForbocAISDKSubsystem::ProcessNPC(FString NpcId, FString Input) {
       .catch_([this](std::string Error) {
         static_cast<void>(Error);
         OnTypingEnd.Broadcast();
-      });
+      })
+      .execute();
 }
 
 void UForbocAISDKSubsystem::ExportSoul(FString AgentId) {
@@ -64,7 +68,8 @@ void UForbocAISDKSubsystem::ExportSoul(FString AgentId) {
   SDKStore->dispatch(rtk::exportSoulThunk(AgentId))
       .then([this](const FSoulExportResult &Result) {
         OnSoulExportComplete.Broadcast(Result.TxId);
-      });
+      })
+      .execute();
 }
 
 FAgentState UForbocAISDKSubsystem::GetNPCState(FString NpcId) const {

@@ -22,7 +22,7 @@ bool FMemorySliceStoreTest::RunTest(const FString &Parameters) {
             FString(TEXT("idle")));
 
   // StoreStart
-  State = MemSlice.Reducer(State, Actions::MemoryStoreStart());
+  State = MemSlice.Reducer(State, MemorySlice::Actions::MemoryStoreStart());
   TestEqual("StorageStatus storing", State.StorageStatus,
             FString(TEXT("storing")));
 
@@ -31,7 +31,7 @@ bool FMemorySliceStoreTest::RunTest(const FString &Parameters) {
   Item.Id = TEXT("mem_1");
   Item.Text = TEXT("The dragon appeared");
   Item.Importance = 0.9f;
-  State = MemSlice.Reducer(State, Actions::MemoryStoreSuccess(Item));
+  State = MemSlice.Reducer(State, MemorySlice::Actions::MemoryStoreSuccess(Item));
   TestEqual("StorageStatus idle after success", State.StorageStatus,
             FString(TEXT("idle")));
 
@@ -56,9 +56,9 @@ bool FMemorySliceStoreFailTest::RunTest(const FString &Parameters) {
   Slice<FMemorySliceState> MemSlice = CreateMemorySlice();
   FMemorySliceState State;
 
-  State = MemSlice.Reducer(State, Actions::MemoryStoreStart());
+  State = MemSlice.Reducer(State, MemorySlice::Actions::MemoryStoreStart());
   State = MemSlice.Reducer(State,
-                           Actions::MemoryStoreFailed(TEXT("Network error")));
+                           MemorySlice::Actions::MemoryStoreFailed(TEXT("Network error")));
 
   TestEqual("StorageStatus error", State.StorageStatus,
             FString(TEXT("error")));
@@ -79,7 +79,7 @@ bool FMemorySliceRecallTest::RunTest(const FString &Parameters) {
   FMemorySliceState State;
 
   // RecallStart
-  State = MemSlice.Reducer(State, Actions::MemoryRecallStart());
+  State = MemSlice.Reducer(State, MemorySlice::Actions::MemoryRecallStart());
   TestEqual("RecallStatus recalling", State.RecallStatus,
             FString(TEXT("recalling")));
 
@@ -97,7 +97,7 @@ bool FMemorySliceRecallTest::RunTest(const FString &Parameters) {
   M2.Importance = 0.7f;
   Items.Add(M2);
 
-  State = MemSlice.Reducer(State, Actions::MemoryRecallSuccess(Items));
+  State = MemSlice.Reducer(State, MemorySlice::Actions::MemoryRecallSuccess(Items));
   TestEqual("RecallStatus idle after success", State.RecallStatus,
             FString(TEXT("idle")));
   TestEqual("LastRecalledIds count", State.LastRecalledIds.Num(), 2);
@@ -120,9 +120,9 @@ bool FMemorySliceRecallFailTest::RunTest(const FString &Parameters) {
   Slice<FMemorySliceState> MemSlice = CreateMemorySlice();
   FMemorySliceState State;
 
-  State = MemSlice.Reducer(State, Actions::MemoryRecallStart());
+  State = MemSlice.Reducer(State, MemorySlice::Actions::MemoryRecallStart());
   State = MemSlice.Reducer(State,
-                           Actions::MemoryRecallFailed(TEXT("Timeout")));
+                           MemorySlice::Actions::MemoryRecallFailed(TEXT("Timeout")));
 
   TestEqual("RecallStatus error", State.RecallStatus, FString(TEXT("error")));
   TestEqual("Error set", State.Error, FString(TEXT("Timeout")));
@@ -145,10 +145,10 @@ bool FMemorySliceClearTest::RunTest(const FString &Parameters) {
   Item.Id = TEXT("clr_1");
   Item.Text = TEXT("Will be cleared");
   Item.Importance = 0.5f;
-  State = MemSlice.Reducer(State, Actions::MemoryStoreSuccess(Item));
+  State = MemSlice.Reducer(State, MemorySlice::Actions::MemoryStoreSuccess(Item));
   TestEqual("One memory before clear", SelectAllMemories(State).Num(), 1);
 
-  State = MemSlice.Reducer(State, Actions::MemoryClear());
+  State = MemSlice.Reducer(State, MemorySlice::Actions::MemoryClear());
   TestEqual("No memories after clear", SelectAllMemories(State).Num(), 0);
   TestEqual("StorageStatus reset", State.StorageStatus,
             FString(TEXT("idle")));

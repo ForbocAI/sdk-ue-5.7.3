@@ -3,7 +3,7 @@
 #include "Core/ThunkDetail.h"
 #include "Cortex/CortexSlice.h"
 #include "Errors.h"
-#include "SDKConfig.h"
+#include "RuntimeConfig.h"
 
 namespace rtk {
 
@@ -73,14 +73,6 @@ completeNodeCortexThunk(const FString &Prompt, const FCortexConfig &Config) {
                                    std::function<void(std::string)> Reject) {
           Async(EAsyncExecution::Thread, [Prompt, Config, Dispatch, Resolve, Reject]() {
             Native::Llama::Context Handle = detail::NodeCortexHandle();
-            if (!Handle) {
-              detail::NodeCortexHandle() =
-                  Native::Llama::LoadModel(Config.Model.IsEmpty()
-                                               ? TEXT("local-default")
-                                               : Config.Model);
-              Handle = detail::NodeCortexHandle();
-            }
-
             if (!Handle) {
               const FString Error = TEXT("Local cortex is not initialized");
               AsyncTask(ENamedThreads::GameThread, [Dispatch, Reject, Error]() {

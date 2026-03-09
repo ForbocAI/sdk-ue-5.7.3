@@ -5,7 +5,7 @@
 #include "HAL/PlatformFilemanager.h"
 #include "Misc/FileHelper.h"
 #include "Misc/Paths.h"
-#include "SDKStore.h"
+#include "RuntimeStore.h"
 #include "Serialization/JsonSerializer.h"
 #include "Bridge/BridgeThunks.h"
 
@@ -107,7 +107,12 @@ BridgeOps::RegisterRule(const FValidationRule &Rule, const FString & /*ApiUrl*/)
   auto Store = ConfigureSDKStore();
   FDirectiveRuleSet Ruleset;
   Ruleset.Id = Rule.Id;
-  Ruleset.Name = Rule.Name;
+  Ruleset.RulesetId = Rule.Name;
+  FBridgeRule BridgeRule;
+  BridgeRule.RuleName = Rule.Name;
+  BridgeRule.RuleDescription = Rule.Name;
+  BridgeRule.RuleActionTypes = Rule.ActionTypes;
+  Ruleset.RulesetRules.Add(BridgeRule);
   return Store.dispatch(rtk::registerRulesetThunk(Ruleset));
 }
 

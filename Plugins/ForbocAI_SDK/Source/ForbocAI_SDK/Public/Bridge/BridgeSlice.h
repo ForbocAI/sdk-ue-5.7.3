@@ -10,7 +10,7 @@ using namespace rtk;
 using namespace func;
 
 struct FBridgeSliceState {
-  TArray<FString> ActivePresetIds;
+  TArray<FDirectiveRuleSet> ActivePresets;
   TArray<FDirectiveRuleSet> AvailableRulesets;
   TArray<FString> AvailablePresetIds;
   FValidationResult LastValidation;
@@ -43,15 +43,16 @@ inline const ActionCreator<FString> &BridgeValidationFailedActionCreator() {
   return ActionCreator;
 }
 
-inline const ActionCreator<TArray<FString>> &SetActivePresetsActionCreator() {
-  static const ActionCreator<TArray<FString>> ActionCreator =
-      createAction<TArray<FString>>(TEXT("bridge/setActivePresets"));
+inline const ActionCreator<TArray<FDirectiveRuleSet>> &
+SetActivePresetsActionCreator() {
+  static const ActionCreator<TArray<FDirectiveRuleSet>> ActionCreator =
+      createAction<TArray<FDirectiveRuleSet>>(TEXT("bridge/setActivePresets"));
   return ActionCreator;
 }
 
-inline const ActionCreator<FString> &AddActivePresetIdActionCreator() {
-  static const ActionCreator<FString> ActionCreator =
-      createAction<FString>(TEXT("bridge/addActivePresetId"));
+inline const ActionCreator<FDirectiveRuleSet> &AddActivePresetActionCreator() {
+  static const ActionCreator<FDirectiveRuleSet> ActionCreator =
+      createAction<FDirectiveRuleSet>(TEXT("bridge/addActivePreset"));
   return ActionCreator;
 }
 
@@ -87,12 +88,12 @@ inline AnyAction BridgeValidationFailure(const FString &Error) {
   return BridgeValidationFailedActionCreator()(Error);
 }
 
-inline AnyAction SetActivePresets(const TArray<FString> &Presets) {
+inline AnyAction SetActivePresets(const TArray<FDirectiveRuleSet> &Presets) {
   return SetActivePresetsActionCreator()(Presets);
 }
 
-inline AnyAction AddActivePresetId(const FString &PresetId) {
-  return AddActivePresetIdActionCreator()(PresetId);
+inline AnyAction AddActivePreset(const FDirectiveRuleSet &Preset) {
+  return AddActivePresetActionCreator()(Preset);
 }
 
 inline AnyAction
@@ -145,18 +146,31 @@ inline Slice<FBridgeSliceState> CreateBridgeSlice() {
       .addExtraCase(
           Actions::SetActivePresetsActionCreator(),
           [](const FBridgeSliceState &State,
-             const Action<TArray<FString>> &Action) -> FBridgeSliceState {
+             const Action<TArray<FDirectiveRuleSet>> &Action)
+              -> FBridgeSliceState {
             FBridgeSliceState Next = State;
-            Next.ActivePresetIds = Action.PayloadValue;
+            Next.ActivePresets = Action.PayloadValue;
             return Next;
           })
       .addExtraCase(
-          Actions::AddActivePresetIdActionCreator(),
+          Actions::AddActivePresetActionCreator(),
           [](const FBridgeSliceState &State,
-             const Action<FString> &Action) -> FBridgeSliceState {
+             const Action<FDirectiveRuleSet> &Action) -> FBridgeSliceState {
             FBridgeSliceState Next = State;
-            if (!Next.ActivePresetIds.Contains(Action.PayloadValue)) {
-              Next.ActivePresetIds.Add(Action.PayloadValue);
+            const FString TargetId =
+                Action.PayloadValue.Id.IsEmpty() ? Action.PayloadValue.RulesetId
+                                                 : Action.PayloadValue.Id;
+            bool bExists = false;
+            for (const FDirectiveRuleSet &Preset : Next.ActivePresets) {
+              const FString ExistingId =
+                  Preset.Id.IsEmpty() ? Preset.RulesetId : Preset.Id;
+              if (ExistingId == TargetId) {
+                bExists = true;
+                break;
+              }
+            }
+            if (!bExists) {
+              Next.ActivePresets.Add(Action.PayloadValue);
             }
             return Next;
           })

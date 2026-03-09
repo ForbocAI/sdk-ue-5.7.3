@@ -232,9 +232,9 @@ inline auto postItem(const FItemRequest &Request) {
 |------|---------|
 | `Core/rtk.hpp` | Complete RTK substrate |
 | `Core/functional_core.hpp` | FP primitives (Maybe, Either, AsyncResult, Pipeline) |
-| `SDKStore.h` | App state + configureStore |
+| `RuntimeStore.h` | App state + configureStore |
 | `*Slice.h` | Domain slices (NPC, Memory, Ghost, Bridge, Soul, Cortex) |
 | `*SliceActions.h` | Action creators per domain |
 | `Thunks.h` | All async thunk implementations |
 | `API/APISlice.h` | HTTP endpoint definitions |
-| `CLI/SDKOps.h` | Store-dispatching operations for CLI |
+| `CLI/CliOperations.h` | Store-dispatching operations for CLI |

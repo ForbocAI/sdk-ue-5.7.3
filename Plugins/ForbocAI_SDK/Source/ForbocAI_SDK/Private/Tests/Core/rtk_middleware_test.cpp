@@ -23,8 +23,9 @@ bool FRtkMiddlewareTest::RunTest(const FString &Parameters) {
 
   // 2. Setup Middleware A (Logging before and after)
   Middleware<FAppMockState> MiddlewareA =
-      [&EventLog](const MiddlewareApi<FAppMockState> &Api) {
-        return [&EventLog](NextDispatcher<FAppMockState> Next) {
+      [&EventLog](const MiddlewareApi<FAppMockState> &Api)
+          -> std::function<Dispatcher(Dispatcher)> {
+        return [&EventLog](Dispatcher Next) -> Dispatcher {
           return [&EventLog, Next](const AnyAction &Action) -> AnyAction {
             EventLog.Add(TEXT("MwA_Before"));
             auto Result = Next(Action);

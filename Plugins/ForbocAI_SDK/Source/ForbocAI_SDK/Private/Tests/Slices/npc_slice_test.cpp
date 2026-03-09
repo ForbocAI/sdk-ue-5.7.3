@@ -22,7 +22,7 @@ bool FNPCSliceSetInfoTest::RunTest(const FString &Parameters) {
   Info.Id = TEXT("npc_001");
   Info.Persona = TEXT("A brave knight");
 
-  State = NpcSlice.Reducer(State, Actions::SetNPCInfo(Info));
+  State = NpcSlice.Reducer(State, NPCSlice::Actions::SetNPCInfo(Info));
 
   TestEqual("ActiveNpcId set", State.ActiveNpcId, FString(TEXT("npc_001")));
 
@@ -39,7 +39,7 @@ bool FNPCSliceSetInfoTest::RunTest(const FString &Parameters) {
   FNPCInternalState Info2;
   Info2.Id = TEXT("npc_002");
   Info2.Persona = TEXT("A sly rogue");
-  State = NpcSlice.Reducer(State, Actions::SetNPCInfo(Info2));
+  State = NpcSlice.Reducer(State, NPCSlice::Actions::SetNPCInfo(Info2));
 
   TestEqual("ActiveNpcId updated to second", State.ActiveNpcId,
             FString(TEXT("npc_002")));
@@ -64,14 +64,14 @@ bool FNPCSliceRemoveTest::RunTest(const FString &Parameters) {
   FNPCInternalState Info;
   Info.Id = TEXT("npc_rm");
   Info.Persona = TEXT("Doomed NPC");
-  State = NpcSlice.Reducer(State, Actions::SetNPCInfo(Info));
+  State = NpcSlice.Reducer(State, NPCSlice::Actions::SetNPCInfo(Info));
 
   TestTrue("NPC exists before removal",
            SelectNPCById(State, TEXT("npc_rm")).hasValue);
   TestEqual("ActiveNpcId is npc_rm", State.ActiveNpcId,
             FString(TEXT("npc_rm")));
 
-  State = NpcSlice.Reducer(State, Actions::RemoveNPC(TEXT("npc_rm")));
+  State = NpcSlice.Reducer(State, NPCSlice::Actions::RemoveNPC(TEXT("npc_rm")));
 
   TestFalse("NPC removed from entities",
             SelectNPCById(State, TEXT("npc_rm")).hasValue);
@@ -105,12 +105,12 @@ bool FNPCSliceSelectorsTest::RunTest(const FString &Parameters) {
   FNPCInternalState A;
   A.Id = TEXT("sel_a");
   A.Persona = TEXT("Alpha");
-  State = NpcSlice.Reducer(State, Actions::SetNPCInfo(A));
+  State = NpcSlice.Reducer(State, NPCSlice::Actions::SetNPCInfo(A));
 
   FNPCInternalState B;
   B.Id = TEXT("sel_b");
   B.Persona = TEXT("Beta");
-  State = NpcSlice.Reducer(State, Actions::SetNPCInfo(B));
+  State = NpcSlice.Reducer(State, NPCSlice::Actions::SetNPCInfo(B));
 
   // Active should be last set
   func::Maybe<FNPCInternalState> Active = SelectActiveNPC(State);
@@ -130,7 +130,7 @@ bool FNPCSliceSelectorsTest::RunTest(const FString &Parameters) {
   TestEqual("Two NPCs total", SelectAllNPCs(State).Num(), 2);
 
   // SetActiveNPC to sel_a
-  State = NpcSlice.Reducer(State, Actions::SetActiveNPC(TEXT("sel_a")));
+  State = NpcSlice.Reducer(State, NPCSlice::Actions::SetActiveNPC(TEXT("sel_a")));
   TestEqual("Active switched to sel_a", SelectActiveNpcId(State),
             FString(TEXT("sel_a")));
 

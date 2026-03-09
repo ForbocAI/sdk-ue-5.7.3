@@ -2,8 +2,8 @@
 
 #include "CoreMinimal.h"
 #include "Kismet/BlueprintFunctionLibrary.h"
-#include "CLI/SDKOps.h"
-#include "ForbocAIBlueprintLibrary.generated.h"
+#include "CLI/CliOperations.h"
+#include "RuntimeBlueprintLibrary.generated.h"
 
 /**
  * Blueprint-callable wrappers around SDKOps.

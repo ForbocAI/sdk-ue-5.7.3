@@ -5,7 +5,7 @@
 #include "Memory/MemorySlice.h"
 #include "Misc/FileHelper.h"
 #include "Misc/Paths.h"
-#include "SDKStore.h"
+#include "RuntimeStore.h"
 #include "Serialization/JsonSerializer.h"
 #include "Memory/MemoryThunks.h"
 
@@ -75,7 +75,8 @@ MemoryOps::Store(const FMemoryStore &Store, const FString &Text,
                  const FString &Type, float Importance) {
   if (!Store.bInitialized) {
     TPromise<MemoryTypes::MemoryStoreAddResult> Promise;
-    Promise.SetValue(MemoryTypes::make_right(FString(), Store));
+    Promise.SetValue(MemoryTypes::make_left(
+        FString(TEXT("Memory store not initialized")), FMemoryStore{}));
     return Promise.GetFuture();
   }
 
@@ -124,7 +125,8 @@ MemoryOps::Recall(const FMemoryStore &Store, const FString &Query,
                   int32 Limit) {
   if (!Store.bInitialized) {
     TPromise<MemoryTypes::MemoryStoreRecallResult> Promise;
-    Promise.SetValue(MemoryTypes::make_right(FString(), TArray<FMemoryItem>()));
+    Promise.SetValue(MemoryTypes::make_left(
+        FString(TEXT("Memory store not initialized")), TArray<FMemoryItem>{}));
     return Promise.GetFuture();
   }
 
@@ -161,9 +163,8 @@ TFuture<MemoryTypes::MemoryStoreEmbeddingResult>
 MemoryOps::GenerateEmbedding(const FMemoryStore &Store, const FString &Text) {
   if (!Store.bInitialized) {
     TPromise<MemoryTypes::MemoryStoreEmbeddingResult> Promise;
-    TArray<float> EmptyVector;
-    EmptyVector.Init(0.0f, Store.Config.VectorDimension);
-    Promise.SetValue(MemoryTypes::make_right(FString(), EmptyVector));
+    Promise.SetValue(MemoryTypes::make_left(
+        FString(TEXT("Memory store not initialized")), TArray<float>{}));
     return Promise.GetFuture();
   }
 

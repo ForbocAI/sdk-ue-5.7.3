@@ -3,8 +3,8 @@
 #include "Interfaces/IHttpRequest.h"
 #include "Interfaces/IHttpResponse.h"
 #include "JsonObjectConverter.h"
-#include "SDKConfig.h"
-#include "SDKStore.h"
+#include "RuntimeConfig.h"
+#include "RuntimeStore.h"
 #include "Serialization/JsonSerializer.h"
 #include "Soul/SoulSlice.h"
 #include "Soul/SoulThunks.h"
@@ -73,6 +73,7 @@ SoulTypes::SoulExportResult SoulOps::ExportToArweave(const FSoul &Soul,
 
         SDKStore.dispatch(rtk::exportSoulThunk(Soul))
             .then([resolve](const FSoulExportResult &Result) { resolve(Result); })
-            .catch_([reject](std::string Error) { reject(Error); });
+            .catch_([reject](std::string Error) { reject(Error); })
+            .execute();
       });
 }

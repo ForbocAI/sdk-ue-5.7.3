@@ -7,11 +7,44 @@
 #include "Protocol/ProtocolRequestTypes.h"
 
 namespace rtk {
+
+struct FProtocolRuntime {
+  std::function<ThunkAction<FMemoryItem, FSDKState>(const FMemoryItem &)>
+      StoreMemory;
+  std::function<ThunkAction<TArray<FMemoryItem>, FSDKState>(
+      const FMemoryRecallRequest &)>
+      RecallMemory;
+  std::function<ThunkAction<FCortexResponse, FSDKState>(
+      const FString &, const FCortexConfig &)>
+      CompleteInference;
+
+  bool HasMemory() const {
+    return static_cast<bool>(StoreMemory) && static_cast<bool>(RecallMemory);
+  }
+
+  bool HasCortex() const { return static_cast<bool>(CompleteInference); }
+};
+
+inline FProtocolRuntime LocalProtocolRuntime() {
+  FProtocolRuntime Runtime;
+  Runtime.StoreMemory = [](const FMemoryItem &Item) {
+    return nodeMemoryStoreThunk(Item);
+  };
+  Runtime.RecallMemory = [](const FMemoryRecallRequest &Request) {
+    return nodeMemoryRecallThunk(Request);
+  };
+  Runtime.CompleteInference = [](const FString &Prompt,
+                                 const FCortexConfig &Config) {
+    return completeNodeCortexThunk(Prompt, Config);
+  };
+  return Runtime;
+}
+
 namespace detail {
 
 inline func::AsyncResult<rtk::FEmptyPayload>
 PersistMemoryInstructions(const TArray<FMemoryStoreInstruction> &Instructions,
-                          int32 Index,
+                          int32 Index, const FProtocolRuntime &Runtime,
                           std::function<AnyAction(const AnyAction &)> Dispatch,
                           std::function<FSDKState()> GetState);
 
@@ -19,7 +52,7 @@ inline func::AsyncResult<FAgentResponse>
 RunProtocolTurn(const FString &NpcId, const FString &Input,
                 const FString &RunId, const FNPCProcessTape &Tape,
                 const FString &LastResultJson, bool bHasLastResult,
-                int32 Turn,
+                int32 Turn, const FProtocolRuntime &Runtime,
                 std::function<AnyAction(const AnyAction &)> Dispatch,
                 std::function<FSDKState()> GetState) {
   if (Turn >= 12) {
@@ -35,7 +68,7 @@ RunProtocolTurn(const FString &NpcId, const FString &Input,
 
   return func::AsyncChain::then<FNPCProcessResponse, FAgentResponse>(
       APISlice::Endpoints::postNpcProcess(NpcId, Request)(Dispatch, GetState),
-      [NpcId, Input, RunId, Tape, Turn, Dispatch,
+      [NpcId, Input, RunId, Tape, Turn, Runtime, Dispatch,
        GetState](const FNPCProcessResponse &Response) {
         const FNPCInstruction &Instruction = Response.Instruction;
 
@@ -46,10 +79,17 @@ RunProtocolTurn(const FString &NpcId, const FString &Input,
           Actor.Data = Response.Tape.NpcState;
           return RunProtocolTurn(NpcId, Input, RunId, Response.Tape,
                                  SerializeIdentifyActorResult(Actor), true,
-                                 Turn + 1, Dispatch, GetState);
+                                 Turn + 1, Runtime, Dispatch, GetState);
         }
 
         if (Instruction.Type == ENPCInstructionType::QueryVector) {
+          if (!Runtime.HasMemory()) {
+            const FString Error =
+                TEXT("API requested memory recall, but no memory engine is configured");
+            Dispatch(DirectiveSlice::Actions::DirectiveRunFailed(RunId, Error));
+            return RejectAsync<FAgentResponse>(Error);
+          }
+
           FDirectiveResponse Directive;
           Directive.MemoryRecall =
               TypeFactory::MemoryRecallInstruction(Instruction.Query,
@@ -63,9 +103,9 @@ RunProtocolTurn(const FString &NpcId, const FString &Input,
           RecallRequest.Threshold = Instruction.Threshold;
 
           return func::AsyncChain::then<TArray<FMemoryItem>, FAgentResponse>(
-              nodeMemoryRecallThunk(RecallRequest)(Dispatch, GetState),
+              Runtime.RecallMemory(RecallRequest)(Dispatch, GetState),
               [NpcId, Input, RunId, Response, Turn, Dispatch,
-               GetState](const TArray<FMemoryItem> &Memories) {
+               GetState, Runtime](const TArray<FMemoryItem> &Memories) {
                 FNPCProcessTape NextTape = Response.Tape;
                 NextTape.Memories.Empty();
                 for (int32 Index = 0; Index < Memories.Num(); ++Index) {
@@ -79,27 +119,36 @@ RunProtocolTurn(const FString &NpcId, const FString &Input,
                 NextTape.bVectorQueried = true;
                 return RunProtocolTurn(NpcId, Input, RunId, NextTape,
                                        SerializeQueryVectorResult(Memories),
-                                       true, Turn + 1, Dispatch, GetState);
+                                       true, Turn + 1, Runtime, Dispatch,
+                                       GetState);
               });
         }
 
         if (Instruction.Type == ENPCInstructionType::ExecuteInference) {
+          if (!Runtime.HasCortex()) {
+            const FString Error =
+                TEXT("No local cortex provided. SDK remote cortex fallback is disabled.");
+            Dispatch(DirectiveSlice::Actions::DirectiveRunFailed(RunId, Error));
+            return RejectAsync<FAgentResponse>(Error);
+          }
+
           Dispatch(DirectiveSlice::Actions::ContextComposed(
               RunId, Instruction.Prompt, Instruction.Constraints));
 
           return func::AsyncChain::then<FCortexResponse, FAgentResponse>(
-              completeNodeCortexThunk(Instruction.Prompt,
-                                      Instruction.Constraints)(Dispatch,
-                                                               GetState),
+              Runtime.CompleteInference(Instruction.Prompt,
+                                        Instruction.Constraints)(Dispatch,
+                                                                 GetState),
               [NpcId, Input, RunId, Response, Turn, Dispatch,
-               GetState](const FCortexResponse &Generated) {
+               GetState, Runtime](const FCortexResponse &Generated) {
                 FNPCProcessTape NextTape = Response.Tape;
                 NextTape.Prompt = Response.Instruction.Prompt;
                 NextTape.Constraints = Response.Instruction.Constraints;
                 NextTape.GeneratedOutput = Generated.Text;
                 return RunProtocolTurn(NpcId, Input, RunId, NextTape,
                                        SerializeInferenceResult(Generated.Text),
-                                       true, Turn + 1, Dispatch, GetState);
+                                       true, Turn + 1, Runtime, Dispatch,
+                                       GetState);
               });
         }
 
@@ -130,8 +179,8 @@ RunProtocolTurn(const FString &NpcId, const FString &Input,
         }
 
         return func::AsyncChain::then<rtk::FEmptyPayload, FAgentResponse>(
-            PersistMemoryInstructions(Instruction.MemoryStore, 0, Dispatch,
-                                      GetState),
+            PersistMemoryInstructions(Instruction.MemoryStore, 0, Runtime,
+                                      Dispatch, GetState),
             [NpcId, Input, Instruction, Dispatch,
              GetState](const rtk::FEmptyPayload &) {
               if (HasStatePayload(Instruction.StateTransform)) {
@@ -158,20 +207,24 @@ RunProtocolTurn(const FString &NpcId, const FString &Input,
 
 inline func::AsyncResult<rtk::FEmptyPayload>
 PersistMemoryInstructions(const TArray<FMemoryStoreInstruction> &Instructions,
-                          int32 Index,
+                          int32 Index, const FProtocolRuntime &Runtime,
                           std::function<AnyAction(const AnyAction &)> Dispatch,
                           std::function<FSDKState()> GetState) {
   if (Index >= Instructions.Num()) {
     return ResolveAsync(rtk::FEmptyPayload{});
   }
 
+  if (!Runtime.StoreMemory) {
+    return RejectAsync<rtk::FEmptyPayload>(
+        TEXT("API returned memoryStore instructions, but no memory engine is configured"));
+  }
+
   return func::AsyncChain::then<FMemoryItem, rtk::FEmptyPayload>(
-      nodeMemoryStoreThunk(MakeMemoryItem(Instructions[Index]))(Dispatch,
-                                                                GetState),
-      [Instructions, Index, Dispatch,
+      Runtime.StoreMemory(MakeMemoryItem(Instructions[Index]))(Dispatch, GetState),
+      [Instructions, Index, Runtime, Dispatch,
        GetState](const FMemoryItem &Stored) {
-        return PersistMemoryInstructions(Instructions, Index + 1, Dispatch,
-                                         GetState);
+        return PersistMemoryInstructions(Instructions, Index + 1, Runtime,
+                                         Dispatch, GetState);
       });
 }
 
@@ -185,8 +238,9 @@ inline ThunkAction<FAgentResponse, FSDKState>
 processNPC(const FString &NpcId, const FString &Input = TEXT(""),
            const FString &ContextJson = TEXT("{}"),
            const FString &Persona = TEXT(""),
-           const FAgentState &InitialState = FAgentState()) {
-  return [NpcId, Input, ContextJson, Persona, InitialState](
+           const FAgentState &InitialState = FAgentState(),
+           const FProtocolRuntime &Runtime = FProtocolRuntime()) {
+  return [NpcId, Input, ContextJson, Persona, InitialState, Runtime](
              std::function<AnyAction(const AnyAction &)> Dispatch,
              std::function<FSDKState()> GetState)
              -> func::AsyncResult<FAgentResponse> {
@@ -231,7 +285,7 @@ processNPC(const FString &NpcId, const FString &Input = TEXT(""),
     Tape.bVectorQueried = false;
 
     return detail::RunProtocolTurn(NpcId, Input, RunId, Tape, TEXT(""), false,
-                                   0, Dispatch, GetState);
+                                   0, Runtime, Dispatch, GetState);
   };
 }
 

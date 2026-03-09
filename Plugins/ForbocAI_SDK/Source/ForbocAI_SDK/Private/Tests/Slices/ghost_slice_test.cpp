@@ -20,7 +20,7 @@ bool FGhostSliceSessionStartedTest::RunTest(const FString &Parameters) {
   TestEqual("Initial status idle", State.Status, FString(TEXT("idle")));
 
   State = GSlice.Reducer(
-      State, Actions::GhostSessionStarted(TEXT("sess_01"), TEXT("running")));
+      State, GhostSlice::Actions::GhostSessionStarted(TEXT("sess_01"), TEXT("running")));
 
   TestEqual("ActiveSessionId set", State.ActiveSessionId,
             FString(TEXT("sess_01")));
@@ -44,10 +44,10 @@ bool FGhostSliceProgressTest::RunTest(const FString &Parameters) {
   FGhostSliceState State;
 
   State = GSlice.Reducer(
-      State, Actions::GhostSessionStarted(TEXT("sess_p"), TEXT("running")));
+      State, GhostSlice::Actions::GhostSessionStarted(TEXT("sess_p"), TEXT("running")));
   State = GSlice.Reducer(
       State,
-      Actions::GhostSessionProgress(TEXT("sess_p"), TEXT("running"), 0.5f));
+      GhostSlice::Actions::GhostSessionProgress(TEXT("sess_p"), TEXT("running"), 0.5f));
 
   TestEqual("Progress updated to 0.5", State.Progress, 0.5f);
   TestEqual("SessionId preserved", State.ActiveSessionId,
@@ -69,7 +69,7 @@ bool FGhostSliceCompletedTest::RunTest(const FString &Parameters) {
   FGhostSliceState State;
 
   State = GSlice.Reducer(
-      State, Actions::GhostSessionStarted(TEXT("sess_c"), TEXT("running")));
+      State, GhostSlice::Actions::GhostSessionStarted(TEXT("sess_c"), TEXT("running")));
 
   FGhostTestReport Report;
   FGhostTestResult Result;
@@ -77,7 +77,7 @@ bool FGhostSliceCompletedTest::RunTest(const FString &Parameters) {
   Result.bPassed = true;
   Report.Results.Add(Result);
 
-  State = GSlice.Reducer(State, Actions::GhostSessionCompleted(Report));
+  State = GSlice.Reducer(State, GhostSlice::Actions::GhostSessionCompleted(Report));
 
   TestEqual("Status completed", State.Status, FString(TEXT("completed")));
   TestEqual("Progress 1.0", State.Progress, 1.0f);
@@ -100,10 +100,10 @@ bool FGhostSliceFailedTest::RunTest(const FString &Parameters) {
   FGhostSliceState State;
 
   State = GSlice.Reducer(
-      State, Actions::GhostSessionStarted(TEXT("sess_f"), TEXT("running")));
+      State, GhostSlice::Actions::GhostSessionStarted(TEXT("sess_f"), TEXT("running")));
   State = GSlice.Reducer(
       State,
-      Actions::GhostSessionFailed(TEXT("sess_f"), TEXT("Scenario crash")));
+      GhostSlice::Actions::GhostSessionFailed(TEXT("sess_f"), TEXT("Scenario crash")));
 
   TestEqual("Status failed", State.Status, FString(TEXT("failed")));
   TestEqual("Error set", State.Error, FString(TEXT("Scenario crash")));
@@ -130,7 +130,7 @@ bool FGhostSliceHistoryTest::RunTest(const FString &Parameters) {
   Entry.SessionId = TEXT("old_sess");
   History.Add(Entry);
 
-  State = GSlice.Reducer(State, Actions::GhostHistoryLoaded(History));
+  State = GSlice.Reducer(State, GhostSlice::Actions::GhostHistoryLoaded(History));
 
   TestEqual("History count", State.History.Num(), 1);
   TestEqual("History entry sessionId", State.History[0].SessionId,

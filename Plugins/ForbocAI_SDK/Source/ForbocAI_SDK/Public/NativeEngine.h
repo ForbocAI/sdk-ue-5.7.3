@@ -44,6 +44,12 @@ FORBOCAI_SDK_API DB Open(const FString &Path);
 /** Closes the database */
 FORBOCAI_SDK_API void Close(DB Database);
 
+/** Clears all rows for a database handle. */
+FORBOCAI_SDK_API void Clear(DB Database);
+
+/** Clears all rows for a database path. */
+FORBOCAI_SDK_API void ClearPath(const FString &Path);
+
 /** Performs vector similarity search and returns full memory rows. */
 FORBOCAI_SDK_API TArray<FMemoryItem>
 SearchRows(DB Database, const TArray<float> &Vector, int32 TopK = 5);

@@ -21,7 +21,7 @@ inline func::Maybe<FString>
 requireApiKeyGuidance(const FString &ApiUrl, const FString &ApiKey) {
   if (ApiKey.IsEmpty() && ApiUrl.Contains(TEXT("api.forboc.ai"))) {
     return func::just<FString>(
-        TEXT("An API key is required when targeting https://api.forboc.ai"));
+        TEXT("Missing API key. Set FORBOCAI_API_KEY (or run `forboc config set apiKey <key>`) for production API calls."));
   }
   return func::nothing<FString>();
 }

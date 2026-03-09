@@ -4,7 +4,7 @@
 #include "CoreMinimal.h"
 #include "Commandlets/Commandlet.h"
 #include "Core/functional_core.hpp"
-#include "ForbocAISDKCommandlet.generated.h"
+#include "RuntimeCommandlet.generated.h"
 
 namespace CLITypes {
 using func::AsyncResult;

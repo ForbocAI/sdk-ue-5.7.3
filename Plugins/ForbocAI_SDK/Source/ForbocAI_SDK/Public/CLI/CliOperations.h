@@ -4,10 +4,12 @@
 #include "Core/functional_core.hpp"
 #include "NPC/NPCId.h"
 #include "NPC/NPCSlice.h"
-#include "SDKConfig.h"
-#include "SDKStore.h"
+#include "RuntimeConfig.h"
+#include "RuntimeStore.h"
 #include "Thunks.h"
+#include "HttpManager.h"
 #include "HttpModule.h"
+#include <stdexcept>
 
 /**
  * SDK Operations — Free functions mirroring TS sdkOps.ts
@@ -29,17 +31,30 @@ template <typename T>
 T WaitForResult(func::AsyncResult<T> &&Async, double TimeoutSeconds = 15.0) {
   bool bCompleted = false;
   T Result{};
+  FString Error;
 
   Async.then([&bCompleted, &Result](T Value) {
     Result = Value;
     bCompleted = true;
+  }).catch_([&bCompleted, &Error](std::string Message) {
+    Error = UTF8_TO_TCHAR(Message.c_str());
+    bCompleted = true;
   });
+  Async.execute();
 
   const double StartTime = FPlatformTime::Seconds();
   while (!bCompleted &&
          (FPlatformTime::Seconds() - StartTime) < TimeoutSeconds) {
     FHttpModule::Get().GetHttpManager().Tick(0.05f);
     FPlatformProcess::Sleep(0.05f);
+  }
+
+  if (!Error.IsEmpty()) {
+    throw std::runtime_error(TCHAR_TO_UTF8(*Error));
+  }
+
+  if (!bCompleted) {
+    throw std::runtime_error("Timed out waiting for async result");
   }
 
   return Result;
@@ -71,7 +86,7 @@ inline FApiStatusResponse CheckApiStatus(rtk::EnhancedStore<FSDKState> &Store) {
 
 inline FNPCInternalState CreateNpc(rtk::EnhancedStore<FSDKState> &Store,
                                    const FString &Persona) {
-  FString Id = NPCSlice::GenerateNPCId();
+  FString Id = NPCId::GenerateNPCId();
   FNPCInternalState Info;
   Info.Id = Id;
   Info.Persona = Persona;
@@ -89,16 +104,16 @@ GetActiveNpc(rtk::EnhancedStore<FSDKState> &Store) {
 inline func::Maybe<FNPCInternalState>
 UpdateNpc(rtk::EnhancedStore<FSDKState> &Store, const FString &NpcId,
           const FAgentState &Delta) {
-  FNPCStateUpdate Update;
-  Update.Id = NpcId;
-  Update.Delta = Delta;
-  Store.dispatch(NPCSlice::Actions::UpdateNPCState(Update));
+  Store.dispatch(NPCSlice::Actions::UpdateNPCState(NpcId, Delta));
   return NPCSlice::SelectNPCById(Store.getState().NPCs, NpcId);
 }
 
 inline FAgentResponse ProcessNpc(rtk::EnhancedStore<FSDKState> &Store,
                                  const FString &NpcId, const FString &Text) {
-  return WaitForResult(Store.dispatch(rtk::processNPC(NpcId, Text)));
+  return WaitForResult(
+      Store.dispatch(rtk::processNPC(NpcId, Text, TEXT("{}"), TEXT(""),
+                                     FAgentState(),
+                                     rtk::LocalProtocolRuntime())));
 }
 
 inline TArray<FNPCInternalState>

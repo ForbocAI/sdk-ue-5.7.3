@@ -5,7 +5,7 @@
 #include "Interfaces/IHttpRequest.h"
 #include "Interfaces/IHttpResponse.h"
 #include "Misc/Guid.h"
-#include "SDKConfig.h"
+#include "RuntimeConfig.h"
 #include "Dom/JsonObject.h"
 #include "Policies/CondensedJsonPrintPolicy.h"
 #include "Serialization/JsonWriter.h"
@@ -111,7 +111,7 @@ FAgentState AgentOps::CalculateNewState(const FAgentState &Current,
   return TypeFactory::AgentState(Updates.JsonData);
 }
 
-#include "SDKStore.h"
+#include "RuntimeStore.h"
 #include "Protocol/ProtocolThunks.h"
 
 AgentTypes::AsyncResult<FAgentResponse>
@@ -125,11 +125,13 @@ AgentOps::Process(const FAgent &Agent, const FString &Input,
 
         Store->dispatch(rtk::processNPC(Agent.Id, Input,
                                         SerializeContextMap(Context),
-                                        Agent.Persona, Agent.State))
+                                        Agent.Persona, Agent.State,
+                                        rtk::LocalProtocolRuntime()))
             .then([resolve, Store](const FAgentResponse &Response) {
               resolve(Response);
             })
-            .catch_([reject, Store](std::string Error) { reject(Error); });
+            .catch_([reject, Store](std::string Error) { reject(Error); })
+            .execute();
       });
 }
 

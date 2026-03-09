@@ -1,4 +1,4 @@
-#include "CLI/SDKOps.h"
+#include "CLI/CliOperations.h"
 #include "Core/rtk.hpp"
 #include "CoreMinimal.h"
 #include "HAL/FileManager.h"
@@ -6,8 +6,8 @@
 #include "Misc/FileHelper.h"
 #include "Misc/Guid.h"
 #include "Misc/Paths.h"
-#include "SDKConfig.h"
-#include "SDKStore.h"
+#include "RuntimeConfig.h"
+#include "RuntimeStore.h"
 
 using namespace rtk;
 
