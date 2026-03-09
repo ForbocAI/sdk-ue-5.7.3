@@ -1,6 +1,7 @@
 #pragma once
 
 #include "CoreMinimal.h"
+#include "Cortex/CortexTypes.h"
 #include "Memory/MemoryTypes.h"
 
 /**
@@ -23,6 +24,10 @@ FORBOCAI_SDK_API void FreeModel(Context Ctx);
 /** Performs synchronous inference */
 FORBOCAI_SDK_API FString Infer(Context Ctx, const FString &Prompt,
                                int32 MaxTokens = 512);
+
+/** Performs synchronous inference with SDK completion options. */
+FORBOCAI_SDK_API FString Infer(Context Ctx, const FString &Prompt,
+                               const FCortexConfig &Config);
 
 /** Generates a deterministic embedding vector for text. */
 FORBOCAI_SDK_API TArray<float> Embed(Context Ctx, const FString &Text);

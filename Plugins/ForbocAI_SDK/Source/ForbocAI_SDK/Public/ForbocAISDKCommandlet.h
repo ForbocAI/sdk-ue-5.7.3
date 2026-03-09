@@ -6,17 +6,28 @@
 #include "Core/functional_core.hpp"
 #include "ForbocAISDKCommandlet.generated.h"
 
+namespace CLITypes {
+using func::AsyncResult;
+using func::Either;
+using func::TestResult;
+using func::ValidationPipeline;
+using func::make_left;
+using func::make_right;
+} // namespace CLITypes
+
 /**
  * ForbocAI SDK Commandlet.
  * Usage:
  *   ./UnrealEditorCmd -run=ForbocAI_SDK -Command=<CommandName> [Args...]
  *
- * Commands:
+ * Canonical commands:
  *   doctor
- *   agent_list
- *   agent_create -Persona="..."
- *   agent_process -Id="..." -Input="..."
+ *   npc_list
+ *   npc_create -Persona="..."
+ *   npc_process -Id="..." -Input="..."
  *   soul_export -Id="..."
+ *   config_set -Key="..." -Value="..."
+ *   config_get -Key="..."
  */
 UCLASS()
 class UForbocAI_SDKCommandlet : public UCommandlet {
@@ -33,15 +44,12 @@ public:
   using CommandResult = CLITypes::TestResult<void>;
   using CommandExecution = CLITypes::AsyncResult<void>;
 
-  // Command execution helpers
-  CommandResult executeDoctor(const FString& apiUrl);
-  CommandResult executeAgentList(const FString& apiUrl);
-  CommandResult executeAgentCreate(const FString& apiUrl, const FString& persona);
-  CommandResult executeAgentProcess(const FString& apiUrl, const FString& id, const FString& input);
-  CommandResult executeSoulExport(const FString& apiUrl, const FString& id);
+  CommandResult executeCommand(const FString &Command,
+                               const TArray<FString> &Args);
 
   // Command pipeline helpers
-  CommandExecution createCommandPipeline(const FString& command, const FString& apiUrl, const FString& param1 = TEXT(""), const FString& param2 = TEXT(""));
+  CommandExecution createCommandPipeline(const FString &Command,
+                                         const TArray<FString> &Args);
 
   // Command validation helpers
   CLITypes::ValidationPipeline<FString, FString> commandValidationPipeline();

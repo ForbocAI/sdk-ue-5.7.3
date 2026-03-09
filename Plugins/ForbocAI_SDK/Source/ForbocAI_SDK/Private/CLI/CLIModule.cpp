@@ -5,6 +5,20 @@
 
 namespace CLIOps {
 
+namespace {
+
+FString DescribeCortexStatus(const FCortexStatus &Status) {
+  if (Status.bReady) {
+    return TEXT("ready");
+  }
+  if (!Status.Error.IsEmpty()) {
+    return Status.Error;
+  }
+  return TEXT("initializing");
+}
+
+} // namespace
+
 /**
  * Single shared store instance for all CLI commands.
  * Mirrors TS cli.ts which imports { store } from '../index'.
@@ -105,7 +119,8 @@ func::TestResult<void> DispatchCommand(const FString &CommandKey,
       return Result::Failure("Usage: cortex_init <model>");
     }
     FCortexStatus Status = SDKOps::InitCortex(Store, Args[0]);
-    UE_LOG(LogTemp, Display, TEXT("Cortex initialized: %s"), *Status.Status);
+    UE_LOG(LogTemp, Display, TEXT("Cortex initialized: %s"),
+           *DescribeCortexStatus(Status));
     return Result::Success("Cortex initialized");
   }
 
@@ -116,7 +131,7 @@ func::TestResult<void> DispatchCommand(const FString &CommandKey,
     FString AuthKey = Args.Num() > 1 ? Args[1] : TEXT("");
     FCortexStatus Status = SDKOps::InitRemoteCortex(Store, Args[0], AuthKey);
     UE_LOG(LogTemp, Display, TEXT("Remote cortex initialized: %s"),
-           *Status.Status);
+           *DescribeCortexStatus(Status));
     return Result::Success("Remote cortex initialized");
   }
 

@@ -5,8 +5,11 @@
 #include "../SDKConfig.h"
 #include "../Types.h"
 #include "CoreMinimal.h"
+#include "Dom/JsonObject.h"
 #include "GenericPlatform/GenericPlatformHttp.h"
 #include "JsonObjectConverter.h"
+#include "Serialization/JsonSerializer.h"
+#include "Serialization/JsonWriter.h"
 
 struct FSDKState;
 
@@ -34,6 +37,46 @@ template <typename T> inline FString ToJson(const T &Value) {
 
 inline FString Encode(const FString &Value) {
   return FGenericPlatformHttp::UrlEncode(Value);
+}
+
+inline FString ToJsonString(const TSharedRef<FJsonObject> &Object) {
+  FString Json;
+  const TSharedRef<TJsonWriter<>> Writer = TJsonWriterFactory<>::Create(&Json);
+  FJsonSerializer::Serialize(Object, Writer);
+  return Json;
+}
+
+inline FString BuildCortexCompletePayload(const FCortexCompleteRequest &Request) {
+  const TSharedRef<FJsonObject> Payload = MakeShared<FJsonObject>();
+  Payload->SetStringField(TEXT("prompt"), Request.Prompt);
+
+  if (Request.MaxTokens >= 0) {
+    Payload->SetNumberField(TEXT("maxTokens"), Request.MaxTokens);
+  }
+
+  if (Request.Temperature >= 0.0f) {
+    Payload->SetNumberField(TEXT("temperature"), Request.Temperature);
+  }
+
+  if (Request.Stop.Num() > 0) {
+    TArray<TSharedPtr<FJsonValue>> StopValues;
+    StopValues.Reserve(Request.Stop.Num());
+    for (const FString &Value : Request.Stop) {
+      StopValues.Add(MakeShared<FJsonValueString>(Value));
+    }
+    Payload->SetArrayField(TEXT("stop"), StopValues);
+  }
+
+  if (!Request.JsonSchemaJson.IsEmpty()) {
+    TSharedPtr<FJsonObject> JsonSchema;
+    const TSharedRef<TJsonReader<>> Reader =
+        TJsonReaderFactory<>::Create(Request.JsonSchemaJson);
+    if (FJsonSerializer::Deserialize(Reader, JsonSchema) && JsonSchema.IsValid()) {
+      Payload->SetObjectField(TEXT("jsonSchema"), JsonSchema);
+    }
+  }
+
+  return ToJsonString(Payload);
 }
 
 template <typename Arg, typename Result>
@@ -137,10 +180,17 @@ inline auto postCortexInit(const FCortexInitRequest &Request) {
       Request);
 }
 
-inline auto postCortexComplete(const FCortexCompleteRequest &Request) {
-  return Detail::MakePost<FCortexCompleteRequest, FCortexResponse>(
+inline auto postCortexComplete(const FString &CortexId,
+                               const FCortexCompleteRequest &Request) {
+  return Detail::MakeEndpoint<FCortexCompleteRequest, FCortexResponse>(
       TEXT("postCortexComplete"),
-      SDKConfig::GetApiUrl() + TEXT("/cortex/complete"), Request);
+      Request,
+      [CortexId](const FCortexCompleteRequest &Arg) {
+        return func::AsyncHttp::Post<FCortexResponse>(
+            SDKConfig::GetApiUrl() + TEXT("/cortex/") +
+                Detail::Encode(CortexId) + TEXT("/complete"),
+            Detail::BuildCortexCompletePayload(Arg), SDKConfig::GetApiKey());
+      });
 }
 
 inline auto postNpcProcess(const FString &NpcId,

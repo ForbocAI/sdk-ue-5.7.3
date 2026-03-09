@@ -183,14 +183,41 @@ PersistMemoryInstructions(const TArray<FMemoryStoreInstruction> &Instructions,
 
 inline ThunkAction<FAgentResponse, FSDKState>
 processNPC(const FString &NpcId, const FString &Input = TEXT(""),
-           const FString &ContextJson = TEXT("{}")) {
-  return [NpcId, Input, ContextJson](
+           const FString &ContextJson = TEXT("{}"),
+           const FString &Persona = TEXT(""),
+           const FAgentState &InitialState = FAgentState()) {
+  return [NpcId, Input, ContextJson, Persona, InitialState](
              std::function<AnyAction(const AnyAction &)> Dispatch,
              std::function<FSDKState()> GetState)
              -> func::AsyncResult<FAgentResponse> {
-    const auto Npc = NPCSlice::SelectNPCById(GetState().NPCs, NpcId);
-    if (!Npc.hasValue) {
-      return detail::RejectAsync<FAgentResponse>(TEXT("NPC not found"));
+    const auto ExistingNpc = NPCSlice::SelectNPCById(GetState().NPCs, NpcId);
+    FString ResolvedPersona = Persona;
+    FAgentState CurrentState = InitialState;
+    const bool bHasExplicitState =
+        !InitialState.JsonData.IsEmpty() && InitialState.JsonData != TEXT("{}");
+
+    if (ExistingNpc.hasValue) {
+      if (ResolvedPersona.IsEmpty()) {
+        ResolvedPersona = ExistingNpc.value.Persona;
+      }
+      if (!bHasExplicitState) {
+        CurrentState = ExistingNpc.value.State;
+      }
+    }
+
+    if (ResolvedPersona.IsEmpty()) {
+      return detail::RejectAsync<FAgentResponse>(
+          TEXT("No persona provided and no active NPC persona available"));
+    }
+
+    if (!ExistingNpc.hasValue) {
+      FNPCInternalState Info;
+      Info.Id = NpcId;
+      Info.Persona = ResolvedPersona;
+      Info.State = InitialState;
+      Dispatch(NPCSlice::Actions::SetNPCInfo(Info));
+    } else if (NPCSlice::SelectActiveNpcId(GetState().NPCs) != NpcId) {
+      Dispatch(NPCSlice::Actions::SetActiveNPC(NpcId));
     }
 
     const FString RunId = FString::Printf(TEXT("%s:%lld"), *NpcId,
@@ -198,8 +225,8 @@ processNPC(const FString &NpcId, const FString &Input = TEXT(""),
     Dispatch(DirectiveSlice::Actions::DirectiveRunStarted(RunId, NpcId, Input));
 
     FNPCProcessTape Tape = TypeFactory::ProcessTape(Input, ContextJson,
-                                                    Npc.value.State,
-                                                    Npc.value.Persona);
+                                                    CurrentState,
+                                                    ResolvedPersona);
     Tape.Memories.Empty();
     Tape.bVectorQueried = false;
 

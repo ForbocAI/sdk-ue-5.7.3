@@ -5,7 +5,10 @@
 #include "Interfaces/IHttpRequest.h"
 #include "Interfaces/IHttpResponse.h"
 #include "Misc/Guid.h"
+#include "SDKConfig.h"
+#include "Dom/JsonObject.h"
 #include "Policies/CondensedJsonPrintPolicy.h"
+#include "Serialization/JsonWriter.h"
 #include "Serialization/JsonSerializer.h"
 
 // ==========================================
@@ -36,6 +39,23 @@ FString GenerateNPCId() {
                          *ToBase36(FDateTime::UtcNow().ToUnixTimestamp()));
 }
 
+FString SerializeContextMap(const TMap<FString, FString> &Context) {
+  if (Context.IsEmpty()) {
+    return TEXT("{}");
+  }
+
+  const TSharedRef<FJsonObject> Root = MakeShared<FJsonObject>();
+  for (const TPair<FString, FString> &Entry : Context) {
+    Root->SetStringField(Entry.Key, Entry.Value);
+  }
+
+  FString Json;
+  const TSharedRef<TJsonWriter<TCHAR, TCondensedJsonPrintPolicy<TCHAR>>> Writer =
+      TJsonWriterFactory<TCHAR, TCondensedJsonPrintPolicy<TCHAR>>::Create(&Json);
+  FJsonSerializer::Serialize(Root, Writer);
+  return Json;
+}
+
 } // namespace
 
 FAgent AgentFactory::Create(const FAgentConfig &Config) {
@@ -44,7 +64,7 @@ FAgent AgentFactory::Create(const FAgentConfig &Config) {
   Agent.Persona = Config.Persona;
   Agent.State = Config.InitialState;
   Agent.ApiUrl =
-      Config.ApiUrl.IsEmpty() ? TEXT("https://api.forboc.ai") : Config.ApiUrl;
+      Config.ApiUrl.IsEmpty() ? SDKConfig::GetApiUrl() : Config.ApiUrl;
   return Agent;
 }
 
@@ -55,7 +75,7 @@ FAgent AgentFactory::FromSoul(const FSoul &Soul, const FString &ApiUrl) {
   Agent.State = Soul.State;
   Agent.Memories = Soul.Memories;
   Agent.ApiUrl =
-      ApiUrl.IsEmpty() ? TEXT("https://api.forboc.ai") : ApiUrl;
+      ApiUrl.IsEmpty() ? SDKConfig::GetApiUrl() : ApiUrl;
   return Agent;
 }
 
@@ -100,16 +120,20 @@ AgentOps::Process(const FAgent &Agent, const FString &Input,
   return AgentTypes::AsyncResult<FAgentResponse>::create(
       [Agent, Input, Context](std::function<void(FAgentResponse)> resolve,
                               std::function<void(std::string)> reject) {
-        // Use the global SDK Store to dispatch the processNPC thunk
-        auto Store = ConfigureSDKStore();
+        SDKConfig::SetApiConfig(Agent.ApiUrl, SDKConfig::GetApiKey());
+        auto Store = MakeShared<rtk::EnhancedStore<FSDKState>>(createSDKStore());
 
-        Store.dispatch(rtk::processNPC(Agent.Id, Input))
-            .then([resolve](const FAgentResponse &Response) { resolve(Response); })
-            .catch_([reject](std::string Error) { reject(Error); });
+        Store->dispatch(rtk::processNPC(Agent.Id, Input,
+                                        SerializeContextMap(Context),
+                                        Agent.Persona, Agent.State))
+            .then([resolve, Store](const FAgentResponse &Response) {
+              resolve(Response);
+            })
+            .catch_([reject, Store](std::string Error) { reject(Error); });
       });
 }
 
 FSoul AgentOps::Export(const FAgent &Agent) {
-  return TypeFactory::Soul(Agent.Id, TEXT("1.0.0"), TEXT("Agent"),
+  return TypeFactory::Soul(Agent.Id, TEXT("1.0.0"), TEXT("NPC"),
                            Agent.Persona, Agent.State, Agent.Memories);
 }

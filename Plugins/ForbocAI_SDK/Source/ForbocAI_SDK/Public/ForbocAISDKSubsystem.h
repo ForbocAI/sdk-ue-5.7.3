@@ -1,6 +1,7 @@
 #pragma once
 
 #include "CoreMinimal.h"
+#include "SDKConfig.h"
 #include "SDKStore.h"
 #include "Types.h"
 #include "Subsystems/GameInstanceSubsystem.h"
@@ -34,7 +35,7 @@ public:
    * Initializes the SDK with the provided configuration.
    */
   UFUNCTION(BlueprintCallable, Category = "Forboc AI|SDK")
-  void InitSDK(FString ApiKey, FString ApiUrl = TEXT("https://api.forboc.ai"));
+  void InitSDK(FString ApiKey, FString ApiUrl = SDKConfig::DEFAULT_API_URL);
 
   /**
    * Triggers the recursive protocol loop for an NPC.

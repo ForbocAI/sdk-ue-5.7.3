@@ -336,22 +336,11 @@ inline TArray<float> GenerateEmbedding(rtk::EnhancedStore<FSDKState> &Store,
 // ---------------------------------------------------------------------------
 
 inline void ConfigSet(const FString &Key, const FString &Value) {
-  if (Key == TEXT("apiUrl")) {
-    SDKConfig::SetApiConfig(Value, SDKConfig::GetApiKey());
-  } else if (Key == TEXT("apiKey")) {
-    SDKConfig::SetApiConfig(SDKConfig::GetApiUrl(), Value);
-  }
+  SDKConfig::SetConfigValue(Key, Value);
 }
 
 inline FString ConfigGet(const FString &Key) {
-  if (Key == TEXT("apiUrl")) {
-    return SDKConfig::GetApiUrl();
-  } else if (Key == TEXT("apiKey")) {
-    return SDKConfig::GetApiKey();
-  } else if (Key == TEXT("version")) {
-    return SDKConfig::GetSdkVersion();
-  }
-  return TEXT("");
+  return SDKConfig::GetConfigValue(Key);
 }
 
 } // namespace SDKOps

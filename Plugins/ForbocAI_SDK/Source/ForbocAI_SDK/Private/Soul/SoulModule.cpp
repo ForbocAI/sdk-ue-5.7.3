@@ -18,7 +18,7 @@ SoulOps::FromAgent(const FAgentState &State,
                    const TArray<FMemoryItem> &Memories, const FString &AgentId,
                    const FString &Persona) {
   try {
-    FSoul Soul = TypeFactory::Soul(AgentId, TEXT("1.0.0"), TEXT("Agent Soul"),
+    FSoul Soul = TypeFactory::Soul(AgentId, TEXT("1.0.0"), TEXT("NPC"),
                                    Persona, State, Memories);
     return SoulTypes::make_right(FString(), Soul);
   } catch (const std::exception &e) {

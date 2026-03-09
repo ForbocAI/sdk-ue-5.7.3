@@ -52,12 +52,22 @@ struct FCortexCompleteRequest {
   GENERATED_BODY()
 
   UPROPERTY(BlueprintReadOnly)
-  FString CortexId;
-
-  UPROPERTY(BlueprintReadOnly)
   FString Prompt;
 
-  FCortexCompleteRequest() {}
+  UPROPERTY(BlueprintReadOnly)
+  int32 MaxTokens;
+
+  UPROPERTY(BlueprintReadOnly)
+  float Temperature;
+
+  UPROPERTY(BlueprintReadOnly)
+  TArray<FString> Stop;
+
+  // JSON-encoded schema payload used for remote completion requests.
+  UPROPERTY(BlueprintReadOnly)
+  FString JsonSchemaJson;
+
+  FCortexCompleteRequest() : MaxTokens(-1), Temperature(-1.0f) {}
 };
 
 /**
@@ -133,8 +143,15 @@ struct FCortexConfig {
   UPROPERTY(BlueprintReadOnly)
   float TopP;
 
+  UPROPERTY(BlueprintReadOnly)
+  TArray<FString> Stop;
+
+  // JSON-encoded schema payload used when a caller needs schema-constrained output.
+  UPROPERTY(BlueprintReadOnly)
+  FString JsonSchemaJson;
+
   FCortexConfig()
-      : Model(TEXT("smalll2-135m")), UseGPU(false), MaxTokens(512),
+      : Model(TEXT("smollm2-135m")), UseGPU(false), MaxTokens(512),
         Temperature(0.7f), TopK(40), TopP(0.9f) {}
 };
 
@@ -174,18 +191,32 @@ inline FCortexInitRequest CortexInitRequest(FString RequestedModel,
   return R;
 }
 
-inline FCortexCompleteRequest CortexCompleteRequest(FString CortexId,
-                                                    FString Prompt) {
+inline FCortexCompleteRequest CortexCompleteRequest(FString Prompt) {
   FCortexCompleteRequest R;
-  R.CortexId = MoveTemp(CortexId);
   R.Prompt = MoveTemp(Prompt);
   return R;
 }
 
-inline FCortexConfig CortexConfig(FString Model = TEXT("smalll2-135m"),
+inline FCortexCompleteRequest CortexCompleteRequest(
+    FString Prompt, int32 MaxTokens, float Temperature,
+    const TArray<FString> &Stop = TArray<FString>(),
+    FString JsonSchemaJson = TEXT("")) {
+  FCortexCompleteRequest R;
+  R.Prompt = MoveTemp(Prompt);
+  R.MaxTokens = MaxTokens;
+  R.Temperature = Temperature;
+  R.Stop = Stop;
+  R.JsonSchemaJson = MoveTemp(JsonSchemaJson);
+  return R;
+}
+
+inline FCortexConfig CortexConfig(FString Model = TEXT("smollm2-135m"),
                                   bool UseGPU = false, int32 MaxTokens = 512,
                                   float Temperature = 0.7f, int32 TopK = 40,
-                                  float TopP = 0.9f) {
+                                  float TopP = 0.9f,
+                                  const TArray<FString> &Stop =
+                                      TArray<FString>(),
+                                  FString JsonSchemaJson = TEXT("")) {
   FCortexConfig C;
   C.Model = MoveTemp(Model);
   C.UseGPU = UseGPU;
@@ -193,6 +224,8 @@ inline FCortexConfig CortexConfig(FString Model = TEXT("smalll2-135m"),
   C.Temperature = Temperature;
   C.TopK = TopK;
   C.TopP = TopP;
+  C.Stop = Stop;
+  C.JsonSchemaJson = MoveTemp(JsonSchemaJson);
   return C;
 }
 

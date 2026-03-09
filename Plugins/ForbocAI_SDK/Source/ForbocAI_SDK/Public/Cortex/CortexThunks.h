@@ -2,6 +2,8 @@
 
 #include "Core/ThunkDetail.h"
 #include "Cortex/CortexSlice.h"
+#include "Errors.h"
+#include "SDKConfig.h"
 
 namespace rtk {
 
@@ -9,6 +11,10 @@ namespace rtk {
 inline ThunkAction<FCortexResponse, FSDKState>
 completeNodeCortexThunk(const FString &Prompt,
                         const FCortexConfig &Config = FCortexConfig());
+
+inline ThunkAction<FCortexResponse, FSDKState>
+completeRemoteThunk(const FString &CortexId, const FString &Prompt,
+                    const FCortexConfig &Config);
 
 // ---------------------------------------------------------------------------
 // Node cortex thunks (mirrors TS nodeCortexSlice.ts)
@@ -86,7 +92,7 @@ completeNodeCortexThunk(const FString &Prompt, const FCortexConfig &Config) {
 
             FCortexResponse Response;
             Response.Id = FGuid::NewGuid().ToString();
-            Response.Text = Native::Llama::Infer(Handle, Prompt, Config.MaxTokens);
+            Response.Text = Native::Llama::Infer(Handle, Prompt, Config);
             Response.Stats = TEXT("local-node");
 
             AsyncTask(ENamedThreads::GameThread, [Dispatch, Resolve, Response]() {
@@ -125,6 +131,11 @@ listCortexModelsThunk() {
   return [](std::function<AnyAction(const AnyAction &)> Dispatch,
             std::function<FSDKState()> GetState)
              -> func::AsyncResult<TArray<FCortexModelInfo>> {
+    const auto ApiKeyError = Errors::requireApiKeyGuidance(
+        SDKConfig::GetApiUrl(), SDKConfig::GetApiKey());
+    if (ApiKeyError.hasValue) {
+      return detail::RejectAsync<TArray<FCortexModelInfo>>(ApiKeyError.value);
+    }
     return APISlice::Endpoints::getCortexModels()(Dispatch, GetState);
   };
 }
@@ -135,6 +146,12 @@ initRemoteCortexThunk(const FString &Model = TEXT("api-integrated"),
   return [Model, AuthKey](std::function<AnyAction(const AnyAction &)> Dispatch,
                           std::function<FSDKState()> GetState)
              -> func::AsyncResult<FCortexStatus> {
+    const auto ApiKeyError = Errors::requireApiKeyGuidance(
+        SDKConfig::GetApiUrl(), SDKConfig::GetApiKey());
+    if (ApiKeyError.hasValue) {
+      return detail::RejectAsync<FCortexStatus>(ApiKeyError.value);
+    }
+
     Dispatch(CortexSlice::Actions::CortexInitPending(Model));
 
     return func::AsyncChain::then<FCortexInitResponse, FCortexStatus>(
@@ -167,15 +184,29 @@ initRemoteCortexThunk(const FString &Model = TEXT("api-integrated"),
 
 inline ThunkAction<FCortexResponse, FSDKState>
 completeRemoteThunk(const FString &CortexId, const FString &Prompt) {
-  return [CortexId, Prompt](
+  return completeRemoteThunk(CortexId, Prompt, FCortexConfig());
+}
+
+inline ThunkAction<FCortexResponse, FSDKState>
+completeRemoteThunk(const FString &CortexId, const FString &Prompt,
+                    const FCortexConfig &Config) {
+  return [CortexId, Prompt, Config](
              std::function<AnyAction(const AnyAction &)> Dispatch,
              std::function<FSDKState()> GetState)
              -> func::AsyncResult<FCortexResponse> {
+    const auto ApiKeyError = Errors::requireApiKeyGuidance(
+        SDKConfig::GetApiUrl(), SDKConfig::GetApiKey());
+    if (ApiKeyError.hasValue) {
+      return detail::RejectAsync<FCortexResponse>(ApiKeyError.value);
+    }
+
     Dispatch(CortexSlice::Actions::CortexCompletePending(Prompt));
     return func::AsyncChain::then<FCortexResponse, FCortexResponse>(
         APISlice::Endpoints::postCortexComplete(
-            TypeFactory::CortexCompleteRequest(CortexId, Prompt))(Dispatch,
-                                                                  GetState),
+            CortexId,
+            TypeFactory::CortexCompleteRequest(
+                Prompt, Config.MaxTokens, Config.Temperature, Config.Stop,
+                Config.JsonSchemaJson))(Dispatch, GetState),
         [Dispatch](const FCortexResponse &Response) {
           Dispatch(CortexSlice::Actions::CortexCompleteFulfilled(Response));
           return detail::ResolveAsync(Response);

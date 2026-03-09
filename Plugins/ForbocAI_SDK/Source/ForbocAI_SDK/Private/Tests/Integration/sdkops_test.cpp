@@ -1,7 +1,12 @@
 #include "CLI/SDKOps.h"
 #include "Core/rtk.hpp"
 #include "CoreMinimal.h"
+#include "HAL/FileManager.h"
 #include "Misc/AutomationTest.h"
+#include "Misc/FileHelper.h"
+#include "Misc/Guid.h"
+#include "Misc/Paths.h"
+#include "SDKConfig.h"
 #include "SDKStore.h"
 
 using namespace rtk;
@@ -22,7 +27,6 @@ bool FSDKOpsCreateNpcTest::RunTest(const FString &Parameters) {
   TestEqual("Persona matches", Result.Persona,
             FString(TEXT("A loyal guard")));
 
-  // Verify store state
   func::Maybe<FNPCInternalState> Active = SDKOps::GetActiveNpc(Store);
   TestTrue("Active NPC exists", Active.hasValue);
   if (Active.hasValue) {
@@ -81,24 +85,50 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(FSDKOpsConfigTest,
                                  EAutomationTestFlags_ApplicationContextMask |
                                      EAutomationTestFlags::EngineFilter)
 bool FSDKOpsConfigTest::RunTest(const FString &Parameters) {
-  // ConfigGet version always returns something
+  const FString TempConfigPath = FPaths::Combine(
+      FPaths::ProjectSavedDir(),
+      FString::Printf(TEXT("forbocai-sdkops-%s.json"),
+                      *FGuid::NewGuid().ToString(EGuidFormats::Digits)));
+
+  IFileManager::Get().Delete(*TempConfigPath, false, true);
+  SDKConfig::SetConfigFilePathOverride(TempConfigPath);
+  SDKConfig::ReloadConfig();
+
+  TestEqual("Default runtime API URL matches node default",
+            SDKConfig::GetApiUrl(), FString(TEXT("http://localhost:8080")));
+  TestTrue("Unset persisted apiUrl is empty",
+           SDKOps::ConfigGet(TEXT("apiUrl")).IsEmpty());
+
   FString Version = SDKOps::ConfigGet(TEXT("version"));
   TestFalse("Version not empty", Version.IsEmpty());
 
-  // ConfigSet + ConfigGet roundtrip for apiUrl
   SDKOps::ConfigSet(TEXT("apiUrl"), TEXT("https://test.forboc.ai"));
   FString Url = SDKOps::ConfigGet(TEXT("apiUrl"));
   TestEqual("ApiUrl roundtrip", Url,
             FString(TEXT("https://test.forboc.ai")));
 
-  // ConfigSet + ConfigGet roundtrip for apiKey
   SDKOps::ConfigSet(TEXT("apiKey"), TEXT("sk_test_roundtrip"));
   FString Key = SDKOps::ConfigGet(TEXT("apiKey"));
   TestEqual("ApiKey roundtrip", Key, FString(TEXT("sk_test_roundtrip")));
 
-  // Unknown key returns empty
   FString Unknown = SDKOps::ConfigGet(TEXT("nonexistent"));
   TestTrue("Unknown key returns empty", Unknown.IsEmpty());
+
+  FString PersistedConfig;
+  TestTrue("Config file saved",
+           FFileHelper::LoadFileToString(PersistedConfig, *TempConfigPath));
+  TestTrue("Persisted config includes apiUrl",
+           PersistedConfig.Contains(TEXT("\"apiUrl\":\"https://test.forboc.ai\"")) ||
+               PersistedConfig.Contains(
+                   TEXT("\"apiUrl\": \"https://test.forboc.ai\"")));
+  TestTrue("Persisted config includes apiKey",
+           PersistedConfig.Contains(TEXT("\"apiKey\":\"sk_test_roundtrip\"")) ||
+               PersistedConfig.Contains(
+                   TEXT("\"apiKey\": \"sk_test_roundtrip\"")));
+
+  IFileManager::Get().Delete(*TempConfigPath, false, true);
+  SDKConfig::SetConfigFilePathOverride(TEXT(""));
+  SDKConfig::ReloadConfig();
 
   return true;
 }

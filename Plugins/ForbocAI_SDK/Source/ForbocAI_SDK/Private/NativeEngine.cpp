@@ -145,6 +145,23 @@ FString MakeStableMemoryId(const FMemoryItem &Item) {
                          static_cast<unsigned long long>(StableHashString(Seed)));
 }
 
+FString ApplyStopTokens(const FString &Value, const TArray<FString> &StopTokens) {
+  int32 EarliestStop = INDEX_NONE;
+  for (const FString &StopToken : StopTokens) {
+    if (StopToken.IsEmpty()) {
+      continue;
+    }
+
+    const int32 FoundIndex = Value.Find(StopToken);
+    if (FoundIndex != INDEX_NONE &&
+        (EarliestStop == INDEX_NONE || FoundIndex < EarliestStop)) {
+      EarliestStop = FoundIndex;
+    }
+  }
+
+  return EarliestStop == INDEX_NONE ? Value : Value.Left(EarliestStop);
+}
+
 FMockSqliteHandle *AsMockSqliteHandle(Native::Sqlite::DB Database) {
   return reinterpret_cast<FMockSqliteHandle *>(Database);
 }
@@ -218,6 +235,10 @@ FString Infer(Context Ctx, const FString &Prompt, int32 MaxTokens) {
   return FString::Printf(TEXT("Simulated local response for: %s"),
                          *Prompt.Left(30));
 #endif
+}
+
+FString Infer(Context Ctx, const FString &Prompt, const FCortexConfig &Config) {
+  return ApplyStopTokens(Infer(Ctx, Prompt, Config.MaxTokens), Config.Stop);
 }
 
 } // namespace Llama

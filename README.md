@@ -74,7 +74,7 @@ Get the plugin directly from **Fab** (formerly Unreal Engine Marketplace).
 // 1. Create an agent via factory function (public domain values stay data-first)
 FAgentConfig Config;
 Config.Persona = TEXT("Cyber-Merchant");
-Config.ApiUrl = TEXT("https://api.forboc.ai");
+// Config.ApiUrl is optional; SDKConfig defaults to http://localhost:8080.
 
 const FAgent Merchant = AgentFactory::Create(Config);
 
@@ -150,17 +150,17 @@ The SDK includes a built-in Commandlet for verification and administration.
 
 **Commands:**
 *   `doctor`: Check API connection status.
-*   `agent_list`: List active agents.
-*   `agent_create -Persona="..."`: Create a new agent.
-*   `agent_process -Id="..." -Input="..."`: Interact with an agent.
-*   `soul_export -Id="..."`: Export an agent's soul.
+*   `npc_list`: List active NPCs.
+*   `npc_create -Persona="..."`: Create a new NPC.
+*   `npc_process -Id="..." -Input="..."`: Interact with an NPC.
+*   `soul_export -Id="..."`: Export an NPC soul.
+*   `config_set -Key="..." -Value="..."`: Persist a CLI config value.
+*   `config_get -Key="..."`: Read a stored CLI config value.
 
 **Example `doctor` output:**
 ```
 ForbocAI SDK CLI (UE5) - Command: doctor
-Running Doctor check on https://api.forboc.ai...
-API Status: ONLINE
-Response: {"message":"Neuro-Symbolic Grid: ACTIVE","status":"online","version":"1.0.0"}
+API Status: online (v1.0.0)
 ```
 
 ---

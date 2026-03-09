@@ -1,8 +1,10 @@
 #pragma once
 
 #include "Core/ThunkDetail.h"
+#include "Errors.h"
 #include "Memory/MemorySlice.h"
 #include "NPC/NPCSlice.h"
+#include "SDKConfig.h"
 #include "Soul/SoulSlice.h"
 
 namespace rtk {
@@ -16,6 +18,12 @@ exportSoulThunk(const FString &NpcId) {
   return [NpcId](std::function<AnyAction(const AnyAction &)> Dispatch,
                  std::function<FSDKState()> GetState)
              -> func::AsyncResult<FSoulExportResult> {
+    const auto ApiKeyError = Errors::requireApiKeyGuidance(
+        SDKConfig::GetApiUrl(), SDKConfig::GetApiKey());
+    if (ApiKeyError.hasValue) {
+      return detail::RejectAsync<FSoulExportResult>(ApiKeyError.value);
+    }
+
     const auto Npc = NPCSlice::SelectNPCById(GetState().NPCs, NpcId);
     if (!Npc.hasValue) {
       return detail::RejectAsync<FSoulExportResult>(TEXT("NPC not found"));
@@ -67,6 +75,12 @@ exportSoulThunk(const FSoul &Soul) {
   return [Soul](std::function<AnyAction(const AnyAction &)> Dispatch,
                 std::function<FSDKState()> GetState)
              -> func::AsyncResult<FSoulExportResult> {
+    const auto ApiKeyError = Errors::requireApiKeyGuidance(
+        SDKConfig::GetApiUrl(), SDKConfig::GetApiKey());
+    if (ApiKeyError.hasValue) {
+      return detail::RejectAsync<FSoulExportResult>(ApiKeyError.value);
+    }
+
     if (Soul.Id.IsEmpty()) {
       return detail::RejectAsync<FSoulExportResult>(TEXT("Soul ID is required"));
     }
@@ -116,6 +130,12 @@ importSoulThunk(const FString &TxId) {
   return [TxId](std::function<AnyAction(const AnyAction &)> Dispatch,
                 std::function<FSDKState()> GetState)
              -> func::AsyncResult<FSoul> {
+    const auto ApiKeyError = Errors::requireApiKeyGuidance(
+        SDKConfig::GetApiUrl(), SDKConfig::GetApiKey());
+    if (ApiKeyError.hasValue) {
+      return detail::RejectAsync<FSoul>(ApiKeyError.value);
+    }
+
     Dispatch(SoulSlice::Actions::ImportSoulPending());
 
     return func::AsyncChain::then<FSoulImportPhase1Response, FSoul>(
@@ -166,10 +186,8 @@ localExportSoulThunk(const FString &NpcId = TEXT("")) {
     }
 
     return detail::ResolveAsync(TypeFactory::Soul(
-        TargetNpcId, SDKConfig::GetSdkVersion(),
-        Npc.value.Persona.IsEmpty() ? TargetNpcId : Npc.value.Persona,
-        Npc.value.Persona, Npc.value.State,
-        MemorySlice::SelectAllMemories(GetState().Memory)));
+        TargetNpcId, TEXT("1.0.0"), TEXT("NPC"), Npc.value.Persona,
+        Npc.value.State, MemorySlice::SelectAllMemories(GetState().Memory)));
   };
 }
 
@@ -194,6 +212,12 @@ getSoulListThunk(int32 Limit = 50) {
   return [Limit](std::function<AnyAction(const AnyAction &)> Dispatch,
                  std::function<FSDKState()> GetState)
              -> func::AsyncResult<TArray<FSoulListItem>> {
+    const auto ApiKeyError = Errors::requireApiKeyGuidance(
+        SDKConfig::GetApiUrl(), SDKConfig::GetApiKey());
+    if (ApiKeyError.hasValue) {
+      return detail::RejectAsync<TArray<FSoulListItem>>(ApiKeyError.value);
+    }
+
     return func::AsyncChain::then<FSoulListResponse, TArray<FSoulListItem>>(
         APISlice::Endpoints::getSouls(Limit)(Dispatch, GetState),
         [Dispatch](const FSoulListResponse &Response) {
@@ -208,6 +232,12 @@ verifySoulThunk(const FString &TxId) {
   return [TxId](std::function<AnyAction(const AnyAction &)> Dispatch,
                 std::function<FSDKState()> GetState)
              -> func::AsyncResult<FSoulVerifyResult> {
+    const auto ApiKeyError = Errors::requireApiKeyGuidance(
+        SDKConfig::GetApiUrl(), SDKConfig::GetApiKey());
+    if (ApiKeyError.hasValue) {
+      return detail::RejectAsync<FSoulVerifyResult>(ApiKeyError.value);
+    }
+
     return APISlice::Endpoints::postSoulVerify(TxId)(Dispatch, GetState);
   };
 }
@@ -217,6 +247,12 @@ importNpcFromSoulThunk(const FString &TxId) {
   return [TxId](std::function<AnyAction(const AnyAction &)> Dispatch,
                 std::function<FSDKState()> GetState)
              -> func::AsyncResult<FImportedNpc> {
+    const auto ApiKeyError = Errors::requireApiKeyGuidance(
+        SDKConfig::GetApiUrl(), SDKConfig::GetApiKey());
+    if (ApiKeyError.hasValue) {
+      return detail::RejectAsync<FImportedNpc>(ApiKeyError.value);
+    }
+
     return func::AsyncChain::then<FSoulImportPhase1Response, FImportedNpc>(
         APISlice::Endpoints::postNpcImport(
             TypeFactory::SoulImportPhase1Request(TxId))(Dispatch, GetState),
