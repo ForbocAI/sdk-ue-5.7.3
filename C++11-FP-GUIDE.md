@@ -2,10 +2,10 @@
 
 `Codex // Functional_Paradigm`
 
-> A guide to functional programming in **strict C++11** for the ForbocAI SDK.
+> A guide to functional programming in **strict C++11** for the host application.
 > All code targets C++11 only -- no C++14/17 features.
 >
-> **Library**: This guide accompanies [`functional_core.hpp`](Plugins/ForbocAI_SDK/Source/ForbocAI_SDK/Public/Core/functional_core.hpp), the canonical source of truth for functional primitives in the UE SDK. If this guide and the header ever disagree, the header wins.
+> **Library**: This guide accompanies [`functional_core.hpp`](Plugins/ForbocAI_SDK/Source/ForbocAI_SDK/Public/Core/functional_core.hpp), the canonical source of truth for functional primitives in the host application. If this guide and the header ever disagree, the header wins.
 
 ---
 
@@ -95,7 +95,7 @@ namespace TypeFactory {
 
 ## 3. Free Functions First
 
-Operations on public domain data should go in namespace-scoped free functions. The exception is the functional core itself, which already defines the canonical helper wrappers the rest of the SDK should reuse instead of cloning.
+Operations on public domain data should go in namespace-scoped free functions. The exception is the functional core itself, which already defines the canonical helper wrappers the rest of the application should reuse instead of cloning.
 
 ```cpp
 // Operations namespace — stateless pure functions
@@ -356,7 +356,7 @@ bool isAlive = result.val;  // access data directly (no unwrap method)
 
 ## 11. Unreal Engine FP Patterns
 
-The functional paradigm applies identically to Unreal Engine types. The ForbocAI SDK follows these patterns throughout.
+The functional paradigm applies identically to Unreal Engine types. The host application follows these patterns throughout.
 
 ### Data Structs with USTRUCT (no methods, no logic)
 

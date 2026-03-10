@@ -2,6 +2,9 @@
 #include "CLI/CliOperations.h"
 #include "RuntimeConfig.h"
 #include "RuntimeStore.h"
+#include "Dom/JsonObject.h"
+#include "Serialization/JsonSerializer.h"
+#include "Serialization/JsonWriter.h"
 #include <exception>
 
 namespace CLIOps {
@@ -36,7 +39,25 @@ func::TestResult<void> DispatchCommand(const FString &CommandKey,
   try {
 
   // ---- System ----
+  if (CommandKey == TEXT("version")) {
+    UE_LOG(LogTemp, Display, TEXT("ForbocAI SDK v%s (UE5)"),
+           *SDKConfig::GetSdkVersion());
+    return Result::Success("Version printed");
+  }
+
+  if (CommandKey == TEXT("status")) {
+    FApiStatusResponse Status = Ops::CheckApiStatus(Store);
+    UE_LOG(LogTemp, Display, TEXT("API: %s"), *Status.Status);
+    return Result::Success("Status checked");
+  }
+
   if (CommandKey == TEXT("doctor") || CommandKey == TEXT("system_status")) {
+    UE_LOG(LogTemp, Display, TEXT("ForbocAI SDK v%s (UE5)"),
+           *SDKConfig::GetSdkVersion());
+    UE_LOG(LogTemp, Display, TEXT("API URL: %s"), *SDKConfig::GetApiUrl());
+    UE_LOG(LogTemp, Display, TEXT("API Key: %s"),
+           SDKConfig::GetApiKey().IsEmpty() ? TEXT("(not set)")
+                                             : TEXT("********"));
     FApiStatusResponse Status = Ops::CheckApiStatus(Store);
     UE_LOG(LogTemp, Display, TEXT("API Status: %s (v%s)"), *Status.Status,
            *Status.Version);
@@ -80,6 +101,55 @@ func::TestResult<void> DispatchCommand(const FString &CommandKey,
     return Result::Success("Active NPC queried");
   }
 
+  if (CommandKey == TEXT("npc_state")) {
+    func::Maybe<FNPCInternalState> Active = Ops::GetActiveNpc(Store);
+    if (!Active.hasValue) {
+      UE_LOG(LogTemp, Display, TEXT("No active NPC"));
+      return Result::Success("No active NPC");
+    }
+    UE_LOG(LogTemp, Display, TEXT("NPC ID:      %s"), *Active.value.Id);
+    UE_LOG(LogTemp, Display, TEXT("Persona:     %s"), *Active.value.Persona);
+    return Result::Success("NPC state printed");
+  }
+
+  if (CommandKey == TEXT("npc_update")) {
+    if (Args.Num() < 2) {
+      return Result::Failure("Usage: npc_update <npcId> [-Mood=<value>] [-Inventory=<item,item>]");
+    }
+    FAgentState Delta;
+    if (Args.Num() > 1) {
+      Delta.Mood = Args[1];
+    }
+    if (Args.Num() > 2) {
+      Delta.Inventory = Args[2];
+    }
+    Ops::UpdateNpc(Store, Args[0], Delta);
+    UE_LOG(LogTemp, Display, TEXT("NPC %s updated"), *Args[0]);
+    return Result::Success("NPC updated");
+  }
+
+  if (CommandKey == TEXT("npc_import")) {
+    if (Args.Num() < 1) {
+      return Result::Failure("Usage: npc_import <txId>");
+    }
+    FImportedNpc Npc = Ops::ImportNpcFromSoul(Store, Args[0]);
+    UE_LOG(LogTemp, Display, TEXT("NPC imported from soul: %s"), *Npc.NpcId);
+    return Result::Success("NPC imported from soul");
+  }
+
+  if (CommandKey == TEXT("npc_chat")) {
+    if (Args.Num() < 2) {
+      return Result::Failure("Usage: npc_chat <npcId> <message>");
+    }
+    UE_LOG(LogTemp, Display, TEXT("> You: %s"), *Args[1]);
+    FAgentResponse Resp = Ops::ProcessNpc(Store, Args[0], Args[1]);
+    UE_LOG(LogTemp, Display, TEXT("> NPC: %s"), *Resp.Dialogue);
+    if (!Resp.Action.Type.IsEmpty()) {
+      UE_LOG(LogTemp, Display, TEXT("> Action: %s"), *Resp.Action.Type);
+    }
+    return Result::Success("Chat turn complete");
+  }
+
   // ---- Memory ----
   if (CommandKey == TEXT("memory_list")) {
     if (Args.Num() < 1) {
@@ -113,6 +183,28 @@ func::TestResult<void> DispatchCommand(const FString &CommandKey,
     }
     Ops::MemoryClear(Store, Args[0]);
     return Result::Success("Memory cleared");
+  }
+
+  if (CommandKey == TEXT("memory_export")) {
+    if (Args.Num() < 1) {
+      return Result::Failure("Usage: memory_export <npcId>");
+    }
+    TArray<FMemoryItem> Items = Ops::MemoryList(Store, Args[0]);
+    TSharedRef<FJsonObject> Root = MakeShared<FJsonObject>();
+    TArray<TSharedPtr<FJsonValue>> JsonItems;
+    for (const FMemoryItem &Item : Items) {
+      TSharedPtr<FJsonObject> Obj = MakeShared<FJsonObject>();
+      Obj->SetStringField(TEXT("text"), Item.Text);
+      Obj->SetStringField(TEXT("type"), Item.Type);
+      Obj->SetNumberField(TEXT("importance"), Item.Importance);
+      JsonItems.Add(MakeShared<FJsonValueObject>(Obj));
+    }
+    Root->SetArrayField(TEXT("memories"), JsonItems);
+    FString JsonString;
+    TSharedRef<TJsonWriter<>> Writer = TJsonWriterFactory<>::Create(&JsonString);
+    FJsonSerializer::Serialize(Root, Writer);
+    UE_LOG(LogTemp, Display, TEXT("%s"), *JsonString);
+    return Result::Success("Memories exported");
   }
 
   // ---- Cortex ----
@@ -318,6 +410,20 @@ func::TestResult<void> DispatchCommand(const FString &CommandKey,
     FString Value = Ops::ConfigGet(Args[0]);
     UE_LOG(LogTemp, Display, TEXT("%s = %s"), *Args[0], *Value);
     return Result::Success("Config retrieved");
+  }
+
+  if (CommandKey == TEXT("config_list")) {
+    static const TArray<FString> ConfigKeys = {
+        TEXT("version"), TEXT("apiUrl"), TEXT("apiKey"), TEXT("modelPath"),
+        TEXT("databasePath"), TEXT("vectorDimension"), TEXT("maxRecallResults")};
+    for (const FString &Key : ConfigKeys) {
+      FString Value = Ops::ConfigGet(Key);
+      bool bMask = Key.Contains(TEXT("key"), ESearchCase::IgnoreCase) ||
+                   Key.Contains(TEXT("Key"), ESearchCase::CaseSensitive);
+      UE_LOG(LogTemp, Display, TEXT("  %s = %s"), *Key,
+             bMask && !Value.IsEmpty() ? TEXT("********") : *Value);
+    }
+    return Result::Success("Config listed");
   }
 
   // ---- Vector ----

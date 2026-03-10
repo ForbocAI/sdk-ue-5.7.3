@@ -28,6 +28,17 @@ public:
   UFUNCTION(BlueprintCallable, Category = "ForbocAI|NPC")
   static FString ProcessNpc(const FString &NpcId, const FString &Text);
 
+  /**
+   * Sends a chat message to an NPC and returns the dialogue response.
+   * Convenience wrapper around ProcessNpc for conversational use.
+   * @param NpcId  The NPC to chat with.
+   * @param Message  The player's message.
+   * @return The NPC's dialogue response.
+   */
+  UFUNCTION(BlueprintCallable, Category = "ForbocAI|NPC",
+            meta = (DisplayName = "Chat With NPC"))
+  static FString ChatNpc(const FString &NpcId, const FString &Message);
+
   UFUNCTION(BlueprintCallable, Category = "ForbocAI|NPC")
   static bool HasActiveNpc();
 

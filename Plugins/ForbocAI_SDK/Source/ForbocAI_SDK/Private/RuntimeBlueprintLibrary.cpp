@@ -25,6 +25,12 @@ FString UForbocAIBlueprintLibrary::ProcessNpc(const FString &NpcId,
   return Resp.Dialogue;
 }
 
+FString UForbocAIBlueprintLibrary::ChatNpc(const FString &NpcId,
+                                            const FString &Message) {
+  FAgentResponse Resp = Ops::ProcessNpc(GetBPStore(), NpcId, Message);
+  return Resp.Dialogue;
+}
+
 bool UForbocAIBlueprintLibrary::HasActiveNpc() {
   func::Maybe<FNPCInternalState> Active = Ops::GetActiveNpc(GetBPStore());
   return Active.hasValue;
