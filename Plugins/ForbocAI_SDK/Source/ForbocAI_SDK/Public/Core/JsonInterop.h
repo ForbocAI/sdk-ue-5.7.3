@@ -77,6 +77,35 @@ inline FString StringifyValue(const TSharedPtr<FJsonValue> &Value) {
   return TEXT("null");
 }
 
+inline bool HasNonNullField(const TSharedPtr<FJsonObject> &Object,
+                            const FString &FieldName) {
+  if (!Object.IsValid() || !Object->HasField(FieldName)) {
+    return false;
+  }
+
+  const TSharedPtr<FJsonValue> Value = Object->TryGetField(FieldName);
+  return Value.IsValid() && Value->Type != EJson::Null;
+}
+
+inline FString OptionalStringFromField(const TSharedPtr<FJsonObject> &Object,
+                                       const FString &FieldName,
+                                       const FString &Fallback = TEXT("")) {
+  if (!HasNonNullField(Object, FieldName)) {
+    return Fallback;
+  }
+
+  const TSharedPtr<FJsonValue> Value = Object->TryGetField(FieldName);
+  if (!Value.IsValid()) {
+    return Fallback;
+  }
+
+  if (Value->Type == EJson::String) {
+    return Value->AsString();
+  }
+
+  return StringifyValue(Value);
+}
+
 inline TSharedPtr<FJsonObject> ParseJsonObjectOrEmpty(const FString &Json) {
   TSharedPtr<FJsonObject> Object;
   ParseJsonObject(Json, Object);
@@ -174,15 +203,15 @@ inline FAgentAction ActionFromObject(const TSharedPtr<FJsonObject> &Object) {
     return Action;
   }
 
-  Action.Type = Object->GetStringField(TEXT("type"));
-  Action.Target = Object->GetStringField(TEXT("target"));
-  Action.Reason = Object->GetStringField(TEXT("reason"));
+  Action.Type = OptionalStringFromField(Object, TEXT("type"));
+  Action.Target = OptionalStringFromField(Object, TEXT("target"));
+  Action.Reason = OptionalStringFromField(Object, TEXT("reason"));
 
   double Confidence = 1.0;
   if (Object->TryGetNumberField(TEXT("confidence"), Confidence)) {
     Action.Confidence = static_cast<float>(Confidence);
   }
-  Action.Signature = Object->GetStringField(TEXT("signature"));
+  Action.Signature = OptionalStringFromField(Object, TEXT("signature"));
   Action.PayloadJson = JsonStringFromField(Object, TEXT("payload"), TEXT("{}"));
   return Action;
 }
@@ -306,7 +335,7 @@ inline FCortexConfig CortexConfigFromObject(const TSharedPtr<FJsonObject> &Objec
     return Config;
   }
 
-  Config.Model = Object->GetStringField(TEXT("model"));
+  Config.Model = OptionalStringFromField(Object, TEXT("model"));
   bool bUseGpu = Config.UseGPU;
   if (Object->TryGetBoolField(TEXT("useGPU"), bUseGpu)) {
     Config.UseGPU = bUseGpu;
@@ -362,7 +391,7 @@ ValidationResultFromObject(const TSharedPtr<FJsonObject> &Object) {
   if (Object->TryGetBoolField(TEXT("valid"), bValid)) {
     Result.bValid = bValid;
   }
-  Result.Reason = Object->GetStringField(TEXT("reason"));
+  Result.Reason = OptionalStringFromField(Object, TEXT("reason"));
   if (Object->HasTypedField<EJson::Object>(TEXT("correctedAction"))) {
     Result.CorrectedAction =
         ActionFromObject(Object->GetObjectField(TEXT("correctedAction")));
@@ -377,9 +406,11 @@ UploadInstructionFromObject(const TSharedPtr<FJsonObject> &Object) {
     return Instruction;
   }
 
-  Instruction.UploadUrl = Object->GetStringField(TEXT("auiEndpoint"));
-  Instruction.ContentType = Object->GetStringField(TEXT("auiContentType"));
-  Instruction.AuiAuthHeader = Object->GetStringField(TEXT("auiAuthHeader"));
+  Instruction.UploadUrl = OptionalStringFromField(Object, TEXT("auiEndpoint"));
+  Instruction.ContentType =
+      OptionalStringFromField(Object, TEXT("auiContentType"));
+  Instruction.AuiAuthHeader =
+      OptionalStringFromField(Object, TEXT("auiAuthHeader"));
   Instruction.PayloadJson = JsonStringFromField(Object, TEXT("auiPayload"), TEXT("{}"));
   return Instruction;
 }
@@ -404,8 +435,9 @@ DownloadInstructionFromObject(const TSharedPtr<FJsonObject> &Object) {
     return Instruction;
   }
 
-  Instruction.GatewayUrl = Object->GetStringField(TEXT("adiGatewayUrl"));
-  Instruction.TxId = Object->GetStringField(TEXT("adiExpectedTxId"));
+  Instruction.GatewayUrl =
+      OptionalStringFromField(Object, TEXT("adiGatewayUrl"));
+  Instruction.TxId = OptionalStringFromField(Object, TEXT("adiExpectedTxId"));
   Instruction.ExpectedTxId = Instruction.TxId;
   return Instruction;
 }
@@ -430,11 +462,11 @@ inline FSoul SoulFromObject(const TSharedPtr<FJsonObject> &Object) {
     return Soul;
   }
 
-  Soul.Id = Object->GetStringField(TEXT("id"));
-  Soul.Version = Object->GetStringField(TEXT("version"));
-  Soul.Name = Object->GetStringField(TEXT("name"));
-  Soul.Persona = Object->GetStringField(TEXT("persona"));
-  Soul.Signature = Object->GetStringField(TEXT("signature"));
+  Soul.Id = OptionalStringFromField(Object, TEXT("id"));
+  Soul.Version = OptionalStringFromField(Object, TEXT("version"));
+  Soul.Name = OptionalStringFromField(Object, TEXT("name"));
+  Soul.Persona = OptionalStringFromField(Object, TEXT("persona"));
+  Soul.Signature = OptionalStringFromField(Object, TEXT("signature"));
   Soul.State = StateFromField(Object, TEXT("state"));
 
   const TArray<TSharedPtr<FJsonValue>> *MemoryValues = nullptr;
@@ -455,8 +487,8 @@ inline FImportedNpc ImportedNpcFromObject(const TSharedPtr<FJsonObject> &Object)
     return Npc;
   }
 
-  Npc.NpcId = Object->GetStringField(TEXT("npcId"));
-  Npc.Persona = Object->GetStringField(TEXT("persona"));
+  Npc.NpcId = OptionalStringFromField(Object, TEXT("npcId"));
+  Npc.Persona = OptionalStringFromField(Object, TEXT("persona"));
   Npc.DataJson = JsonStringFromField(Object, TEXT("data"));
   return Npc;
 }

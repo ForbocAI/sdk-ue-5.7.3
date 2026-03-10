@@ -1,4 +1,5 @@
 #pragma once
+// uplink traffic enters here; keep the contract hard-edged
 
 #include "../Core/AsyncHttp.h"
 #include "../Core/JsonInterop.h"
@@ -12,7 +13,7 @@
 #include "Serialization/JsonSerializer.h"
 #include "Serialization/JsonWriter.h"
 
-struct FSDKState;
+struct FStoreState;
 
 namespace APISlice {
 
@@ -26,7 +27,7 @@ struct FAPIState {
   FAPIState() : Status(TEXT("idle")) {}
 };
 
-extern rtk::ApiSlice<FSDKState> ForbocAiApi;
+extern rtk::ApiSlice<FStoreState> ForbocAiApi;
 
 namespace Detail {
 
@@ -47,7 +48,8 @@ inline FString ToJsonString(const TSharedRef<FJsonObject> &Object) {
   return Json;
 }
 
-inline FString BuildCortexCompletePayload(const FCortexCompleteRequest &Request) {
+inline FString
+BuildCortexCompletePayload(const FCortexCompleteRequest &Request) {
   const TSharedRef<FJsonObject> Payload = MakeShared<FJsonObject>();
   Payload->SetStringField(TEXT("prompt"), Request.Prompt);
 
@@ -72,7 +74,8 @@ inline FString BuildCortexCompletePayload(const FCortexCompleteRequest &Request)
     TSharedPtr<FJsonObject> JsonSchema;
     const TSharedRef<TJsonReader<>> Reader =
         TJsonReaderFactory<>::Create(Request.JsonSchemaJson);
-    if (FJsonSerializer::Deserialize(Reader, JsonSchema) && JsonSchema.IsValid()) {
+    if (FJsonSerializer::Deserialize(Reader, JsonSchema) &&
+        JsonSchema.IsValid()) {
       Payload->SetObjectField(TEXT("jsonSchema"), JsonSchema);
     }
   }
@@ -81,15 +84,13 @@ inline FString BuildCortexCompletePayload(const FCortexCompleteRequest &Request)
 }
 
 template <typename Arg, typename Result>
-inline ThunkAction<Result, FSDKState>
-MakeEndpoint(const FString &EndpointName, const Arg &ArgValue,
-             std::function<func::AsyncResult<func::HttpResult<Result>>(
-                 const Arg &)>
-                 RequestBuilder,
-             const TArray<FApiEndpointTag> &ProvidesTags =
-                 TArray<FApiEndpointTag>(),
-             const TArray<FApiEndpointTag> &InvalidatesTags =
-                 TArray<FApiEndpointTag>()) {
+inline ThunkAction<Result, FStoreState> MakeEndpoint(
+    const FString &EndpointName, const Arg &ArgValue,
+    std::function<func::AsyncResult<func::HttpResult<Result>>(const Arg &)>
+        RequestBuilder,
+    const TArray<FApiEndpointTag> &ProvidesTags = TArray<FApiEndpointTag>(),
+    const TArray<FApiEndpointTag> &InvalidatesTags =
+        TArray<FApiEndpointTag>()) {
   ApiEndpoint<Arg, Result> Endpoint;
   Endpoint.EndpointName = EndpointName;
   Endpoint.ProvidesTags = ProvidesTags;
@@ -99,7 +100,7 @@ MakeEndpoint(const FString &EndpointName, const Arg &ArgValue,
 }
 
 template <typename Result>
-inline ThunkAction<Result, FSDKState>
+inline ThunkAction<Result, FStoreState>
 MakeGet(const FString &EndpointName, const FString &Url,
         const TArray<FApiEndpointTag> &Tags = TArray<FApiEndpointTag>()) {
   return MakeEndpoint<rtk::FEmptyPayload, Result>(
@@ -111,10 +112,10 @@ MakeGet(const FString &EndpointName, const FString &Url,
 }
 
 template <typename Request, typename Result>
-inline ThunkAction<Result, FSDKState>
-MakePost(const FString &EndpointName, const FString &Url,
-         const Request &RequestValue,
-         const TArray<FApiEndpointTag> &Invalidates = TArray<FApiEndpointTag>()) {
+inline ThunkAction<Result, FStoreState> MakePost(
+    const FString &EndpointName, const FString &Url,
+    const Request &RequestValue,
+    const TArray<FApiEndpointTag> &Invalidates = TArray<FApiEndpointTag>()) {
   return MakeEndpoint<Request, Result>(
       EndpointName, RequestValue,
       [Url](const Request &Arg) {
@@ -125,9 +126,9 @@ MakePost(const FString &EndpointName, const FString &Url,
 }
 
 template <typename Result>
-inline ThunkAction<Result, FSDKState>
-MakeDelete(const FString &EndpointName, const FString &Url,
-           const TArray<FApiEndpointTag> &Invalidates = TArray<FApiEndpointTag>()) {
+inline ThunkAction<Result, FStoreState> MakeDelete(
+    const FString &EndpointName, const FString &Url,
+    const TArray<FApiEndpointTag> &Invalidates = TArray<FApiEndpointTag>()) {
   return MakeEndpoint<rtk::FEmptyPayload, Result>(
       EndpointName, rtk::FEmptyPayload{},
       [Url](const rtk::FEmptyPayload &) {
@@ -141,9 +142,9 @@ inline func::AsyncResult<func::HttpResult<Result>>
 DecodeHttpResult(func::AsyncResult<func::HttpResult<FString>> RawResult,
                  std::function<bool(const FString &, Result &)> Decoder) {
   return func::AsyncResult<func::HttpResult<Result>>::create(
-      [RawResult, Decoder](
-          std::function<void(func::HttpResult<Result>)> Resolve,
-          std::function<void(std::string)> Reject) {
+      [RawResult,
+       Decoder](std::function<void(func::HttpResult<Result>)> Resolve,
+                std::function<void(std::string)> Reject) {
         RawResult
             .then([Decoder, Resolve](const func::HttpResult<FString> &Http) {
               if (!Http.bSuccess) {
@@ -170,13 +171,12 @@ DecodeHttpResult(func::AsyncResult<func::HttpResult<FString>> RawResult,
 }
 
 template <typename Request, typename Result>
-inline ThunkAction<Result, FSDKState>
-MakePostWithCodec(const FString &EndpointName, const FString &Url,
-                  const Request &RequestValue,
-                  std::function<FString(const Request &)> Encoder,
-                  std::function<bool(const FString &, Result &)> Decoder,
-                  const TArray<FApiEndpointTag> &Invalidates =
-                      TArray<FApiEndpointTag>()) {
+inline ThunkAction<Result, FStoreState> MakePostWithCodec(
+    const FString &EndpointName, const FString &Url,
+    const Request &RequestValue,
+    std::function<FString(const Request &)> Encoder,
+    std::function<bool(const FString &, Result &)> Decoder,
+    const TArray<FApiEndpointTag> &Invalidates = TArray<FApiEndpointTag>()) {
   return MakeEndpoint<Request, Result>(
       EndpointName, RequestValue,
       [Url, Encoder, Decoder](const Request &Arg) {
@@ -189,34 +189,35 @@ MakePostWithCodec(const FString &EndpointName, const FString &Url,
 }
 
 template <typename Result>
-inline ThunkAction<Result, FSDKState>
-MakeGetWithCodec(const FString &EndpointName, const FString &Url,
-                 std::function<bool(const FString &, Result &)> Decoder,
-                 const TArray<FApiEndpointTag> &Tags = TArray<FApiEndpointTag>()) {
+inline ThunkAction<Result, FStoreState> MakeGetWithCodec(
+    const FString &EndpointName, const FString &Url,
+    std::function<bool(const FString &, Result &)> Decoder,
+    const TArray<FApiEndpointTag> &Tags = TArray<FApiEndpointTag>()) {
   return MakeEndpoint<rtk::FEmptyPayload, Result>(
       EndpointName, rtk::FEmptyPayload{},
       [Url, Decoder](const rtk::FEmptyPayload &) {
         return DecodeHttpResult<Result>(
-            func::AsyncHttp::Get<FString>(Url, SDKConfig::GetApiKey()), Decoder);
+            func::AsyncHttp::Get<FString>(Url, SDKConfig::GetApiKey()),
+            Decoder);
       },
       Tags);
 }
 
 template <typename Result>
-inline ThunkAction<Result, FSDKState>
+inline ThunkAction<Result, FStoreState>
 MakePostRawWithCodec(const FString &EndpointName, const FString &Url,
                      const FString &PayloadJson,
                      std::function<bool(const FString &, Result &)> Decoder) {
   return MakeEndpoint<FString, Result>(
-      EndpointName, PayloadJson,
-      [Url, Decoder](const FString &Arg) {
+      EndpointName, PayloadJson, [Url, Decoder](const FString &Arg) {
         return DecodeHttpResult<Result>(
             func::AsyncHttp::Post<FString>(Url, Arg, SDKConfig::GetApiKey()),
             Decoder);
       });
 }
 
-inline TSharedRef<FJsonObject> EncodeProcessTapeObject(const FNPCProcessTape &Tape) {
+inline TSharedRef<FJsonObject>
+EncodeProcessTapeObject(const FNPCProcessTape &Tape) {
   const TSharedRef<FJsonObject> Root = MakeShared<FJsonObject>();
   Root->SetStringField(TEXT("observation"), Tape.Observation);
   JsonInterop::SetFieldFromJsonString(Root, TEXT("context"), Tape.ContextJson,
@@ -268,7 +269,7 @@ inline bool DecodeProcessTapeObject(const TSharedPtr<FJsonObject> &Object,
   Tape.Observation = Object->GetStringField(TEXT("observation"));
   Tape.ContextJson = JsonInterop::JsonStringFromField(Object, TEXT("context"));
   Tape.NpcState = JsonInterop::StateFromField(Object, TEXT("npcState"));
-  Tape.Persona = Object->GetStringField(TEXT("persona"));
+  Tape.Persona = JsonInterop::OptionalStringFromField(Object, TEXT("persona"));
   Tape.bHasActor = Object->HasTypedField<EJson::Object>(TEXT("actor"));
   if (Tape.bHasActor) {
     const TSharedPtr<FJsonObject> Actor = Object->GetObjectField(TEXT("actor"));
@@ -279,21 +280,25 @@ inline bool DecodeProcessTapeObject(const TSharedPtr<FJsonObject> &Object,
 
   Tape.Memories.Empty();
   const TArray<TSharedPtr<FJsonValue>> *MemoryValues = nullptr;
-  if (Object->TryGetArrayField(TEXT("memories"), MemoryValues) && MemoryValues) {
+  if (Object->TryGetArrayField(TEXT("memories"), MemoryValues) &&
+      MemoryValues) {
     for (const TSharedPtr<FJsonValue> &Value : *MemoryValues) {
       if (Value.IsValid() && Value->Type == EJson::Object) {
-        Tape.Memories.Add(JsonInterop::RecalledMemoryFromObject(Value->AsObject()));
+        Tape.Memories.Add(
+            JsonInterop::RecalledMemoryFromObject(Value->AsObject()));
       }
     }
   }
 
-  Tape.Prompt = Object->GetStringField(TEXT("prompt"));
+  Tape.Prompt = JsonInterop::OptionalStringFromField(Object, TEXT("prompt"));
   if (Object->HasTypedField<EJson::Object>(TEXT("constraints"))) {
     Tape.Constraints = JsonInterop::CortexConfigFromObject(
         Object->GetObjectField(TEXT("constraints")));
   }
-  Tape.GeneratedOutput = Object->GetStringField(TEXT("generatedOutput"));
-  Tape.RulesetId = Object->GetStringField(TEXT("rulesetId"));
+  Tape.GeneratedOutput =
+      JsonInterop::OptionalStringFromField(Object, TEXT("generatedOutput"));
+  Tape.RulesetId =
+      JsonInterop::OptionalStringFromField(Object, TEXT("rulesetId"));
   bool bVectorQueried = false;
   if (Object->TryGetBoolField(TEXT("vectorQueried"), bVectorQueried)) {
     Tape.bVectorQueried = bVectorQueried;
@@ -352,11 +357,13 @@ inline bool DecodeInstructionObject(const TSharedPtr<FJsonObject> &Object,
     if (Object->TryGetBoolField(TEXT("valid"), bValid)) {
       Instruction.bValid = bValid;
     }
-    Instruction.Signature = Object->GetStringField(TEXT("signature"));
+    Instruction.Signature =
+        JsonInterop::OptionalStringFromField(Object, TEXT("signature"));
     Instruction.StateTransform =
         JsonInterop::StateFromField(Object, TEXT("stateTransform"));
     Instruction.Dialogue = Object->GetStringField(TEXT("dialogue"));
-    Instruction.bHasAction = Object->HasTypedField<EJson::Object>(TEXT("action"));
+    Instruction.bHasAction =
+        Object->HasTypedField<EJson::Object>(TEXT("action"));
     if (Instruction.bHasAction) {
       Instruction.Action =
           JsonInterop::ActionFromObject(Object->GetObjectField(TEXT("action")));
@@ -379,6 +386,11 @@ inline bool DecodeInstructionObject(const TSharedPtr<FJsonObject> &Object,
   return false;
 }
 
+/**
+ * User Story: As the SDK protocol loop, I need a single process endpoint
+ * that returns one atomic instruction per turn while echoing full tape state.
+ * ᚹ one hop in, one hop out, like passing a lit shard through vacuum. (From TS)
+ */
 inline bool DecodeNpcProcessResponse(const FString &Json,
                                      FNPCProcessResponse &Response) {
   TSharedPtr<FJsonObject> Root;
@@ -402,8 +414,8 @@ inline FString EncodeDirectiveRequest(const FDirectiveRequest &Request) {
   Root->SetStringField(TEXT("observation"), Request.Observation);
   Root->SetObjectField(TEXT("npcState"),
                        JsonInterop::StateToObject(Request.NpcState));
-  JsonInterop::SetFieldFromJsonString(Root, TEXT("context"), Request.ContextJson,
-                                      false);
+  JsonInterop::SetFieldFromJsonString(Root, TEXT("context"),
+                                      Request.ContextJson, false);
   return ToJsonString(Root);
 }
 
@@ -415,7 +427,8 @@ inline bool DecodeDirectiveResponse(const FString &Json,
     return false;
   }
 
-  const TSharedPtr<FJsonObject> Recall = Root->GetObjectField(TEXT("memoryRecall"));
+  const TSharedPtr<FJsonObject> Recall =
+      Root->GetObjectField(TEXT("memoryRecall"));
   Response.MemoryRecall.Query = Recall->GetStringField(TEXT("query"));
   double Number = 0.0;
   if (Recall->TryGetNumberField(TEXT("limit"), Number)) {
@@ -478,7 +491,8 @@ inline bool DecodeVerdictResponse(const FString &Json,
   if (Root->TryGetBoolField(TEXT("valid"), bValid)) {
     Response.bValid = bValid;
   }
-  Response.Signature = Root->GetStringField(TEXT("signature"));
+  Response.Signature =
+      JsonInterop::OptionalStringFromField(Root, TEXT("signature"));
   Response.StateDelta = JsonInterop::StateFromField(Root, TEXT("stateDelta"));
   Response.Dialogue = Root->GetStringField(TEXT("dialogue"));
   Response.bHasAction = Root->HasTypedField<EJson::Object>(TEXT("action"));
@@ -501,9 +515,11 @@ inline bool DecodeVerdictResponse(const FString &Json,
   return true;
 }
 
-inline FString EncodeBridgeValidateRequest(const FBridgeValidateRequest &Request) {
+inline FString
+EncodeBridgeValidateRequest(const FBridgeValidateRequest &Request) {
   const TSharedRef<FJsonObject> Root = MakeShared<FJsonObject>();
-  Root->SetObjectField(TEXT("action"), JsonInterop::ActionToObject(Request.Action));
+  Root->SetObjectField(TEXT("action"),
+                       JsonInterop::ActionToObject(Request.Action));
   Root->SetObjectField(TEXT("context"),
                        JsonInterop::ValidationContextToObject(Request.Context));
   return ToJsonString(Root);
@@ -515,12 +531,167 @@ inline bool DecodeValidationResult(const FString &Json,
   if (!JsonInterop::ParseJsonObject(Json, Root) || !Root.IsValid()) {
     return false;
   }
-  Result = JsonInterop::ValidationResultFromObject(Root);
+  if (Root->HasTypedField<EJson::Object>(TEXT("brResult"))) {
+    Result = JsonInterop::ValidationResultFromObject(
+        Root->GetObjectField(TEXT("brResult")));
+  } else {
+    Result = JsonInterop::ValidationResultFromObject(Root);
+  }
   return true;
 }
 
-inline FString EncodeSoulExportPhase1Request(
-    const FSoulExportPhase1Request &Request) {
+inline TArray<FString>
+DecodeStringArrayField(const TSharedPtr<FJsonObject> &Object,
+                       const FString &FieldName) {
+  TArray<FString> Values;
+  const TArray<TSharedPtr<FJsonValue>> *RawValues = nullptr;
+  if (!Object.IsValid() || !Object->TryGetArrayField(FieldName, RawValues) ||
+      !RawValues) {
+    return Values;
+  }
+
+  Values.Reserve(RawValues->Num());
+  for (const TSharedPtr<FJsonValue> &Value : *RawValues) {
+    if (Value.IsValid() && Value->Type != EJson::Null) {
+      Values.Add(Value->AsString());
+    }
+  }
+  return Values;
+}
+
+inline bool DecodeBridgeRuleObject(const TSharedPtr<FJsonObject> &Object,
+                                   FBridgeRule &Rule) {
+  if (!Object.IsValid()) {
+    return false;
+  }
+
+  Rule.RuleName =
+      JsonInterop::OptionalStringFromField(Object, TEXT("ruleName"));
+  if (Rule.RuleName.IsEmpty()) {
+    Rule.RuleName =
+        JsonInterop::OptionalStringFromField(Object, TEXT("brRuleId"));
+  }
+  if (Rule.RuleName.IsEmpty()) {
+    Rule.RuleName =
+        JsonInterop::OptionalStringFromField(Object, TEXT("ruleId"));
+  }
+
+  Rule.RuleDescription =
+      JsonInterop::OptionalStringFromField(Object, TEXT("ruleDescription"));
+  if (Rule.RuleDescription.IsEmpty()) {
+    Rule.RuleDescription =
+        JsonInterop::OptionalStringFromField(Object, TEXT("ruleReason"));
+  }
+
+  Rule.RuleActionTypes =
+      DecodeStringArrayField(Object, TEXT("ruleActionTypes"));
+  if (Rule.RuleActionTypes.Num() == 0) {
+    Rule.RuleActionTypes =
+        DecodeStringArrayField(Object, TEXT("affectedActions"));
+  }
+  if (Rule.RuleActionTypes.Num() == 0) {
+    const FString SingleAction =
+        JsonInterop::OptionalStringFromField(Object, TEXT("ruleAction"));
+    if (!SingleAction.IsEmpty()) {
+      Rule.RuleActionTypes.Add(SingleAction);
+    }
+  }
+
+  return true;
+}
+
+inline bool DecodeDirectiveRuleSetObject(const TSharedPtr<FJsonObject> &Object,
+                                         FDirectiveRuleSet &Ruleset) {
+  if (!Object.IsValid()) {
+    return false;
+  }
+
+  Ruleset.Id = JsonInterop::OptionalStringFromField(Object, TEXT("id"));
+  Ruleset.RulesetId =
+      JsonInterop::OptionalStringFromField(Object, TEXT("rulesetId"));
+  if (Ruleset.Id.IsEmpty()) {
+    Ruleset.Id = Ruleset.RulesetId;
+  }
+
+  Ruleset.RulesetRules.Empty();
+  const TArray<TSharedPtr<FJsonValue>> *RuleValues = nullptr;
+  if (Object->TryGetArrayField(TEXT("rulesetRules"), RuleValues) &&
+      RuleValues) {
+    Ruleset.RulesetRules.Reserve(RuleValues->Num());
+    for (const TSharedPtr<FJsonValue> &Value : *RuleValues) {
+      if (!Value.IsValid() || Value->Type != EJson::Object) {
+        continue;
+      }
+
+      FBridgeRule Rule;
+      if (DecodeBridgeRuleObject(Value->AsObject(), Rule)) {
+        Ruleset.RulesetRules.Add(Rule);
+      }
+    }
+  }
+
+  return true;
+}
+
+inline bool DecodeBridgeRulesResponse(const FString &Json,
+                                      TArray<FBridgeRule> &Rules) {
+  TArray<TSharedPtr<FJsonValue>> Values;
+  if (!JsonInterop::ParseJsonArray(Json, Values)) {
+    return false;
+  }
+
+  Rules.Empty();
+  Rules.Reserve(Values.Num());
+  for (const TSharedPtr<FJsonValue> &Value : Values) {
+    if (!Value.IsValid() || Value->Type != EJson::Object) {
+      continue;
+    }
+
+    FBridgeRule Rule;
+    if (DecodeBridgeRuleObject(Value->AsObject(), Rule)) {
+      Rules.Add(Rule);
+    }
+  }
+
+  return true;
+}
+
+inline bool DecodeDirectiveRuleSetResponse(const FString &Json,
+                                           FDirectiveRuleSet &Ruleset) {
+  TSharedPtr<FJsonObject> Root;
+  if (!JsonInterop::ParseJsonObject(Json, Root) || !Root.IsValid()) {
+    return false;
+  }
+
+  return DecodeDirectiveRuleSetObject(Root, Ruleset);
+}
+
+inline bool
+DecodeDirectiveRuleSetListResponse(const FString &Json,
+                                   TArray<FDirectiveRuleSet> &Rulesets) {
+  TArray<TSharedPtr<FJsonValue>> Values;
+  if (!JsonInterop::ParseJsonArray(Json, Values)) {
+    return false;
+  }
+
+  Rulesets.Empty();
+  Rulesets.Reserve(Values.Num());
+  for (const TSharedPtr<FJsonValue> &Value : Values) {
+    if (!Value.IsValid() || Value->Type != EJson::Object) {
+      continue;
+    }
+
+    FDirectiveRuleSet Ruleset;
+    if (DecodeDirectiveRuleSetObject(Value->AsObject(), Ruleset)) {
+      Rulesets.Add(Ruleset);
+    }
+  }
+
+  return true;
+}
+
+inline FString
+EncodeSoulExportPhase1Request(const FSoulExportPhase1Request &Request) {
   const TSharedRef<FJsonObject> Root = MakeShared<FJsonObject>();
   Root->SetStringField(TEXT("npcIdRef"), Request.NpcIdRef);
   Root->SetStringField(TEXT("persona"), Request.Persona);
@@ -529,8 +700,9 @@ inline FString EncodeSoulExportPhase1Request(
   return ToJsonString(Root);
 }
 
-inline bool DecodeSoulExportPhase1Response(const FString &Json,
-                                           FSoulExportPhase1Response &Response) {
+inline bool
+DecodeSoulExportPhase1Response(const FString &Json,
+                               FSoulExportPhase1Response &Response) {
   TSharedPtr<FJsonObject> Root;
   if (!JsonInterop::ParseJsonObject(Json, Root) || !Root.IsValid() ||
       !Root->HasTypedField<EJson::Object>(TEXT("se1Instruction"))) {
@@ -539,17 +711,19 @@ inline bool DecodeSoulExportPhase1Response(const FString &Json,
 
   Response.se1Instruction = JsonInterop::UploadInstructionFromObject(
       Root->GetObjectField(TEXT("se1Instruction")));
-  Response.se1SignedPayload =
-      JsonInterop::JsonStringFromField(Root, TEXT("se1SignedPayload"), TEXT(""));
-  Response.se1Signature = Root->GetStringField(TEXT("se1Signature"));
+  Response.se1SignedPayload = JsonInterop::JsonStringFromField(
+      Root, TEXT("se1SignedPayload"), TEXT(""));
+  Response.se1Signature =
+      JsonInterop::OptionalStringFromField(Root, TEXT("se1Signature"));
   return true;
 }
 
-inline FString EncodeSoulExportConfirmRequest(
-    const FSoulExportConfirmRequest &Request) {
+inline FString
+EncodeSoulExportConfirmRequest(const FSoulExportConfirmRequest &Request) {
   const TSharedRef<FJsonObject> Root = MakeShared<FJsonObject>();
-  Root->SetObjectField(TEXT("secUploadResult"),
-                       JsonInterop::UploadResultToObject(Request.secUploadResult));
+  Root->SetObjectField(
+      TEXT("secUploadResult"),
+      JsonInterop::UploadResultToObject(Request.secUploadResult));
   JsonInterop::SetFieldFromJsonString(Root, TEXT("secSignedPayload"),
                                       Request.secSignedPayload, false);
   Root->SetStringField(TEXT("secSignature"), Request.secSignature);
@@ -565,22 +739,25 @@ inline bool DecodeSoulExportResponse(const FString &Json,
 
   Response.TxId = Root->GetStringField(TEXT("txId"));
   Response.ArweaveUrl = Root->GetStringField(TEXT("arweaveUrl"));
-  Response.Signature = Root->GetStringField(TEXT("signature"));
+  Response.Signature =
+      JsonInterop::OptionalStringFromField(Root, TEXT("signature"));
   if (Root->HasTypedField<EJson::Object>(TEXT("soul"))) {
-    Response.Soul = JsonInterop::SoulFromObject(Root->GetObjectField(TEXT("soul")));
+    Response.Soul =
+        JsonInterop::SoulFromObject(Root->GetObjectField(TEXT("soul")));
   }
   return true;
 }
 
-inline FString EncodeSoulImportPhase1Request(
-    const FSoulImportPhase1Request &Request) {
+inline FString
+EncodeSoulImportPhase1Request(const FSoulImportPhase1Request &Request) {
   const TSharedRef<FJsonObject> Root = MakeShared<FJsonObject>();
   Root->SetStringField(TEXT("txIdRef"), Request.TxIdRef);
   return ToJsonString(Root);
 }
 
-inline bool DecodeSoulImportPhase1Response(const FString &Json,
-                                           FSoulImportPhase1Response &Response) {
+inline bool
+DecodeSoulImportPhase1Response(const FString &Json,
+                               FSoulImportPhase1Response &Response) {
   TSharedPtr<FJsonObject> Root;
   if (!JsonInterop::ParseJsonObject(Json, Root) || !Root.IsValid() ||
       !Root->HasTypedField<EJson::Object>(TEXT("si1Instruction"))) {
@@ -592,13 +769,13 @@ inline bool DecodeSoulImportPhase1Response(const FString &Json,
   return true;
 }
 
-inline FString EncodeSoulImportConfirmRequest(
-    const FSoulImportConfirmRequest &Request) {
+inline FString
+EncodeSoulImportConfirmRequest(const FSoulImportConfirmRequest &Request) {
   const TSharedRef<FJsonObject> Root = MakeShared<FJsonObject>();
   Root->SetStringField(TEXT("sicTxId"), Request.sicTxId);
-  Root->SetObjectField(TEXT("sicDownloadResult"),
-                       JsonInterop::DownloadResultToObject(
-                           Request.sicDownloadResult));
+  Root->SetObjectField(
+      TEXT("sicDownloadResult"),
+      JsonInterop::DownloadResultToObject(Request.sicDownloadResult));
   return ToJsonString(Root);
 }
 
@@ -608,6 +785,29 @@ inline bool DecodeImportedNpc(const FString &Json, FImportedNpc &Npc) {
     return false;
   }
   Npc = JsonInterop::ImportedNpcFromObject(Root);
+  return true;
+}
+
+inline bool DecodeSoulVerifyResponse(const FString &Json,
+                                     FSoulVerifyResult &Response) {
+  TSharedPtr<FJsonObject> Root;
+  if (!JsonInterop::ParseJsonObject(Json, Root) || !Root.IsValid()) {
+    return false;
+  }
+
+  bool bValid = false;
+  if (!Root->TryGetBoolField(TEXT("verifyValid"), bValid)) {
+    Root->TryGetBoolField(TEXT("valid"), bValid);
+  }
+  Response.bValid = bValid;
+
+  Response.Reason =
+      JsonInterop::OptionalStringFromField(Root, TEXT("verifyReason"));
+  if (Response.Reason.IsEmpty()) {
+    Response.Reason =
+        JsonInterop::OptionalStringFromField(Root, TEXT("reason"));
+  }
+
   return true;
 }
 
@@ -742,7 +942,8 @@ inline bool DecodeGhostResultsResponse(const FString &Json,
 
   Response.ResultsMetrics.Empty();
   const TArray<TSharedPtr<FJsonValue>> *MetricPairs = nullptr;
-  if (Root->TryGetArrayField(TEXT("resultsMetrics"), MetricPairs) && MetricPairs) {
+  if (Root->TryGetArrayField(TEXT("resultsMetrics"), MetricPairs) &&
+      MetricPairs) {
     for (const TSharedPtr<FJsonValue> &PairValue : *MetricPairs) {
       if (!PairValue.IsValid() || PairValue->Type != EJson::Array) {
         continue;
@@ -802,8 +1003,9 @@ inline bool DecodeGhostHistoryResponse(const FString &Json,
         Session, Session->HasField(TEXT("startedAt")) ? TEXT("startedAt")
                                                       : TEXT("histStartedAt"));
     Entry.CompletedAt = JsonNumberOrStringToInt64(
-        Session, Session->HasField(TEXT("completedAt")) ? TEXT("completedAt")
-                                                        : TEXT("histCompletedAt"));
+        Session, Session->HasField(TEXT("completedAt"))
+                     ? TEXT("completedAt")
+                     : TEXT("histCompletedAt"));
     Entry.Status = Session->HasField(TEXT("status"))
                        ? Session->GetStringField(TEXT("status"))
                        : Session->GetStringField(TEXT("histStatus"));
@@ -825,16 +1027,14 @@ namespace Endpoints {
 inline auto getNPCs() {
   TArray<FApiEndpointTag> Tags;
   Tags.Add(FApiEndpointTag{TEXT("NPC"), TEXT("LIST")});
-  return Detail::MakeGet<TArray<FAgent>>(TEXT("getNPCs"),
-                                         SDKConfig::GetApiUrl() +
-                                             TEXT("/npcs"),
-                                         Tags);
+  return Detail::MakeGet<TArray<FAgent>>(
+      TEXT("getNPCs"), SDKConfig::GetApiUrl() + TEXT("/npcs"), Tags);
 }
 
 inline auto getNPC(const FString &NpcId) {
-  return Detail::MakeGet<FAgent>(TEXT("getNPC"),
-                                 SDKConfig::GetApiUrl() + TEXT("/npcs/") +
-                                     Detail::Encode(NpcId));
+  return Detail::MakeGet<FAgent>(TEXT("getNPC"), SDKConfig::GetApiUrl() +
+                                                     TEXT("/npcs/") +
+                                                     Detail::Encode(NpcId));
 }
 
 inline auto postNPC(const FAgentConfig &Config) {
@@ -846,15 +1046,13 @@ inline auto postNPC(const FAgentConfig &Config) {
 }
 
 inline auto getApiStatus() {
-  return Detail::MakeGet<FApiStatusResponse>(TEXT("getApiStatus"),
-                                             SDKConfig::GetApiUrl() +
-                                                 TEXT("/status"));
+  return Detail::MakeGet<FApiStatusResponse>(
+      TEXT("getApiStatus"), SDKConfig::GetApiUrl() + TEXT("/status"));
 }
 
 inline auto getCortexModels() {
   return Detail::MakeGet<TArray<FCortexModelInfo>>(
-      TEXT("getCortexModels"),
-      SDKConfig::GetApiUrl() + TEXT("/cortex/models"));
+      TEXT("getCortexModels"), SDKConfig::GetApiUrl() + TEXT("/cortex/models"));
 }
 
 inline auto postCortexInit(const FCortexInitRequest &Request) {
@@ -866,8 +1064,7 @@ inline auto postCortexInit(const FCortexInitRequest &Request) {
 inline auto postCortexComplete(const FString &CortexId,
                                const FCortexCompleteRequest &Request) {
   return Detail::MakeEndpoint<FCortexCompleteRequest, FCortexResponse>(
-      TEXT("postCortexComplete"),
-      Request,
+      TEXT("postCortexComplete"), Request,
       [CortexId](const FCortexCompleteRequest &Arg) {
         return func::AsyncHttp::Post<FCortexResponse>(
             SDKConfig::GetApiUrl() + TEXT("/cortex/") +
@@ -892,8 +1089,7 @@ inline auto postDirective(const FString &NpcId,
       TEXT("postDirective"),
       SDKConfig::GetApiUrl() + TEXT("/npcs/") + Detail::Encode(NpcId) +
           TEXT("/directive"),
-      Request, Detail::EncodeDirectiveRequest,
-      Detail::DecodeDirectiveResponse);
+      Request, Detail::EncodeDirectiveRequest, Detail::DecodeDirectiveResponse);
 }
 
 inline auto postContext(const FString &NpcId, const FContextRequest &Request) {
@@ -925,9 +1121,8 @@ inline auto postMemoryStore(const FString &NpcId,
 
 inline auto getMemoryList(const FString &NpcId) {
   return Detail::MakeGet<TArray<FMemoryItem>>(
-      TEXT("getMemoryList"),
-      SDKConfig::GetApiUrl() + TEXT("/npcs/") + Detail::Encode(NpcId) +
-          TEXT("/memory"));
+      TEXT("getMemoryList"), SDKConfig::GetApiUrl() + TEXT("/npcs/") +
+                                 Detail::Encode(NpcId) + TEXT("/memory"));
 }
 
 inline auto postMemoryRecall(const FString &NpcId,
@@ -972,55 +1167,53 @@ inline auto postBridgeValidate(const FString &NpcId,
 }
 
 inline auto getBridgeRules() {
-  return Detail::MakeGet<TArray<FBridgeRule>>(TEXT("getBridgeRules"),
-                                              SDKConfig::GetApiUrl() +
-                                                  TEXT("/bridge/rules"));
+  return Detail::MakeGetWithCodec<TArray<FBridgeRule>>(
+      TEXT("getBridgeRules"), SDKConfig::GetApiUrl() + TEXT("/bridge/rules"),
+      Detail::DecodeBridgeRulesResponse);
 }
 
 inline auto postBridgePreset(const FString &PresetName) {
-  return Detail::MakeEndpoint<rtk::FEmptyPayload, FDirectiveRuleSet>(
-      TEXT("postBridgePreset"), rtk::FEmptyPayload{},
-      [PresetName](const rtk::FEmptyPayload &) {
-        return func::AsyncHttp::Post<FDirectiveRuleSet>(
-            SDKConfig::GetApiUrl() + TEXT("/rules/presets/") +
-                Detail::Encode(PresetName),
-            TEXT("{}"), SDKConfig::GetApiKey());
-      });
+  return Detail::MakePostRawWithCodec<FDirectiveRuleSet>(
+      TEXT("postBridgePreset"),
+      SDKConfig::GetApiUrl() + TEXT("/rules/presets/") +
+          Detail::Encode(PresetName),
+      TEXT("{}"), Detail::DecodeDirectiveRuleSetResponse);
 }
 
 inline auto getRulesets() {
-  return Detail::MakeGet<TArray<FDirectiveRuleSet>>(
-      TEXT("getRulesets"), SDKConfig::GetApiUrl() + TEXT("/rules"));
+  return Detail::MakeGetWithCodec<TArray<FDirectiveRuleSet>>(
+      TEXT("getRulesets"), SDKConfig::GetApiUrl() + TEXT("/rules"),
+      Detail::DecodeDirectiveRuleSetListResponse);
 }
 
 inline auto getRulePresets() {
-  return Detail::MakeGet<TArray<FString>>(TEXT("getRulePresets"),
-                                          SDKConfig::GetApiUrl() +
-                                              TEXT("/rules/presets"));
+  return Detail::MakeGet<TArray<FString>>(
+      TEXT("getRulePresets"), SDKConfig::GetApiUrl() + TEXT("/rules/presets"));
 }
 
 inline auto postRuleRegister(const FDirectiveRuleSet &Ruleset) {
   TArray<FApiEndpointTag> Invalidates;
   Invalidates.Add(FApiEndpointTag{TEXT("Rule"), TEXT("LIST")});
-  return Detail::MakePost<FDirectiveRuleSet, FDirectiveRuleSet>(
+  return Detail::MakePostWithCodec<FDirectiveRuleSet, FDirectiveRuleSet>(
       TEXT("postRuleRegister"), SDKConfig::GetApiUrl() + TEXT("/rules"),
-      Ruleset, Invalidates);
+      Ruleset, Detail::ToJson<FDirectiveRuleSet>,
+      Detail::DecodeDirectiveRuleSetResponse, Invalidates);
 }
 
 inline auto deleteRule(const FString &RulesetId) {
   TArray<FApiEndpointTag> Invalidates;
   Invalidates.Add(FApiEndpointTag{TEXT("Rule"), TEXT("LIST")});
-  return Detail::MakeDelete<rtk::FEmptyPayload>(TEXT("deleteRule"),
-                                           SDKConfig::GetApiUrl() +
-                                               TEXT("/rules/") +
-                                               Detail::Encode(RulesetId),
-                                           Invalidates);
+  return Detail::MakeDelete<rtk::FEmptyPayload>(
+      TEXT("deleteRule"),
+      SDKConfig::GetApiUrl() + TEXT("/rules/") + Detail::Encode(RulesetId),
+      Invalidates);
 }
 
 inline auto postGhostRun(const FGhostRunRequest &Request) {
   return Detail::MakePostWithCodec<FGhostRunRequest, FGhostRunResponse>(
       TEXT("postGhostRun"), SDKConfig::GetApiUrl() + TEXT("/ghost/run"),
-      Request, Detail::ToJson<FGhostRunRequest>, Detail::DecodeGhostRunResponse);
+      Request, Detail::ToJson<FGhostRunRequest>,
+      Detail::DecodeGhostRunResponse);
 }
 
 inline auto postGhostRun(const FGhostConfig &Config) {
@@ -1084,8 +1277,8 @@ inline auto postSoulExportConfirm(const FString &NpcId,
 
 inline auto getSouls(int32 Limit = 50) {
   return Detail::MakeGet<FSoulListResponse>(
-      TEXT("getSouls"), SDKConfig::GetApiUrl() + TEXT("/souls?limit=") +
-                            FString::FromInt(Limit));
+      TEXT("getSouls"),
+      SDKConfig::GetApiUrl() + TEXT("/souls?limit=") + FString::FromInt(Limit));
 }
 
 inline auto getSoulImport(const FString &TxId) {
@@ -1095,14 +1288,11 @@ inline auto getSoulImport(const FString &TxId) {
 }
 
 inline auto postSoulVerify(const FString &TxId) {
-  return Detail::MakeEndpoint<rtk::FEmptyPayload, FSoulVerifyResult>(
-      TEXT("postSoulVerify"), rtk::FEmptyPayload{},
-      [TxId](const rtk::FEmptyPayload &) {
-        return func::AsyncHttp::Post<FSoulVerifyResult>(
-            SDKConfig::GetApiUrl() + TEXT("/souls/") + Detail::Encode(TxId) +
-                TEXT("/verify"),
-            TEXT("{}"), SDKConfig::GetApiKey());
-      });
+  return Detail::MakePostRawWithCodec<FSoulVerifyResult>(
+      TEXT("postSoulVerify"),
+      SDKConfig::GetApiUrl() + TEXT("/souls/") + Detail::Encode(TxId) +
+          TEXT("/verify"),
+      TEXT("{}"), Detail::DecodeSoulVerifyResponse);
 }
 
 inline auto postNpcImport(const FSoulImportPhase1Request &Request) {

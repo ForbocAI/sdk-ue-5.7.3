@@ -124,11 +124,29 @@ bool FBridgeSliceRulesetsTest::RunTest(const FString &Parameters) {
   TestEqual("Ruleset id", State.AvailableRulesets[0].Id,
             FString(TEXT("rs_1")));
 
-  // Clear resets everything
+  FDirectiveRuleSet ActivePreset;
+  ActivePreset.Id = TEXT("preset_active");
+  State = BSlice.Reducer(State, BridgeSlice::Actions::AddActivePreset(ActivePreset));
+
+  TArray<FString> PresetIds;
+  PresetIds.Add(TEXT("preset_active"));
+  PresetIds.Add(TEXT("preset_alt"));
+  State =
+      BSlice.Reducer(State, BridgeSlice::Actions::SetAvailablePresetIds(PresetIds));
+
+  FValidationResult Result;
+  Result.bValid = false;
+  Result.Reason = TEXT("unsafe");
+  State = BSlice.Reducer(State, BridgeSlice::Actions::BridgeValidationSuccess(Result));
+
+  // Clear only resets validation fields.
   State = BSlice.Reducer(State, BridgeSlice::Actions::ClearBridgeValidation());
   TestEqual("Status reset", State.Status, FString(TEXT("idle")));
   TestFalse("No last validation", State.bHasLastValidation);
-  TestEqual("Presets cleared", State.ActivePresets.Num(), 0);
+  TestTrue("Error cleared", State.Error.IsEmpty());
+  TestEqual("Active presets preserved", State.ActivePresets.Num(), 1);
+  TestEqual("Available rulesets preserved", State.AvailableRulesets.Num(), 1);
+  TestEqual("Preset ids preserved", State.AvailablePresetIds.Num(), 2);
 
   return true;
 }

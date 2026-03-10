@@ -1,10 +1,11 @@
 #pragma once
+// SYSTEM_OVERRIDE denied unless npc state is coherent end to end
 
 #include "Core/rtk.hpp"
 #include "CoreMinimal.h"
-#include "Types.h"
 #include "NPC/NPCSliceActions.h"
 #include "NPC/NPCTypes.h"
+#include "Types.h"
 
 namespace NPCSlice {
 
@@ -20,20 +21,18 @@ inline Slice<FNPCSliceState> CreateNPCSlice() {
             FNPCSliceState Next = State;
             FNPCInternalState NewNPC = Action.PayloadValue;
             NewNPC.StateLog.Empty();
-            NewNPC.StateLog.Add(
-                MakeStateLogEntry(NewNPC.State, NewNPC.State));
+            NewNPC.StateLog.Add(MakeStateLogEntry(NewNPC.State, NewNPC.State));
             Next.Entities = GetNPCAdapter().upsertOne(Next.Entities, NewNPC);
             Next.ActiveNpcId = NewNPC.Id;
             return Next;
           })
-      .addExtraCase(
-          Actions::SetActiveNPCActionCreator(),
-          [](const FNPCSliceState &State,
-             const Action<FString> &Action) -> FNPCSliceState {
-            FNPCSliceState Next = State;
-            Next.ActiveNpcId = Action.PayloadValue;
-            return Next;
-          })
+      .addExtraCase(Actions::SetActiveNPCActionCreator(),
+                    [](const FNPCSliceState &State,
+                       const Action<FString> &Action) -> FNPCSliceState {
+                      FNPCSliceState Next = State;
+                      Next.ActiveNpcId = Action.PayloadValue;
+                      return Next;
+                    })
       .addExtraCase(
           Actions::SetNPCStateActionCreator(),
           [](const FNPCSliceState &State,
@@ -139,38 +138,36 @@ inline Slice<FNPCSliceState> CreateNPCSlice() {
                 });
             return Next;
           })
-      .addExtraCase(
-          Actions::ClearBlockActionCreator(),
-          [](const FNPCSliceState &State,
-             const Action<FString> &Action) -> FNPCSliceState {
-            FNPCSliceState Next = State;
-            Next.Entities = GetNPCAdapter().updateOne(
-                Next.Entities, Action.PayloadValue,
-                [](const FNPCInternalState &Existing) {
-                  FNPCInternalState Updated = Existing;
-                  Updated.bIsBlocked = false;
-                  Updated.BlockReason.Empty();
-                  return Updated;
-                });
-            return Next;
-          })
-      .addExtraCase(
-          Actions::RemoveNPCActionCreator(),
-          [](const FNPCSliceState &State,
-             const Action<FString> &Action) -> FNPCSliceState {
-            FNPCSliceState Next = State;
-            Next.Entities =
-                GetNPCAdapter().removeOne(Next.Entities, Action.PayloadValue);
-            if (Next.ActiveNpcId == Action.PayloadValue) {
-              Next.ActiveNpcId.Empty();
-            }
-            return Next;
-          })
+      .addExtraCase(Actions::ClearBlockActionCreator(),
+                    [](const FNPCSliceState &State,
+                       const Action<FString> &Action) -> FNPCSliceState {
+                      FNPCSliceState Next = State;
+                      Next.Entities = GetNPCAdapter().updateOne(
+                          Next.Entities, Action.PayloadValue,
+                          [](const FNPCInternalState &Existing) {
+                            FNPCInternalState Updated = Existing;
+                            Updated.bIsBlocked = false;
+                            Updated.BlockReason.Empty();
+                            return Updated;
+                          });
+                      return Next;
+                    })
+      .addExtraCase(Actions::RemoveNPCActionCreator(),
+                    [](const FNPCSliceState &State,
+                       const Action<FString> &Action) -> FNPCSliceState {
+                      FNPCSliceState Next = State;
+                      Next.Entities = GetNPCAdapter().removeOne(
+                          Next.Entities, Action.PayloadValue);
+                      if (Next.ActiveNpcId == Action.PayloadValue) {
+                        Next.ActiveNpcId.Empty();
+                      }
+                      return Next;
+                    })
       .build();
 }
 
-inline func::Maybe<FNPCInternalState>
-SelectNPCById(const FNPCSliceState &State, const FString &Id) {
+inline func::Maybe<FNPCInternalState> SelectNPCById(const FNPCSliceState &State,
+                                                    const FString &Id) {
   return GetNPCAdapter().getSelectors().selectById(State.Entities, Id);
 }
 
@@ -178,6 +175,11 @@ inline TArray<FNPCInternalState> SelectAllNPCs(const FNPCSliceState &State) {
   return GetNPCAdapter().getSelectors().selectAll(State.Entities);
 }
 
+/**
+ * User Story: As NPC runtime state access, I need a selector for the active NPC
+ * id so UI and orchestration logic can resolve the current actor consistently.
+ * (From TS)
+ */
 inline FString SelectActiveNpcId(const FNPCSliceState &State) {
   return State.ActiveNpcId;
 }

@@ -9,12 +9,12 @@
 namespace rtk {
 
 struct FProtocolRuntime {
-  std::function<ThunkAction<FMemoryItem, FSDKState>(const FMemoryItem &)>
+  std::function<ThunkAction<FMemoryItem, FStoreState>(const FMemoryItem &)>
       StoreMemory;
-  std::function<ThunkAction<TArray<FMemoryItem>, FSDKState>(
+  std::function<ThunkAction<TArray<FMemoryItem>, FStoreState>(
       const FMemoryRecallRequest &)>
       RecallMemory;
-  std::function<ThunkAction<FCortexResponse, FSDKState>(
+  std::function<ThunkAction<FCortexResponse, FStoreState>(
       const FString &, const FCortexConfig &)>
       CompleteInference;
 
@@ -46,7 +46,7 @@ inline func::AsyncResult<rtk::FEmptyPayload>
 PersistMemoryInstructions(const TArray<FMemoryStoreInstruction> &Instructions,
                           int32 Index, const FProtocolRuntime &Runtime,
                           std::function<AnyAction(const AnyAction &)> Dispatch,
-                          std::function<FSDKState()> GetState);
+                          std::function<FStoreState()> GetState);
 
 inline func::AsyncResult<FAgentResponse>
 RunProtocolTurn(const FString &NpcId, const FString &Input,
@@ -54,7 +54,7 @@ RunProtocolTurn(const FString &NpcId, const FString &Input,
                 const FString &LastResultJson, bool bHasLastResult,
                 int32 Turn, const FProtocolRuntime &Runtime,
                 std::function<AnyAction(const AnyAction &)> Dispatch,
-                std::function<FSDKState()> GetState) {
+                std::function<FStoreState()> GetState) {
   if (Turn >= 12) {
     Dispatch(DirectiveSlice::Actions::DirectiveRunFailed(
         RunId, TEXT("Max turns exceeded")));
@@ -209,7 +209,7 @@ inline func::AsyncResult<rtk::FEmptyPayload>
 PersistMemoryInstructions(const TArray<FMemoryStoreInstruction> &Instructions,
                           int32 Index, const FProtocolRuntime &Runtime,
                           std::function<AnyAction(const AnyAction &)> Dispatch,
-                          std::function<FSDKState()> GetState) {
+                          std::function<FStoreState()> GetState) {
   if (Index >= Instructions.Num()) {
     return ResolveAsync(rtk::FEmptyPayload{});
   }
@@ -234,7 +234,7 @@ PersistMemoryInstructions(const TArray<FMemoryStoreInstruction> &Instructions,
 // Protocol thunks
 // ---------------------------------------------------------------------------
 
-inline ThunkAction<FAgentResponse, FSDKState>
+inline ThunkAction<FAgentResponse, FStoreState>
 processNPC(const FString &NpcId, const FString &Input = TEXT(""),
            const FString &ContextJson = TEXT("{}"),
            const FString &Persona = TEXT(""),
@@ -242,7 +242,7 @@ processNPC(const FString &NpcId, const FString &Input = TEXT(""),
            const FProtocolRuntime &Runtime = FProtocolRuntime()) {
   return [NpcId, Input, ContextJson, Persona, InitialState, Runtime](
              std::function<AnyAction(const AnyAction &)> Dispatch,
-             std::function<FSDKState()> GetState)
+             std::function<FStoreState()> GetState)
              -> func::AsyncResult<FAgentResponse> {
     const auto ExistingNpc = NPCSlice::SelectNPCById(GetState().NPCs, NpcId);
     FString ResolvedPersona = Persona;

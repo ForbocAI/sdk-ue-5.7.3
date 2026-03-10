@@ -1,4 +1,5 @@
 #pragma once
+// ᚱ bridge traffic should never hide who said what and when
 
 #include "Core/rtk.hpp"
 #include "CoreMinimal.h"
@@ -18,8 +19,7 @@ struct FBridgeSliceState {
   FString Status;
   FString Error;
 
-  FBridgeSliceState()
-      : bHasLastValidation(false), Status(TEXT("idle")) {}
+  FBridgeSliceState() : bHasLastValidation(false), Status(TEXT("idle")) {}
 };
 
 namespace Actions {
@@ -59,7 +59,8 @@ inline const ActionCreator<FDirectiveRuleSet> &AddActivePresetActionCreator() {
 inline const ActionCreator<TArray<FDirectiveRuleSet>> &
 SetAvailableRulesetsActionCreator() {
   static const ActionCreator<TArray<FDirectiveRuleSet>> ActionCreator =
-      createAction<TArray<FDirectiveRuleSet>>(TEXT("bridge/setAvailableRulesets"));
+      createAction<TArray<FDirectiveRuleSet>>(
+          TEXT("bridge/setAvailableRulesets"));
   return ActionCreator;
 }
 
@@ -132,34 +133,33 @@ inline Slice<FBridgeSliceState> CreateBridgeSlice() {
             Next.bHasLastValidation = true;
             return Next;
           })
-      .addExtraCase(
-          Actions::BridgeValidationFailedActionCreator(),
-          [](const FBridgeSliceState &State,
-             const Action<FString> &Action) -> FBridgeSliceState {
-            FBridgeSliceState Next = State;
-            Next.Status = TEXT("error");
-            Next.Error = Action.PayloadValue;
-            Next.LastValidation = TypeFactory::Invalid(Action.PayloadValue);
-            Next.bHasLastValidation = true;
-            return Next;
-          })
-      .addExtraCase(
-          Actions::SetActivePresetsActionCreator(),
-          [](const FBridgeSliceState &State,
-             const Action<TArray<FDirectiveRuleSet>> &Action)
-              -> FBridgeSliceState {
-            FBridgeSliceState Next = State;
-            Next.ActivePresets = Action.PayloadValue;
-            return Next;
-          })
+      .addExtraCase(Actions::BridgeValidationFailedActionCreator(),
+                    [](const FBridgeSliceState &State,
+                       const Action<FString> &Action) -> FBridgeSliceState {
+                      FBridgeSliceState Next = State;
+                      Next.Status = TEXT("error");
+                      Next.Error = Action.PayloadValue;
+                      Next.LastValidation =
+                          TypeFactory::Invalid(Action.PayloadValue);
+                      Next.bHasLastValidation = true;
+                      return Next;
+                    })
+      .addExtraCase(Actions::SetActivePresetsActionCreator(),
+                    [](const FBridgeSliceState &State,
+                       const Action<TArray<FDirectiveRuleSet>> &Action)
+                        -> FBridgeSliceState {
+                      FBridgeSliceState Next = State;
+                      Next.ActivePresets = Action.PayloadValue;
+                      return Next;
+                    })
       .addExtraCase(
           Actions::AddActivePresetActionCreator(),
           [](const FBridgeSliceState &State,
              const Action<FDirectiveRuleSet> &Action) -> FBridgeSliceState {
             FBridgeSliceState Next = State;
-            const FString TargetId =
-                Action.PayloadValue.Id.IsEmpty() ? Action.PayloadValue.RulesetId
-                                                 : Action.PayloadValue.Id;
+            const FString TargetId = Action.PayloadValue.Id.IsEmpty()
+                                         ? Action.PayloadValue.RulesetId
+                                         : Action.PayloadValue.Id;
             bool bExists = false;
             for (const FDirectiveRuleSet &Preset : Next.ActivePresets) {
               const FString ExistingId =
@@ -174,15 +174,14 @@ inline Slice<FBridgeSliceState> CreateBridgeSlice() {
             }
             return Next;
           })
-      .addExtraCase(
-          Actions::SetAvailableRulesetsActionCreator(),
-          [](const FBridgeSliceState &State,
-             const Action<TArray<FDirectiveRuleSet>> &Action)
-              -> FBridgeSliceState {
-            FBridgeSliceState Next = State;
-            Next.AvailableRulesets = Action.PayloadValue;
-            return Next;
-          })
+      .addExtraCase(Actions::SetAvailableRulesetsActionCreator(),
+                    [](const FBridgeSliceState &State,
+                       const Action<TArray<FDirectiveRuleSet>> &Action)
+                        -> FBridgeSliceState {
+                      FBridgeSliceState Next = State;
+                      Next.AvailableRulesets = Action.PayloadValue;
+                      return Next;
+                    })
       .addExtraCase(
           Actions::SetAvailablePresetIdsActionCreator(),
           [](const FBridgeSliceState &State,
@@ -194,9 +193,13 @@ inline Slice<FBridgeSliceState> CreateBridgeSlice() {
       .addExtraCase(
           Actions::ClearBridgeValidationActionCreator(),
           [](const FBridgeSliceState &State,
-             const Action<rtk::FEmptyPayload> &Action)
-              -> FBridgeSliceState {
-            return FBridgeSliceState();
+             const Action<rtk::FEmptyPayload> &Action) -> FBridgeSliceState {
+            FBridgeSliceState Next = State;
+            Next.LastValidation = FValidationResult();
+            Next.bHasLastValidation = false;
+            Next.Status = TEXT("idle");
+            Next.Error.Empty();
+            return Next;
           })
       .build();
 }

@@ -35,12 +35,12 @@ TFuture<CortexTypes::CortexInitResult> CortexOps::Init(FCortex &Cortex) {
     return Promise.GetFuture();
   }
 
-  auto SDKStore = ConfigureSDKStore();
-  SDKStore.dispatch(CortexSlice::Actions::CortexInitPending(Cortex.Config.Model));
+  auto Store = ConfigureStore();
+  Store.dispatch(CortexSlice::Actions::CortexInitPending(Cortex.Config.Model));
 
   return Async(
       EAsyncExecution::Thread,
-      [&Cortex, SDKStore]() -> CortexTypes::CortexInitResult {
+      [&Cortex, Store]() -> CortexTypes::CortexInitResult {
         try {
           Cortex.EngineHandle = Native::Llama::LoadModel(Cortex.Config.Model);
           Cortex.bReady = (Cortex.EngineHandle != nullptr);
@@ -53,17 +53,17 @@ TFuture<CortexTypes::CortexInitResult> CortexOps::Init(FCortex &Cortex) {
           Status.DownloadProgress = Cortex.bReady ? 1.0f : 0.0f;
 
           if (Cortex.bReady) {
-            SDKStore.dispatch(CortexSlice::Actions::CortexInitFulfilled(Status));
+            Store.dispatch(CortexSlice::Actions::CortexInitFulfilled(Status));
             return CortexTypes::make_right(FString(), true);
           } else {
             Status.Error = TEXT("Init failed");
-            SDKStore.dispatch(
+            Store.dispatch(
                 CortexSlice::Actions::CortexInitRejected(Status.Error));
             return CortexTypes::make_left(
                 FString(TEXT("Inference initialization failed")), false);
           }
         } catch (const std::exception &e) {
-          SDKStore.dispatch(
+          Store.dispatch(
               CortexSlice::Actions::CortexInitRejected(FString(e.what())));
           return CortexTypes::make_left(FString(e.what()), false);
         }
@@ -86,8 +86,8 @@ CortexOps::Complete(const FCortex &Cortex, const FString &Prompt,
       EAsyncExecution::Thread,
       [Cortex, Prompt]() -> CortexTypes::CortexCompletionResult {
         try {
-          auto SDKStore = ConfigureSDKStore();
-          SDKStore.dispatch(
+          auto Store = ConfigureStore();
+          Store.dispatch(
               CortexSlice::Actions::CortexCompletePending(Prompt));
 
           FCortexResponse Response;
@@ -97,7 +97,7 @@ CortexOps::Complete(const FCortex &Cortex, const FString &Prompt,
               Cortex.EngineHandle, Prompt, Cortex.Config.MaxTokens);
           Response.Stats = TEXT("Inference completed");
 
-          SDKStore.dispatch(
+          Store.dispatch(
               CortexSlice::Actions::CortexCompleteFulfilled(Response));
           return CortexTypes::make_right(FString(), Response);
         } catch (const std::exception &e) {

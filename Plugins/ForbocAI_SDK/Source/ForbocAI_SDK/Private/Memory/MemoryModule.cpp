@@ -90,12 +90,14 @@ MemoryOps::Store(const FMemoryStore &Store, const FString &Text,
   Item.Importance = FMath::Clamp(Importance, 0.0f, 1.0f);
   Item.Timestamp = FDateTime::Now().ToUnixTimestamp();
 
-  auto SDKStore = ConfigureSDKStore();
+  auto RuntimeStore = ConfigureStore();
 
   // Dispatch the store thunk
   auto ThunkResult = rtk::nodeMemoryStoreThunk(Item)(
-      [SDKStore](const rtk::AnyAction &a) { return SDKStore.dispatch(a); },
-      [SDKStore]() { return SDKStore.getState(); });
+      [RuntimeStore](const rtk::AnyAction &a) {
+        return RuntimeStore.dispatch(a);
+      },
+      [RuntimeStore]() { return RuntimeStore.getState(); });
 
   // Chain result back to the promise
   ThunkResult
@@ -133,7 +135,7 @@ MemoryOps::Recall(const FMemoryStore &Store, const FString &Query,
   TSharedPtr<TPromise<MemoryTypes::MemoryStoreRecallResult>> Promise =
       MakeShared<TPromise<MemoryTypes::MemoryStoreRecallResult>>();
 
-  auto SDKStore = ConfigureSDKStore();
+  auto RuntimeStore = ConfigureStore();
   FMemoryRecallRequest RecallRequest;
   RecallRequest.Query = Query;
   RecallRequest.Limit = Limit < 0 ? Store.Config.MaxRecallResults : Limit;
@@ -141,8 +143,10 @@ MemoryOps::Recall(const FMemoryStore &Store, const FString &Query,
 
   // Dispatch the recall thunk
   auto ThunkResult = rtk::nodeMemoryRecallThunk(RecallRequest)(
-      [SDKStore](const rtk::AnyAction &a) { return SDKStore.dispatch(a); },
-      [SDKStore]() { return SDKStore.getState(); });
+      [RuntimeStore](const rtk::AnyAction &a) {
+        return RuntimeStore.dispatch(a);
+      },
+      [RuntimeStore]() { return RuntimeStore.getState(); });
 
   // Chain result back to the promise
   ThunkResult

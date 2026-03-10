@@ -123,6 +123,11 @@ inline FString DefaultNodeMemoryPath() {
   return FPaths::ProjectSavedDir() + TEXT("ForbocAI_Memory.sqlite");
 }
 
+inline FString &NodeMemoryPathStorage() {
+  static FString Path = DefaultNodeMemoryPath();
+  return Path;
+}
+
 inline Native::Sqlite::DB EnsureNodeMemoryDatabase() {
   return NodeMemoryHandle();
 }

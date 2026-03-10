@@ -11,7 +11,7 @@
 #include "NPC/NPCSlice.h"
 #include "Soul/SoulSlice.h"
 
-struct FSDKState {
+struct FStoreState {
   NPCSlice::FNPCSliceState NPCs;
   MemorySlice::FMemorySliceState Memory;
   DirectiveSlice::FDirectiveSliceState Directives;
@@ -22,7 +22,7 @@ struct FSDKState {
   APISlice::FAPIState API;
 };
 
-namespace SDKStoreInternal {
+namespace StoreInternal {
 
 inline const rtk::Slice<NPCSlice::FNPCSliceState> &GetNPCSlice() {
   static const rtk::Slice<NPCSlice::FNPCSliceState> Slice =
@@ -73,27 +73,25 @@ inline const rtk::Slice<APISlice::FAPIState> &GetAPISlice() {
   return Slice;
 }
 
-} // namespace SDKStoreInternal
+} // namespace StoreInternal
 
-inline FSDKState SDKReducer(const FSDKState &State,
-                            const rtk::AnyAction &Action) {
-  FSDKState Next = State;
-  Next.NPCs = SDKStoreInternal::GetNPCSlice().Reducer(State.NPCs, Action);
-  Next.Memory = SDKStoreInternal::GetMemorySlice().Reducer(State.Memory, Action);
+inline FStoreState StoreReducer(const FStoreState &State,
+                                const rtk::AnyAction &Action) {
+  FStoreState Next = State;
+  Next.NPCs = StoreInternal::GetNPCSlice().Reducer(State.NPCs, Action);
+  Next.Memory = StoreInternal::GetMemorySlice().Reducer(State.Memory, Action);
   Next.Directives =
-      SDKStoreInternal::GetDirectiveSlice().Reducer(State.Directives, Action);
-  Next.Bridge =
-      SDKStoreInternal::GetBridgeSlice().Reducer(State.Bridge, Action);
-  Next.Cortex =
-      SDKStoreInternal::GetCortexSlice().Reducer(State.Cortex, Action);
-  Next.Soul = SDKStoreInternal::GetSoulSlice().Reducer(State.Soul, Action);
-  Next.Ghost = SDKStoreInternal::GetGhostSlice().Reducer(State.Ghost, Action);
-  Next.API = SDKStoreInternal::GetAPISlice().Reducer(State.API, Action);
+      StoreInternal::GetDirectiveSlice().Reducer(State.Directives, Action);
+  Next.Bridge = StoreInternal::GetBridgeSlice().Reducer(State.Bridge, Action);
+  Next.Cortex = StoreInternal::GetCortexSlice().Reducer(State.Cortex, Action);
+  Next.Soul = StoreInternal::GetSoulSlice().Reducer(State.Soul, Action);
+  Next.Ghost = StoreInternal::GetGhostSlice().Reducer(State.Ghost, Action);
+  Next.API = StoreInternal::GetAPISlice().Reducer(State.API, Action);
   return Next;
 }
 
-inline rtk::Middleware<FSDKState> createNpcRemovalListener() {
-  return [](const rtk::MiddlewareApi<FSDKState> &Api)
+inline rtk::Middleware<FStoreState> createNpcRemovalListener() {
+  return [](const rtk::MiddlewareApi<FStoreState> &Api)
              -> std::function<rtk::Dispatcher(rtk::Dispatcher)> {
     return [Api](rtk::Dispatcher Next) -> rtk::Dispatcher {
       return [Api, Next](const rtk::AnyAction &Action) -> rtk::AnyAction {
@@ -123,19 +121,19 @@ inline rtk::Middleware<FSDKState> createNpcRemovalListener() {
   };
 }
 
-inline rtk::EnhancedStore<FSDKState>
-createSDKStore(func::Maybe<FSDKState> PreloadedState =
-                   func::nothing<FSDKState>()) {
-  std::vector<rtk::Middleware<FSDKState>> Middlewares;
+inline rtk::EnhancedStore<FStoreState>
+createStore(func::Maybe<FStoreState> PreloadedState =
+                func::nothing<FStoreState>()) {
+  std::vector<rtk::Middleware<FStoreState>> Middlewares;
   Middlewares.push_back(createNpcRemovalListener());
 
-  return rtk::configureStore<FSDKState>(
-      &SDKReducer,
-      PreloadedState.hasValue ? PreloadedState.value : FSDKState(),
+  return rtk::configureStore<FStoreState>(
+      &StoreReducer,
+      PreloadedState.hasValue ? PreloadedState.value : FStoreState(),
       Middlewares);
 }
 
-inline rtk::EnhancedStore<FSDKState> ConfigureSDKStore() {
-  static rtk::EnhancedStore<FSDKState> GlobalStore = createSDKStore();
+inline rtk::EnhancedStore<FStoreState> ConfigureStore() {
+  static rtk::EnhancedStore<FStoreState> GlobalStore = createStore();
   return GlobalStore;
 }

@@ -6,20 +6,26 @@
 namespace rtk {
 
 // Forward declarations
-inline ThunkAction<FMemoryItem, FSDKState>
+inline ThunkAction<FMemoryItem, FStoreState>
 nodeMemoryStoreThunk(const FMemoryItem &Item);
 
-inline ThunkAction<TArray<FMemoryItem>, FSDKState>
+inline ThunkAction<TArray<FMemoryItem>, FStoreState>
 nodeMemoryRecallThunk(const FMemoryRecallRequest &Request);
 
 // ---------------------------------------------------------------------------
 // Node memory thunks (mirrors TS nodeMemorySlice.ts)
+// memory operations stay grounded in explicit IO paths
 // ---------------------------------------------------------------------------
 
-inline ThunkAction<rtk::FEmptyPayload, FSDKState>
+/**
+ * User Story: As memory persistence setup, I need validated DB/table paths so
+ * vector storage cannot escape the intended infrastructure directory. (From TS)
+ */
+
+inline ThunkAction<rtk::FEmptyPayload, FStoreState>
 initNodeMemoryThunk(const FString &DatabasePath = TEXT("")) {
   return [DatabasePath](std::function<AnyAction(const AnyAction &)> Dispatch,
-                        std::function<FSDKState()> GetState)
+                        std::function<FStoreState()> GetState)
              -> func::AsyncResult<rtk::FEmptyPayload> {
     return func::AsyncResult<rtk::FEmptyPayload>::create(
         [DatabasePath](std::function<void(rtk::FEmptyPayload)> Resolve,
@@ -34,6 +40,7 @@ initNodeMemoryThunk(const FString &DatabasePath = TEXT("")) {
             const FString Path = DatabasePath.IsEmpty()
                                      ? detail::DefaultNodeMemoryPath()
                                      : DatabasePath;
+            detail::NodeMemoryPathStorage() = Path;
             Handle = Native::Sqlite::Open(Path);
 
             AsyncTask(ENamedThreads::GameThread, [Handle, Resolve, Reject]() {
@@ -48,10 +55,10 @@ initNodeMemoryThunk(const FString &DatabasePath = TEXT("")) {
   };
 }
 
-inline ThunkAction<FMemoryItem, FSDKState>
+inline ThunkAction<FMemoryItem, FStoreState>
 nodeMemoryStoreThunk(const FMemoryItem &Item) {
   return [Item](std::function<AnyAction(const AnyAction &)> Dispatch,
-                std::function<FSDKState()> GetState)
+                std::function<FStoreState()> GetState)
              -> func::AsyncResult<FMemoryItem> {
     Dispatch(MemorySlice::Actions::MemoryStoreStart());
 
@@ -75,36 +82,34 @@ nodeMemoryStoreThunk(const FMemoryItem &Item) {
             const bool bStored =
                 Native::Sqlite::Upsert(Db, Stored, Stored.Embedding);
 
-            AsyncTask(ENamedThreads::GameThread,
-                      [Dispatch, Resolve, Reject, Stored, bStored]() {
-                        if (bStored) {
-                          Dispatch(MemorySlice::Actions::MemoryStoreSuccess(
-                              Stored));
-                          Resolve(Stored);
-                        } else {
-                          const FString Error =
-                              TEXT("Failed to store local memory");
-                          Dispatch(MemorySlice::Actions::MemoryStoreFailed(
-                              Error));
-                          Reject(TCHAR_TO_UTF8(*Error));
-                        }
-                      });
+            AsyncTask(ENamedThreads::GameThread, [Dispatch, Resolve, Reject,
+                                                  Stored, bStored]() {
+              if (bStored) {
+                Dispatch(MemorySlice::Actions::MemoryStoreSuccess(Stored));
+                Resolve(Stored);
+              } else {
+                const FString Error = TEXT("Failed to store local memory");
+                Dispatch(MemorySlice::Actions::MemoryStoreFailed(Error));
+                Reject(TCHAR_TO_UTF8(*Error));
+              }
+            });
           });
         });
   };
 }
 
-inline ThunkAction<TArray<FMemoryItem>, FSDKState>
+inline ThunkAction<TArray<FMemoryItem>, FStoreState>
 nodeMemoryRecallThunk(const FMemoryRecallRequest &Request) {
   return [Request](std::function<AnyAction(const AnyAction &)> Dispatch,
-                   std::function<FSDKState()> GetState)
+                   std::function<FStoreState()> GetState)
              -> func::AsyncResult<TArray<FMemoryItem>> {
     Dispatch(MemorySlice::Actions::MemoryRecallStart());
 
     return func::AsyncResult<TArray<FMemoryItem>>::create(
         [Request, Dispatch](std::function<void(TArray<FMemoryItem>)> Resolve,
                             std::function<void(std::string)> Reject) {
-          Async(EAsyncExecution::Thread, [Request, Dispatch, Resolve, Reject]() {
+          Async(EAsyncExecution::Thread, [Request, Dispatch, Resolve,
+                                          Reject]() {
             Native::Sqlite::DB Db = detail::EnsureNodeMemoryDatabase();
             if (!Db) {
               const FString Error = TEXT("Local memory is not initialized");
@@ -126,19 +131,22 @@ nodeMemoryRecallThunk(const FMemoryRecallRequest &Request) {
               });
             }
 
-            AsyncTask(ENamedThreads::GameThread,
-                      [Dispatch, Resolve, Results]() {
-                        Dispatch(MemorySlice::Actions::MemoryRecallSuccess(
-                            Results));
-                        Resolve(Results);
-                      });
+            AsyncTask(
+                ENamedThreads::GameThread, [Dispatch, Resolve, Results]() {
+                  Dispatch(MemorySlice::Actions::MemoryRecallSuccess(Results));
+                  Resolve(Results);
+                });
           });
         });
   };
 }
 
+/**
+ * User Story: As recall query post-processing, I need row-to-memory mapping
+ * that normalizes records into store FMemoryItem shape. (From TS)
+ */
 // Convenience wrappers
-inline ThunkAction<FMemoryItem, FSDKState>
+inline ThunkAction<FMemoryItem, FStoreState>
 storeNodeMemoryThunk(const FString &Text,
                      const FString &Type = TEXT("observation"),
                      float Importance = 0.5f) {
@@ -149,7 +157,7 @@ storeNodeMemoryThunk(const FString &Text,
   return nodeMemoryStoreThunk(detail::MakeMemoryItem(Instruction));
 }
 
-inline ThunkAction<TArray<FMemoryItem>, FSDKState>
+inline ThunkAction<TArray<FMemoryItem>, FStoreState>
 recallNodeMemoryThunk(const FString &Query, int32 Limit = 10,
                       float Threshold = 0.7f) {
   FMemoryRecallRequest Request;
@@ -159,25 +167,26 @@ recallNodeMemoryThunk(const FString &Query, int32 Limit = 10,
   return nodeMemoryRecallThunk(Request);
 }
 
-inline ThunkAction<rtk::FEmptyPayload, FSDKState> clearNodeMemoryThunk() {
+inline ThunkAction<rtk::FEmptyPayload, FStoreState> clearNodeMemoryThunk() {
   return [](std::function<AnyAction(const AnyAction &)> Dispatch,
-            std::function<FSDKState()> GetState)
+            std::function<FStoreState()> GetState)
              -> func::AsyncResult<rtk::FEmptyPayload> {
     return func::AsyncResult<rtk::FEmptyPayload>::create(
         [Dispatch](std::function<void(rtk::FEmptyPayload)> Resolve,
                    std::function<void(std::string)> Reject) {
           Async(EAsyncExecution::Thread, [Dispatch, Resolve]() {
             Native::Sqlite::DB &Handle = detail::NodeMemoryHandle();
+            const FString Path = detail::NodeMemoryPathStorage();
             if (Handle) {
               Native::Sqlite::Clear(Handle);
               Native::Sqlite::Close(Handle);
               Handle = nullptr;
             } else {
-              Native::Sqlite::ClearPath(detail::DefaultNodeMemoryPath());
+              Native::Sqlite::ClearPath(Path);
             }
 
-            IFileManager::Get().Delete(*detail::DefaultNodeMemoryPath(), false,
-                                       true, true);
+            IFileManager::Get().Delete(*Path, false, true, true);
+            detail::NodeMemoryPathStorage() = detail::DefaultNodeMemoryPath();
 
             AsyncTask(ENamedThreads::GameThread, [Dispatch, Resolve]() {
               Dispatch(MemorySlice::Actions::MemoryClear());
@@ -188,9 +197,9 @@ inline ThunkAction<rtk::FEmptyPayload, FSDKState> clearNodeMemoryThunk() {
   };
 }
 
-inline ThunkAction<rtk::FEmptyPayload, FSDKState> initNodeVectorThunk() {
+inline ThunkAction<rtk::FEmptyPayload, FStoreState> initNodeVectorThunk() {
   return [](std::function<AnyAction(const AnyAction &)> Dispatch,
-            std::function<FSDKState()> GetState)
+            std::function<FStoreState()> GetState)
              -> func::AsyncResult<rtk::FEmptyPayload> {
     return detail::ResolveAsync(rtk::FEmptyPayload{});
   };
@@ -200,12 +209,12 @@ inline ThunkAction<rtk::FEmptyPayload, FSDKState> initNodeVectorThunk() {
 // Remote memory thunks (mirrors TS core thunks.ts)
 // ---------------------------------------------------------------------------
 
-inline ThunkAction<rtk::FEmptyPayload, FSDKState>
+inline ThunkAction<rtk::FEmptyPayload, FStoreState>
 storeMemoryRemoteThunk(const FString &NpcId, const FString &Observation,
                        float Importance = 0.8f) {
-  return [NpcId, Observation, Importance](
-             std::function<AnyAction(const AnyAction &)> Dispatch,
-             std::function<FSDKState()> GetState)
+  return [NpcId, Observation,
+          Importance](std::function<AnyAction(const AnyAction &)> Dispatch,
+                      std::function<FStoreState()> GetState)
              -> func::AsyncResult<rtk::FEmptyPayload> {
     return APISlice::Endpoints::postMemoryStore(
         NpcId, TypeFactory::RemoteMemoryStoreRequest(Observation, Importance))(
@@ -213,10 +222,10 @@ storeMemoryRemoteThunk(const FString &NpcId, const FString &Observation,
   };
 }
 
-inline ThunkAction<TArray<FMemoryItem>, FSDKState>
+inline ThunkAction<TArray<FMemoryItem>, FStoreState>
 listMemoryRemoteThunk(const FString &NpcId) {
   return [NpcId](std::function<AnyAction(const AnyAction &)> Dispatch,
-                 std::function<FSDKState()> GetState)
+                 std::function<FStoreState()> GetState)
              -> func::AsyncResult<TArray<FMemoryItem>> {
     return func::AsyncChain::then<TArray<FMemoryItem>, TArray<FMemoryItem>>(
         APISlice::Endpoints::getMemoryList(NpcId)(Dispatch, GetState),
@@ -227,22 +236,22 @@ listMemoryRemoteThunk(const FString &NpcId) {
   };
 }
 
-inline ThunkAction<TArray<FMemoryItem>, FSDKState>
+inline ThunkAction<TArray<FMemoryItem>, FStoreState>
 recallMemoryRemoteThunk(const FString &NpcId, const FString &Query,
                         float Similarity = 0.0f) {
-  return [NpcId, Query, Similarity](
-             std::function<AnyAction(const AnyAction &)> Dispatch,
-             std::function<FSDKState()> GetState)
+  return [NpcId, Query,
+          Similarity](std::function<AnyAction(const AnyAction &)> Dispatch,
+                      std::function<FStoreState()> GetState)
              -> func::AsyncResult<TArray<FMemoryItem>> {
     Dispatch(MemorySlice::Actions::MemoryRecallStart());
     return func::AsyncChain::then<TArray<FMemoryItem>, TArray<FMemoryItem>>(
-        APISlice::Endpoints::postMemoryRecall(
-            NpcId, TypeFactory::RemoteMemoryRecallRequest(Query, Similarity))(
-            Dispatch, GetState),
-        [Dispatch](const TArray<FMemoryItem> &Items) {
-          Dispatch(MemorySlice::Actions::MemoryRecallSuccess(Items));
-          return detail::ResolveAsync(Items);
-        })
+               APISlice::Endpoints::postMemoryRecall(
+                   NpcId, TypeFactory::RemoteMemoryRecallRequest(
+                              Query, Similarity))(Dispatch, GetState),
+               [Dispatch](const TArray<FMemoryItem> &Items) {
+                 Dispatch(MemorySlice::Actions::MemoryRecallSuccess(Items));
+                 return detail::ResolveAsync(Items);
+               })
         .catch_([Dispatch](std::string Error) {
           Dispatch(MemorySlice::Actions::MemoryRecallFailed(
               FString(UTF8_TO_TCHAR(Error.c_str()))));
@@ -250,10 +259,10 @@ recallMemoryRemoteThunk(const FString &NpcId, const FString &Query,
   };
 }
 
-inline ThunkAction<rtk::FEmptyPayload, FSDKState>
+inline ThunkAction<rtk::FEmptyPayload, FStoreState>
 clearMemoryRemoteThunk(const FString &NpcId) {
   return [NpcId](std::function<AnyAction(const AnyAction &)> Dispatch,
-                 std::function<FSDKState()> GetState)
+                 std::function<FStoreState()> GetState)
              -> func::AsyncResult<rtk::FEmptyPayload> {
     return func::AsyncChain::then<rtk::FEmptyPayload, rtk::FEmptyPayload>(
         APISlice::Endpoints::deleteMemoryClear(NpcId)(Dispatch, GetState),

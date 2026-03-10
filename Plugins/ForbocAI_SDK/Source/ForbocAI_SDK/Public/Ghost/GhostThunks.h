@@ -11,10 +11,10 @@ namespace rtk {
 // Ghost thunks (mirrors TS ghostSlice.ts)
 // ---------------------------------------------------------------------------
 
-inline ThunkAction<FGhostRunResponse, FSDKState>
+inline ThunkAction<FGhostRunResponse, FStoreState>
 startGhostThunk(const FGhostConfig &Config) {
   return [Config](std::function<AnyAction(const AnyAction &)> Dispatch,
-                  std::function<FSDKState()> GetState)
+                  std::function<FStoreState()> GetState)
              -> func::AsyncResult<FGhostRunResponse> {
     const auto ApiKeyError = Errors::requireApiKeyGuidance(
         SDKConfig::GetApiUrl(), SDKConfig::GetApiKey());
@@ -31,10 +31,10 @@ startGhostThunk(const FGhostConfig &Config) {
   };
 }
 
-inline ThunkAction<FGhostStatusResponse, FSDKState>
+inline ThunkAction<FGhostStatusResponse, FStoreState>
 getGhostStatusThunk(const FString &SessionId) {
   return [SessionId](std::function<AnyAction(const AnyAction &)> Dispatch,
-                     std::function<FSDKState()> GetState)
+                     std::function<FStoreState()> GetState)
              -> func::AsyncResult<FGhostStatusResponse> {
     const auto ApiKeyError = Errors::requireApiKeyGuidance(
         SDKConfig::GetApiUrl(), SDKConfig::GetApiKey());
@@ -52,10 +52,10 @@ getGhostStatusThunk(const FString &SessionId) {
   };
 }
 
-inline ThunkAction<FGhostResultsResponse, FSDKState>
+inline ThunkAction<FGhostResultsResponse, FStoreState>
 getGhostResultsThunk(const FString &SessionId) {
   return [SessionId](std::function<AnyAction(const AnyAction &)> Dispatch,
-                     std::function<FSDKState()> GetState)
+                     std::function<FStoreState()> GetState)
              -> func::AsyncResult<FGhostResultsResponse> {
     const auto ApiKeyError = Errors::requireApiKeyGuidance(
         SDKConfig::GetApiUrl(), SDKConfig::GetApiKey());
@@ -102,10 +102,10 @@ getGhostResultsThunk(const FString &SessionId) {
   };
 }
 
-inline ThunkAction<FGhostStopResponse, FSDKState>
+inline ThunkAction<FGhostStopResponse, FStoreState>
 stopGhostThunk(const FString &SessionId) {
   return [SessionId](std::function<AnyAction(const AnyAction &)> Dispatch,
-                     std::function<FSDKState()> GetState)
+                     std::function<FStoreState()> GetState)
              -> func::AsyncResult<FGhostStopResponse> {
     const auto ApiKeyError = Errors::requireApiKeyGuidance(
         SDKConfig::GetApiUrl(), SDKConfig::GetApiKey());
@@ -132,10 +132,10 @@ stopGhostThunk(const FString &SessionId) {
   };
 }
 
-inline ThunkAction<TArray<FGhostHistoryEntry>, FSDKState>
+inline ThunkAction<TArray<FGhostHistoryEntry>, FStoreState>
 getGhostHistoryThunk(int32 Limit = 10) {
   return [Limit](std::function<AnyAction(const AnyAction &)> Dispatch,
-                 std::function<FSDKState()> GetState)
+                 std::function<FStoreState()> GetState)
              -> func::AsyncResult<TArray<FGhostHistoryEntry>> {
     const auto ApiKeyError = Errors::requireApiKeyGuidance(
         SDKConfig::GetApiUrl(), SDKConfig::GetApiKey());

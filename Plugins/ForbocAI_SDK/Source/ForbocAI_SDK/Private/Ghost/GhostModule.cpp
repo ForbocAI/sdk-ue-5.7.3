@@ -36,8 +36,8 @@ GhostTypes::GhostTestRunResult GhostOps::RunTest(const FGhost &Ghost,
           return;
         }
 
-        auto SDKStore = ConfigureSDKStore();
-        SDKStore.dispatch(
+        auto Store = ConfigureStore();
+        Store.dispatch(
             GhostSlice::Actions::GhostSessionStarted(Scenario, TEXT("running")));
 
         // Create agent from configuration
@@ -45,7 +45,7 @@ GhostTypes::GhostTestRunResult GhostOps::RunTest(const FGhost &Ghost,
 
         // Run the scenario test via Internal helper
         GhostInternal::RunScenarioTest(Agent, Scenario)
-            .then([resolve, SDKStore, Scenario](FGhostTestResult Result) {
+            .then([resolve, Store, Scenario](FGhostTestResult Result) {
               FGhostTestReport Report;
               Report.Results.Add(Result);
               Report.TotalTests = 1;
@@ -53,16 +53,16 @@ GhostTypes::GhostTestRunResult GhostOps::RunTest(const FGhost &Ghost,
               Report.FailedTests = Result.bPassed ? 0 : 1;
               Report.SuccessRate = Result.bPassed ? 1.0f : 0.0f;
               Report.Summary = Result.bPassed ? TEXT("Passed") : TEXT("Failed");
-              SDKStore.dispatch(
+              Store.dispatch(
                   GhostSlice::Actions::GhostSessionCompleted(Report));
               resolve(Result);
             })
-            .catch_([reject, SDKStore, Scenario](std::string Error) {
+            .catch_([reject, Store, Scenario](std::string Error) {
               FGhostTestResult Failure;
               Failure.Scenario = Scenario;
               Failure.bPassed = false;
               Failure.ErrorMessage = FString(Error.c_str());
-              SDKStore.dispatch(GhostSlice::Actions::GhostSessionFailed(
+              Store.dispatch(GhostSlice::Actions::GhostSessionFailed(
                   Scenario, Failure.ErrorMessage));
               reject(Error);
             })
@@ -81,14 +81,14 @@ GhostTypes::GhostTestRunAllResult GhostOps::RunAllTests(const FGhost &Ghost) {
         GhostInternal::RunTestsSequentially(
             Ghost, Report, 0,
             [resolve](FGhostTestReport FinalReport) {
-              auto SDKStore = ConfigureSDKStore();
-              SDKStore.dispatch(
+              auto Store = ConfigureStore();
+              Store.dispatch(
                   GhostSlice::Actions::GhostSessionCompleted(FinalReport));
               resolve(FinalReport);
             },
             [reject](std::string Error) {
-              auto SDKStore = ConfigureSDKStore();
-              SDKStore.dispatch(GhostSlice::Actions::GhostSessionFailed(
+              auto Store = ConfigureStore();
+              Store.dispatch(GhostSlice::Actions::GhostSessionFailed(
                   TEXT("ghost-run"), FString(Error.c_str())));
               reject(Error);
             });

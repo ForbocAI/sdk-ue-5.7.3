@@ -57,11 +57,11 @@ FValidationResult BridgeOps::Validate(const FAgentAction &Action,
   auto validationPipeline = BridgeHelpers::bridgeValidationPipeline();
   auto result = validationPipeline.run(Action);
 
-  auto SDKStore = ConfigureSDKStore();
-  SDKStore.dispatch(BridgeSlice::Actions::BridgeValidationPending());
+  auto Store = ConfigureStore();
+  Store.dispatch(BridgeSlice::Actions::BridgeValidationPending());
 
   if (result.isLeft) {
-    SDKStore.dispatch(
+    Store.dispatch(
         BridgeSlice::Actions::BridgeValidationFailure(result.left));
     return TypeFactory::Invalid(result.left);
   }
@@ -74,7 +74,7 @@ FValidationResult BridgeOps::Validate(const FAgentAction &Action,
           Rule.Validator(validatedAction, Context);
 
       if (!RuleResult.bValid) {
-        SDKStore.dispatch(BridgeSlice::Actions::BridgeValidationFailure(
+        Store.dispatch(BridgeSlice::Actions::BridgeValidationFailure(
             RuleResult.Reason));
         return RuleResult;
       }
@@ -82,7 +82,7 @@ FValidationResult BridgeOps::Validate(const FAgentAction &Action,
   }
 
   FValidationResult FinalSuccess = TypeFactory::Valid(TEXT("All rules passed"));
-  SDKStore.dispatch(BridgeSlice::Actions::BridgeValidationSuccess(
+  Store.dispatch(BridgeSlice::Actions::BridgeValidationSuccess(
       FinalSuccess));
   return FinalSuccess;
 }
@@ -104,7 +104,7 @@ TArray<FValidationRule> BridgeOps::CreateRPGRules() {
 BridgeTypes::AsyncResult<FDirectiveRuleSet>
 BridgeOps::RegisterRule(const FValidationRule &Rule, const FString & /*ApiUrl*/) {
   // Dispatch through the store — no direct HTTP calls.
-  auto Store = ConfigureSDKStore();
+  auto Store = ConfigureStore();
   FDirectiveRuleSet Ruleset;
   Ruleset.Id = Rule.Id;
   Ruleset.RulesetId = Rule.Name;

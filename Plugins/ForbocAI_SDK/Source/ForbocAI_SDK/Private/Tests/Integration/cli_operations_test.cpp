@@ -12,22 +12,22 @@
 using namespace rtk;
 
 // ---------------------------------------------------------------------------
-// Test: SDKOps::CreateNpc creates NPC and updates store
+// Test: Ops::CreateNpc creates NPC and updates store
 // ---------------------------------------------------------------------------
-IMPLEMENT_SIMPLE_AUTOMATION_TEST(FSDKOpsCreateNpcTest,
-                                 "ForbocAI.Integration.SDKOps.CreateNpc",
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FOpsCreateNpcTest,
+                                 "ForbocAI.Integration.Ops.CreateNpc",
                                  EAutomationTestFlags_ApplicationContextMask |
                                      EAutomationTestFlags::EngineFilter)
-bool FSDKOpsCreateNpcTest::RunTest(const FString &Parameters) {
-  EnhancedStore<FSDKState> Store = createSDKStore();
+bool FOpsCreateNpcTest::RunTest(const FString &Parameters) {
+  EnhancedStore<FStoreState> Store = createStore();
 
-  FNPCInternalState Result = SDKOps::CreateNpc(Store, TEXT("A loyal guard"));
+  FNPCInternalState Result = Ops::CreateNpc(Store, TEXT("A loyal guard"));
 
   TestFalse("NPC Id not empty", Result.Id.IsEmpty());
   TestEqual("Persona matches", Result.Persona,
             FString(TEXT("A loyal guard")));
 
-  func::Maybe<FNPCInternalState> Active = SDKOps::GetActiveNpc(Store);
+  func::Maybe<FNPCInternalState> Active = Ops::GetActiveNpc(Store);
   TestTrue("Active NPC exists", Active.hasValue);
   if (Active.hasValue) {
     TestEqual("Active NPC Id matches created", Active.value.Id, Result.Id);
@@ -39,52 +39,52 @@ bool FSDKOpsCreateNpcTest::RunTest(const FString &Parameters) {
 }
 
 // ---------------------------------------------------------------------------
-// Test: SDKOps::GetActiveNpc returns nothing on empty store
+// Test: Ops::GetActiveNpc returns nothing on empty store
 // ---------------------------------------------------------------------------
-IMPLEMENT_SIMPLE_AUTOMATION_TEST(FSDKOpsGetActiveEmptyTest,
-                                 "ForbocAI.Integration.SDKOps.GetActiveEmpty",
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FOpsGetActiveEmptyTest,
+                                 "ForbocAI.Integration.Ops.GetActiveEmpty",
                                  EAutomationTestFlags_ApplicationContextMask |
                                      EAutomationTestFlags::EngineFilter)
-bool FSDKOpsGetActiveEmptyTest::RunTest(const FString &Parameters) {
-  EnhancedStore<FSDKState> Store = createSDKStore();
+bool FOpsGetActiveEmptyTest::RunTest(const FString &Parameters) {
+  EnhancedStore<FStoreState> Store = createStore();
 
-  func::Maybe<FNPCInternalState> Active = SDKOps::GetActiveNpc(Store);
+  func::Maybe<FNPCInternalState> Active = Ops::GetActiveNpc(Store);
   TestFalse("No active NPC on fresh store", Active.hasValue);
 
   return true;
 }
 
 // ---------------------------------------------------------------------------
-// Test: SDKOps::ListNpcs returns all created NPCs
+// Test: Ops::ListNpcs returns all created NPCs
 // ---------------------------------------------------------------------------
-IMPLEMENT_SIMPLE_AUTOMATION_TEST(FSDKOpsListNpcsTest,
-                                 "ForbocAI.Integration.SDKOps.ListNpcs",
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FOpsListNpcsTest,
+                                 "ForbocAI.Integration.Ops.ListNpcs",
                                  EAutomationTestFlags_ApplicationContextMask |
                                      EAutomationTestFlags::EngineFilter)
-bool FSDKOpsListNpcsTest::RunTest(const FString &Parameters) {
-  EnhancedStore<FSDKState> Store = createSDKStore();
+bool FOpsListNpcsTest::RunTest(const FString &Parameters) {
+  EnhancedStore<FStoreState> Store = createStore();
 
-  TArray<FNPCInternalState> Empty = SDKOps::ListNpcs(Store);
+  TArray<FNPCInternalState> Empty = Ops::ListNpcs(Store);
   TestEqual("Empty list initially", Empty.Num(), 0);
 
-  SDKOps::CreateNpc(Store, TEXT("Guard"));
-  SDKOps::CreateNpc(Store, TEXT("Merchant"));
-  SDKOps::CreateNpc(Store, TEXT("Thief"));
+  Ops::CreateNpc(Store, TEXT("Guard"));
+  Ops::CreateNpc(Store, TEXT("Merchant"));
+  Ops::CreateNpc(Store, TEXT("Thief"));
 
-  TArray<FNPCInternalState> All = SDKOps::ListNpcs(Store);
+  TArray<FNPCInternalState> All = Ops::ListNpcs(Store);
   TestEqual("Three NPCs listed", All.Num(), 3);
 
   return true;
 }
 
 // ---------------------------------------------------------------------------
-// Test: SDKOps::ConfigGet / ConfigSet
+// Test: Ops::ConfigGet / ConfigSet
 // ---------------------------------------------------------------------------
-IMPLEMENT_SIMPLE_AUTOMATION_TEST(FSDKOpsConfigTest,
-                                 "ForbocAI.Integration.SDKOps.Config",
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FOpsConfigTest,
+                                 "ForbocAI.Integration.Ops.Config",
                                  EAutomationTestFlags_ApplicationContextMask |
                                      EAutomationTestFlags::EngineFilter)
-bool FSDKOpsConfigTest::RunTest(const FString &Parameters) {
+bool FOpsConfigTest::RunTest(const FString &Parameters) {
   const FString TempConfigPath = FPaths::Combine(
       FPaths::ProjectSavedDir(),
       FString::Printf(TEXT("forbocai-sdkops-%s.json"),
@@ -97,21 +97,21 @@ bool FSDKOpsConfigTest::RunTest(const FString &Parameters) {
   TestEqual("Default runtime API URL matches node default",
             SDKConfig::GetApiUrl(), FString(TEXT("http://localhost:8080")));
   TestTrue("Unset persisted apiUrl is empty",
-           SDKOps::ConfigGet(TEXT("apiUrl")).IsEmpty());
+           Ops::ConfigGet(TEXT("apiUrl")).IsEmpty());
 
-  FString Version = SDKOps::ConfigGet(TEXT("version"));
+  FString Version = Ops::ConfigGet(TEXT("version"));
   TestFalse("Version not empty", Version.IsEmpty());
 
-  SDKOps::ConfigSet(TEXT("apiUrl"), TEXT("https://test.forboc.ai"));
-  FString Url = SDKOps::ConfigGet(TEXT("apiUrl"));
+  Ops::ConfigSet(TEXT("apiUrl"), TEXT("https://test.forboc.ai"));
+  FString Url = Ops::ConfigGet(TEXT("apiUrl"));
   TestEqual("ApiUrl roundtrip", Url,
             FString(TEXT("https://test.forboc.ai")));
 
-  SDKOps::ConfigSet(TEXT("apiKey"), TEXT("sk_test_roundtrip"));
-  FString Key = SDKOps::ConfigGet(TEXT("apiKey"));
+  Ops::ConfigSet(TEXT("apiKey"), TEXT("sk_test_roundtrip"));
+  FString Key = Ops::ConfigGet(TEXT("apiKey"));
   TestEqual("ApiKey roundtrip", Key, FString(TEXT("sk_test_roundtrip")));
 
-  FString Unknown = SDKOps::ConfigGet(TEXT("nonexistent"));
+  FString Unknown = Ops::ConfigGet(TEXT("nonexistent"));
   TestTrue("Unknown key returns empty", Unknown.IsEmpty());
 
   FString PersistedConfig;
@@ -134,26 +134,26 @@ bool FSDKOpsConfigTest::RunTest(const FString &Parameters) {
 }
 
 // ---------------------------------------------------------------------------
-// Test: SDKOps::CreateNpc then remove via store dispatch
+// Test: Ops::CreateNpc then remove via store dispatch
 // ---------------------------------------------------------------------------
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(
-    FSDKOpsCreateAndRemoveTest,
-    "ForbocAI.Integration.SDKOps.CreateAndRemove",
+    FOpsCreateAndRemoveTest,
+    "ForbocAI.Integration.Ops.CreateAndRemove",
     EAutomationTestFlags_ApplicationContextMask |
         EAutomationTestFlags::EngineFilter)
-bool FSDKOpsCreateAndRemoveTest::RunTest(const FString &Parameters) {
-  EnhancedStore<FSDKState> Store = createSDKStore();
+bool FOpsCreateAndRemoveTest::RunTest(const FString &Parameters) {
+  EnhancedStore<FStoreState> Store = createStore();
 
-  FNPCInternalState Npc = SDKOps::CreateNpc(Store, TEXT("Ephemeral"));
+  FNPCInternalState Npc = Ops::CreateNpc(Store, TEXT("Ephemeral"));
   FString NpcId = Npc.Id;
 
-  TestEqual("One NPC exists", SDKOps::ListNpcs(Store).Num(), 1);
+  TestEqual("One NPC exists", Ops::ListNpcs(Store).Num(), 1);
 
   Store.dispatch(NPCSlice::Actions::RemoveNPC(NpcId));
 
-  TestEqual("Zero NPCs after removal", SDKOps::ListNpcs(Store).Num(), 0);
+  TestEqual("Zero NPCs after removal", Ops::ListNpcs(Store).Num(), 0);
 
-  func::Maybe<FNPCInternalState> Active = SDKOps::GetActiveNpc(Store);
+  func::Maybe<FNPCInternalState> Active = Ops::GetActiveNpc(Store);
   TestFalse("No active NPC after removal", Active.hasValue);
 
   return true;

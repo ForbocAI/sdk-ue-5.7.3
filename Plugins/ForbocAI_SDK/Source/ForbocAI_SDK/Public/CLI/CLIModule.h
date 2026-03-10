@@ -6,7 +6,7 @@
 /**
  * CLI Module — Pure command router.
  *
- * Parses command keys and delegates to SDKOps functions.
+ * Parses command keys and delegates to Ops functions.
  * No business logic lives here — all operations go through the store.
  * Mirrors TS cli.ts which routes to sdkOps.ts.
  */

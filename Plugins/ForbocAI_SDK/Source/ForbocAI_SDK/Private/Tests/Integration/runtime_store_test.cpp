@@ -6,20 +6,20 @@
 using namespace rtk;
 
 // ---------------------------------------------------------------------------
-// Test: SDKReducer processes NPC creation across all slices
+// Test: StoreReducer processes NPC creation across all slices
 // ---------------------------------------------------------------------------
-IMPLEMENT_SIMPLE_AUTOMATION_TEST(FSDKStoreNPCCreationTest,
-                                 "ForbocAI.Integration.SDKStore.NPCCreation",
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FStoreNPCCreationTest,
+                                 "ForbocAI.Integration.Store.NPCCreation",
                                  EAutomationTestFlags_ApplicationContextMask |
                                      EAutomationTestFlags::EngineFilter)
-bool FSDKStoreNPCCreationTest::RunTest(const FString &Parameters) {
-  FSDKState State;
+bool FStoreNPCCreationTest::RunTest(const FString &Parameters) {
+  FStoreState State;
 
   FNPCInternalState Info;
   Info.Id = TEXT("int_npc_1");
   Info.Persona = TEXT("Test NPC");
 
-  State = SDKReducer(State, NPCSlice::Actions::SetNPCInfo(Info));
+  State = StoreReducer(State, NPCSlice::Actions::SetNPCInfo(Info));
 
   TestEqual("NPC active", State.NPCs.ActiveNpcId,
             FString(TEXT("int_npc_1")));
@@ -43,12 +43,12 @@ bool FSDKStoreNPCCreationTest::RunTest(const FString &Parameters) {
 // Test: NPC removal middleware cascades clears
 // ---------------------------------------------------------------------------
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(
-    FSDKStoreRemovalCascadeTest,
-    "ForbocAI.Integration.SDKStore.RemovalCascade",
+    FStoreRemovalCascadeTest,
+    "ForbocAI.Integration.Store.RemovalCascade",
     EAutomationTestFlags_ApplicationContextMask |
         EAutomationTestFlags::EngineFilter)
-bool FSDKStoreRemovalCascadeTest::RunTest(const FString &Parameters) {
-  EnhancedStore<FSDKState> Store = createSDKStore();
+bool FStoreRemovalCascadeTest::RunTest(const FString &Parameters) {
+  EnhancedStore<FStoreState> Store = createStore();
 
   // Create NPC
   FNPCInternalState Info;
@@ -75,6 +75,21 @@ bool FSDKStoreRemovalCascadeTest::RunTest(const FString &Parameters) {
   TestEqual("Bridge validating", Store.getState().Bridge.Status,
             FString(TEXT("validating")));
 
+  FDirectiveRuleSet Preset;
+  Preset.Id = TEXT("preset_keep");
+  Store.dispatch(BridgeSlice::Actions::AddActivePreset(Preset));
+
+  TArray<FDirectiveRuleSet> Rulesets;
+  FDirectiveRuleSet Ruleset;
+  Ruleset.Id = TEXT("ruleset_keep");
+  Ruleset.RulesetId = TEXT("ruleset_keep");
+  Rulesets.Add(Ruleset);
+  Store.dispatch(BridgeSlice::Actions::SetAvailableRulesets(Rulesets));
+
+  TArray<FString> PresetIds;
+  PresetIds.Add(TEXT("preset_keep"));
+  Store.dispatch(BridgeSlice::Actions::SetAvailablePresetIds(PresetIds));
+
   // Start ghost session
   Store.dispatch(
       GhostSlice::Actions::GhostSessionStarted(TEXT("gs_1"), TEXT("running")));
@@ -99,6 +114,12 @@ bool FSDKStoreRemovalCascadeTest::RunTest(const FString &Parameters) {
             MemorySlice::SelectAllMemories(Store.getState().Memory).Num(), 0);
   TestEqual("Bridge reset", Store.getState().Bridge.Status,
             FString(TEXT("idle")));
+  TestEqual("Bridge active presets preserved",
+            Store.getState().Bridge.ActivePresets.Num(), 1);
+  TestEqual("Bridge rulesets preserved",
+            Store.getState().Bridge.AvailableRulesets.Num(), 1);
+  TestEqual("Bridge preset ids preserved",
+            Store.getState().Bridge.AvailablePresetIds.Num(), 1);
   TestEqual("Ghost reset", Store.getState().Ghost.Status,
             FString(TEXT("idle")));
   TestTrue("Directive cleared",
@@ -113,12 +134,12 @@ bool FSDKStoreRemovalCascadeTest::RunTest(const FString &Parameters) {
 // Test: Multiple NPCs, remove non-active — no cascade on memory
 // ---------------------------------------------------------------------------
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(
-    FSDKStoreRemoveNonActiveTest,
-    "ForbocAI.Integration.SDKStore.RemoveNonActive",
+    FStoreRemoveNonActiveTest,
+    "ForbocAI.Integration.Store.RemoveNonActive",
     EAutomationTestFlags_ApplicationContextMask |
         EAutomationTestFlags::EngineFilter)
-bool FSDKStoreRemoveNonActiveTest::RunTest(const FString &Parameters) {
-  EnhancedStore<FSDKState> Store = createSDKStore();
+bool FStoreRemoveNonActiveTest::RunTest(const FString &Parameters) {
+  EnhancedStore<FStoreState> Store = createStore();
 
   // Create two NPCs
   FNPCInternalState A;

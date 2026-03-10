@@ -16,9 +16,9 @@ using func::make_right;
 } // namespace CLITypes
 
 /**
- * ForbocAI SDK Commandlet.
+ * ForbocAI Commandlet.
  * Usage:
- *   ./UnrealEditorCmd -run=ForbocAI_SDK -Command=<CommandName> [Args...]
+ *   ./UnrealEditorCmd -run=ForbocAI -Command=<CommandName> [Args...]
  *
  * Canonical commands:
  *   doctor
@@ -30,11 +30,11 @@ using func::make_right;
  *   config_get -Key="..."
  */
 UCLASS()
-class UForbocAI_SDKCommandlet : public UCommandlet {
+class UForbocAICommandlet : public UCommandlet {
   GENERATED_BODY()
 
 public:
-  UForbocAI_SDKCommandlet();
+  UForbocAICommandlet();
 
   //~ Begin UCommandlet Interface
   virtual int32 Main(const FString &Params) override;

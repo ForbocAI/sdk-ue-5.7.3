@@ -24,7 +24,7 @@ DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FOnSoulExportComplete, FString,
  * and the functional Redux-style core.
  */
 UCLASS(BlueprintType, Blueprintable)
-class FORBOCAI_SDK_API UForbocAISDKSubsystem : public UGameInstanceSubsystem {
+class FORBOCAI_SDK_API UForbocAISubsystem : public UGameInstanceSubsystem {
   GENERATED_BODY()
 
 public:
@@ -35,7 +35,7 @@ public:
    * Initializes the SDK with the provided configuration.
    */
   UFUNCTION(BlueprintCallable, Category = "Forboc AI|SDK")
-  void InitSDK(FString ApiKey, FString ApiUrl = TEXT("http://localhost:8080"));
+  void Init(FString ApiKey, FString ApiUrl = TEXT("http://localhost:8080"));
 
   /**
    * Triggers the recursive protocol loop for an NPC.
@@ -78,7 +78,7 @@ public:
 
 private:
   /** The underlying functional Redux store. */
-  TSharedPtr<rtk::EnhancedStore<FSDKState>> SDKStore;
+  TSharedPtr<rtk::EnhancedStore<FStoreState>> Store;
 
   /** Internal callback for the RTK listener middleware. */
   void HandleAction(const rtk::AnyAction &Action);

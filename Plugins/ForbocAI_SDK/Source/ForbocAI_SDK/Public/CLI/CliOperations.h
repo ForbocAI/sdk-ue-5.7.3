@@ -12,12 +12,12 @@
 #include <stdexcept>
 
 /**
- * SDK Operations — Free functions mirroring TS sdkOps.ts
+ * Operations — Free functions mirroring TS sdkOps.ts
  *
  * Every CLI operation dispatches thunks through the store.
  * No direct HTTP calls, no logic — just store dispatch + await.
  */
-namespace SDKOps {
+namespace Ops {
 
 // ---------------------------------------------------------------------------
 // Shared utilities
@@ -76,7 +76,7 @@ inline FRuntimeConfig RuntimeConfig() {
 // System ops
 // ---------------------------------------------------------------------------
 
-inline FApiStatusResponse CheckApiStatus(rtk::EnhancedStore<FSDKState> &Store) {
+inline FApiStatusResponse CheckApiStatus(rtk::EnhancedStore<FStoreState> &Store) {
   return WaitForResult(Store.dispatch(rtk::checkApiStatusThunk()));
 }
 
@@ -84,7 +84,7 @@ inline FApiStatusResponse CheckApiStatus(rtk::EnhancedStore<FSDKState> &Store) {
 // NPC ops
 // ---------------------------------------------------------------------------
 
-inline FNPCInternalState CreateNpc(rtk::EnhancedStore<FSDKState> &Store,
+inline FNPCInternalState CreateNpc(rtk::EnhancedStore<FStoreState> &Store,
                                    const FString &Persona) {
   FString Id = NPCId::GenerateNPCId();
   FNPCInternalState Info;
@@ -97,18 +97,18 @@ inline FNPCInternalState CreateNpc(rtk::EnhancedStore<FSDKState> &Store,
 }
 
 inline func::Maybe<FNPCInternalState>
-GetActiveNpc(rtk::EnhancedStore<FSDKState> &Store) {
+GetActiveNpc(rtk::EnhancedStore<FStoreState> &Store) {
   return NPCSlice::SelectActiveNPC(Store.getState().NPCs);
 }
 
 inline func::Maybe<FNPCInternalState>
-UpdateNpc(rtk::EnhancedStore<FSDKState> &Store, const FString &NpcId,
+UpdateNpc(rtk::EnhancedStore<FStoreState> &Store, const FString &NpcId,
           const FAgentState &Delta) {
   Store.dispatch(NPCSlice::Actions::UpdateNPCState(NpcId, Delta));
   return NPCSlice::SelectNPCById(Store.getState().NPCs, NpcId);
 }
 
-inline FAgentResponse ProcessNpc(rtk::EnhancedStore<FSDKState> &Store,
+inline FAgentResponse ProcessNpc(rtk::EnhancedStore<FStoreState> &Store,
                                  const FString &NpcId, const FString &Text) {
   return WaitForResult(
       Store.dispatch(rtk::processNPC(NpcId, Text, TEXT("{}"), TEXT(""),
@@ -117,7 +117,7 @@ inline FAgentResponse ProcessNpc(rtk::EnhancedStore<FSDKState> &Store,
 }
 
 inline TArray<FNPCInternalState>
-ListNpcs(rtk::EnhancedStore<FSDKState> &Store) {
+ListNpcs(rtk::EnhancedStore<FStoreState> &Store) {
   return NPCSlice::SelectAllNPCs(Store.getState().NPCs);
 }
 
@@ -125,12 +125,12 @@ ListNpcs(rtk::EnhancedStore<FSDKState> &Store) {
 // Memory ops (remote — API-backed)
 // ---------------------------------------------------------------------------
 
-inline TArray<FMemoryItem> MemoryList(rtk::EnhancedStore<FSDKState> &Store,
+inline TArray<FMemoryItem> MemoryList(rtk::EnhancedStore<FStoreState> &Store,
                                       const FString &NpcId) {
   return WaitForResult(Store.dispatch(rtk::listMemoryRemoteThunk(NpcId)));
 }
 
-inline TArray<FMemoryItem> MemoryRecall(rtk::EnhancedStore<FSDKState> &Store,
+inline TArray<FMemoryItem> MemoryRecall(rtk::EnhancedStore<FStoreState> &Store,
                                         const FString &NpcId,
                                         const FString &Query,
                                         int32 Limit = 10,
@@ -143,7 +143,7 @@ inline TArray<FMemoryItem> MemoryRecall(rtk::EnhancedStore<FSDKState> &Store,
   return Results;
 }
 
-inline rtk::FEmptyPayload MemoryStore(rtk::EnhancedStore<FSDKState> &Store,
+inline rtk::FEmptyPayload MemoryStore(rtk::EnhancedStore<FStoreState> &Store,
                                       const FString &NpcId,
                                       const FString &Observation,
                                       float Importance = 0.8f) {
@@ -151,7 +151,7 @@ inline rtk::FEmptyPayload MemoryStore(rtk::EnhancedStore<FSDKState> &Store,
       Store.dispatch(rtk::storeMemoryRemoteThunk(NpcId, Observation, Importance)));
 }
 
-inline rtk::FEmptyPayload MemoryClear(rtk::EnhancedStore<FSDKState> &Store,
+inline rtk::FEmptyPayload MemoryClear(rtk::EnhancedStore<FStoreState> &Store,
                                       const FString &NpcId) {
   return WaitForResult(Store.dispatch(rtk::clearMemoryRemoteThunk(NpcId)));
 }
@@ -160,12 +160,12 @@ inline rtk::FEmptyPayload MemoryClear(rtk::EnhancedStore<FSDKState> &Store,
 // Memory ops (local — node-backed)
 // ---------------------------------------------------------------------------
 
-inline rtk::FEmptyPayload InitNodeMemory(rtk::EnhancedStore<FSDKState> &Store,
+inline rtk::FEmptyPayload InitNodeMemory(rtk::EnhancedStore<FStoreState> &Store,
                                           const FString &DatabasePath = TEXT("")) {
   return WaitForResult(Store.dispatch(rtk::initNodeMemoryThunk(DatabasePath)));
 }
 
-inline FMemoryItem StoreNodeMemory(rtk::EnhancedStore<FSDKState> &Store,
+inline FMemoryItem StoreNodeMemory(rtk::EnhancedStore<FStoreState> &Store,
                                    const FString &Text,
                                    float Importance = 0.8f) {
   return WaitForResult(
@@ -174,14 +174,14 @@ inline FMemoryItem StoreNodeMemory(rtk::EnhancedStore<FSDKState> &Store,
 }
 
 inline TArray<FMemoryItem>
-RecallNodeMemory(rtk::EnhancedStore<FSDKState> &Store, const FString &Query,
+RecallNodeMemory(rtk::EnhancedStore<FStoreState> &Store, const FString &Query,
                  int32 Limit = 10, float Threshold = 0.7f) {
   return WaitForResult(
       Store.dispatch(rtk::recallNodeMemoryThunk(Query, Limit, Threshold)));
 }
 
 inline rtk::FEmptyPayload
-ClearNodeMemory(rtk::EnhancedStore<FSDKState> &Store) {
+ClearNodeMemory(rtk::EnhancedStore<FStoreState> &Store) {
   return WaitForResult(Store.dispatch(rtk::clearNodeMemoryThunk()));
 }
 
@@ -189,12 +189,12 @@ ClearNodeMemory(rtk::EnhancedStore<FSDKState> &Store) {
 // Cortex ops (local)
 // ---------------------------------------------------------------------------
 
-inline FCortexStatus InitCortex(rtk::EnhancedStore<FSDKState> &Store,
+inline FCortexStatus InitCortex(rtk::EnhancedStore<FStoreState> &Store,
                                 const FString &Model) {
   return WaitForResult(Store.dispatch(rtk::initNodeCortexThunk(Model)));
 }
 
-inline FCortexResponse CompleteCortex(rtk::EnhancedStore<FSDKState> &Store,
+inline FCortexResponse CompleteCortex(rtk::EnhancedStore<FStoreState> &Store,
                                       const FString &Prompt) {
   return WaitForResult(Store.dispatch(rtk::completeNodeCortexThunk(Prompt)));
 }
@@ -203,7 +203,7 @@ inline FCortexResponse CompleteCortex(rtk::EnhancedStore<FSDKState> &Store,
 // Cortex ops (remote)
 // ---------------------------------------------------------------------------
 
-inline FCortexStatus InitRemoteCortex(rtk::EnhancedStore<FSDKState> &Store,
+inline FCortexStatus InitRemoteCortex(rtk::EnhancedStore<FStoreState> &Store,
                                       const FString &Model,
                                       const FString &AuthKey = TEXT("")) {
   return WaitForResult(
@@ -211,12 +211,12 @@ inline FCortexStatus InitRemoteCortex(rtk::EnhancedStore<FSDKState> &Store,
 }
 
 inline TArray<FCortexModelInfo>
-ListCortexModels(rtk::EnhancedStore<FSDKState> &Store) {
+ListCortexModels(rtk::EnhancedStore<FStoreState> &Store) {
   return WaitForResult(Store.dispatch(rtk::listCortexModelsThunk()));
 }
 
 inline FCortexResponse
-CompleteRemoteCortex(rtk::EnhancedStore<FSDKState> &Store,
+CompleteRemoteCortex(rtk::EnhancedStore<FStoreState> &Store,
                      const FString &CortexId, const FString &Prompt) {
   return WaitForResult(
       Store.dispatch(rtk::completeRemoteThunk(CortexId, Prompt)));
@@ -226,7 +226,7 @@ CompleteRemoteCortex(rtk::EnhancedStore<FSDKState> &Store,
 // Ghost ops
 // ---------------------------------------------------------------------------
 
-inline FGhostRunResponse GhostRun(rtk::EnhancedStore<FSDKState> &Store,
+inline FGhostRunResponse GhostRun(rtk::EnhancedStore<FStoreState> &Store,
                                   const FString &TestSuite,
                                   int32 Duration = 300) {
   FGhostConfig Config;
@@ -236,22 +236,22 @@ inline FGhostRunResponse GhostRun(rtk::EnhancedStore<FSDKState> &Store,
 }
 
 inline FGhostStatusResponse
-GhostStatus(rtk::EnhancedStore<FSDKState> &Store, const FString &SessionId) {
+GhostStatus(rtk::EnhancedStore<FStoreState> &Store, const FString &SessionId) {
   return WaitForResult(Store.dispatch(rtk::getGhostStatusThunk(SessionId)));
 }
 
 inline FGhostResultsResponse
-GhostResults(rtk::EnhancedStore<FSDKState> &Store, const FString &SessionId) {
+GhostResults(rtk::EnhancedStore<FStoreState> &Store, const FString &SessionId) {
   return WaitForResult(Store.dispatch(rtk::getGhostResultsThunk(SessionId)));
 }
 
-inline FGhostStopResponse GhostStop(rtk::EnhancedStore<FSDKState> &Store,
+inline FGhostStopResponse GhostStop(rtk::EnhancedStore<FStoreState> &Store,
                                     const FString &SessionId) {
   return WaitForResult(Store.dispatch(rtk::stopGhostThunk(SessionId)));
 }
 
 inline TArray<FGhostHistoryEntry>
-GhostHistory(rtk::EnhancedStore<FSDKState> &Store, int32 Limit = 10) {
+GhostHistory(rtk::EnhancedStore<FStoreState> &Store, int32 Limit = 10) {
   return WaitForResult(Store.dispatch(rtk::getGhostHistoryThunk(Limit)));
 }
 
@@ -260,7 +260,7 @@ GhostHistory(rtk::EnhancedStore<FSDKState> &Store, int32 Limit = 10) {
 // ---------------------------------------------------------------------------
 
 inline FValidationResult
-ValidateBridge(rtk::EnhancedStore<FSDKState> &Store,
+ValidateBridge(rtk::EnhancedStore<FStoreState> &Store,
                const FAgentAction &Action,
                const FBridgeValidationContext &Context) {
   return WaitForResult(
@@ -268,32 +268,32 @@ ValidateBridge(rtk::EnhancedStore<FSDKState> &Store,
 }
 
 inline TArray<FBridgeRule>
-BridgeRules(rtk::EnhancedStore<FSDKState> &Store) {
+BridgeRules(rtk::EnhancedStore<FStoreState> &Store) {
   return WaitForResult(Store.dispatch(rtk::getBridgeRulesThunk()));
 }
 
-inline FDirectiveRuleSet BridgePreset(rtk::EnhancedStore<FSDKState> &Store,
+inline FDirectiveRuleSet BridgePreset(rtk::EnhancedStore<FStoreState> &Store,
                                       const FString &PresetName) {
   return WaitForResult(
       Store.dispatch(rtk::loadBridgePresetThunk(PresetName)));
 }
 
 inline TArray<FDirectiveRuleSet>
-RulesList(rtk::EnhancedStore<FSDKState> &Store) {
+RulesList(rtk::EnhancedStore<FStoreState> &Store) {
   return WaitForResult(Store.dispatch(rtk::listRulesetsThunk()));
 }
 
-inline TArray<FString> RulesPresets(rtk::EnhancedStore<FSDKState> &Store) {
+inline TArray<FString> RulesPresets(rtk::EnhancedStore<FStoreState> &Store) {
   return WaitForResult(Store.dispatch(rtk::listRulePresetsThunk()));
 }
 
 inline FDirectiveRuleSet
-RulesRegister(rtk::EnhancedStore<FSDKState> &Store,
+RulesRegister(rtk::EnhancedStore<FStoreState> &Store,
               const FDirectiveRuleSet &Ruleset) {
   return WaitForResult(Store.dispatch(rtk::registerRulesetThunk(Ruleset)));
 }
 
-inline rtk::FEmptyPayload RulesDelete(rtk::EnhancedStore<FSDKState> &Store,
+inline rtk::FEmptyPayload RulesDelete(rtk::EnhancedStore<FStoreState> &Store,
                                       const FString &RulesetId) {
   return WaitForResult(Store.dispatch(rtk::deleteRulesetThunk(RulesetId)));
 }
@@ -302,33 +302,33 @@ inline rtk::FEmptyPayload RulesDelete(rtk::EnhancedStore<FSDKState> &Store,
 // Soul ops
 // ---------------------------------------------------------------------------
 
-inline FSoulExportResult ExportSoul(rtk::EnhancedStore<FSDKState> &Store,
+inline FSoulExportResult ExportSoul(rtk::EnhancedStore<FStoreState> &Store,
                                     const FString &NpcId) {
   return WaitForResult(Store.dispatch(rtk::remoteExportSoulThunk(NpcId)));
 }
 
-inline FSoul ImportSoul(rtk::EnhancedStore<FSDKState> &Store,
+inline FSoul ImportSoul(rtk::EnhancedStore<FStoreState> &Store,
                         const FString &TxId) {
   return WaitForResult(
       Store.dispatch(rtk::importSoulFromArweaveThunk(TxId)));
 }
 
-inline FImportedNpc ImportNpcFromSoul(rtk::EnhancedStore<FSDKState> &Store,
+inline FImportedNpc ImportNpcFromSoul(rtk::EnhancedStore<FStoreState> &Store,
                                       const FString &TxId) {
   return WaitForResult(Store.dispatch(rtk::importNpcFromSoulThunk(TxId)));
 }
 
-inline TArray<FSoulListItem> ListSouls(rtk::EnhancedStore<FSDKState> &Store,
+inline TArray<FSoulListItem> ListSouls(rtk::EnhancedStore<FStoreState> &Store,
                                        int32 Limit = 50) {
   return WaitForResult(Store.dispatch(rtk::getSoulListThunk(Limit)));
 }
 
-inline FSoulVerifyResult VerifySoul(rtk::EnhancedStore<FSDKState> &Store,
+inline FSoulVerifyResult VerifySoul(rtk::EnhancedStore<FStoreState> &Store,
                                     const FString &TxId) {
   return WaitForResult(Store.dispatch(rtk::verifySoulThunk(TxId)));
 }
 
-inline FSoul LocalExportSoul(rtk::EnhancedStore<FSDKState> &Store,
+inline FSoul LocalExportSoul(rtk::EnhancedStore<FStoreState> &Store,
                               const FString &NpcId = TEXT("")) {
   return WaitForResult(Store.dispatch(rtk::localExportSoulThunk(NpcId)));
 }
@@ -337,11 +337,11 @@ inline FSoul LocalExportSoul(rtk::EnhancedStore<FSDKState> &Store,
 // Vector ops
 // ---------------------------------------------------------------------------
 
-inline rtk::FEmptyPayload InitVector(rtk::EnhancedStore<FSDKState> &Store) {
+inline rtk::FEmptyPayload InitVector(rtk::EnhancedStore<FStoreState> &Store) {
   return WaitForResult(Store.dispatch(rtk::initNodeVectorThunk()));
 }
 
-inline TArray<float> GenerateEmbedding(rtk::EnhancedStore<FSDKState> &Store,
+inline TArray<float> GenerateEmbedding(rtk::EnhancedStore<FStoreState> &Store,
                                        const FString &Text) {
   return WaitForResult(Store.dispatch(rtk::generateNodeEmbeddingThunk(Text)));
 }
@@ -358,4 +358,4 @@ inline FString ConfigGet(const FString &Key) {
   return SDKConfig::GetConfigValue(Key);
 }
 
-} // namespace SDKOps
+} // namespace Ops

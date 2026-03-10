@@ -1,4 +1,5 @@
 #pragma once
+// memory lanes should read like ledger lines, not fog
 
 #include "Core/rtk.hpp"
 #include "CoreMinimal.h"
@@ -105,37 +106,33 @@ inline Slice<FMemorySliceState> CreateMemorySlice() {
       .addExtraCase(
           Actions::MemoryStoreStartActionCreator(),
           [](const FMemorySliceState &State,
-             const Action<rtk::FEmptyPayload> &Action)
-              -> FMemorySliceState {
+             const Action<rtk::FEmptyPayload> &Action) -> FMemorySliceState {
             FMemorySliceState Next = State;
             Next.StorageStatus = TEXT("storing");
             Next.Error.Empty();
             return Next;
           })
-      .addExtraCase(
-          Actions::MemoryStoreSuccessActionCreator(),
-          [](const FMemorySliceState &State,
-             const Action<FMemoryItem> &Action) -> FMemorySliceState {
-            FMemorySliceState Next = State;
-            Next.StorageStatus = TEXT("idle");
-            Next.Entities =
-                GetMemoryAdapter().upsertOne(Next.Entities, Action.PayloadValue);
-            return Next;
-          })
-      .addExtraCase(
-          Actions::MemoryStoreFailedActionCreator(),
-          [](const FMemorySliceState &State,
-             const Action<FString> &Action) -> FMemorySliceState {
-            FMemorySliceState Next = State;
-            Next.StorageStatus = TEXT("error");
-            Next.Error = Action.PayloadValue;
-            return Next;
-          })
+      .addExtraCase(Actions::MemoryStoreSuccessActionCreator(),
+                    [](const FMemorySliceState &State,
+                       const Action<FMemoryItem> &Action) -> FMemorySliceState {
+                      FMemorySliceState Next = State;
+                      Next.StorageStatus = TEXT("idle");
+                      Next.Entities = GetMemoryAdapter().upsertOne(
+                          Next.Entities, Action.PayloadValue);
+                      return Next;
+                    })
+      .addExtraCase(Actions::MemoryStoreFailedActionCreator(),
+                    [](const FMemorySliceState &State,
+                       const Action<FString> &Action) -> FMemorySliceState {
+                      FMemorySliceState Next = State;
+                      Next.StorageStatus = TEXT("error");
+                      Next.Error = Action.PayloadValue;
+                      return Next;
+                    })
       .addExtraCase(
           Actions::MemoryRecallStartActionCreator(),
           [](const FMemorySliceState &State,
-             const Action<rtk::FEmptyPayload> &Action)
-              -> FMemorySliceState {
+             const Action<rtk::FEmptyPayload> &Action) -> FMemorySliceState {
             FMemorySliceState Next = State;
             Next.RecallStatus = TEXT("recalling");
             Next.Error.Empty();
@@ -147,28 +144,26 @@ inline Slice<FMemorySliceState> CreateMemorySlice() {
              const Action<TArray<FMemoryItem>> &Action) -> FMemorySliceState {
             FMemorySliceState Next = State;
             Next.RecallStatus = TEXT("idle");
-            Next.Entities =
-                GetMemoryAdapter().upsertMany(Next.Entities, Action.PayloadValue);
+            Next.Entities = GetMemoryAdapter().upsertMany(Next.Entities,
+                                                          Action.PayloadValue);
             Next.LastRecalledIds.Empty(Action.PayloadValue.Num());
             for (int32 Index = 0; Index < Action.PayloadValue.Num(); ++Index) {
               Next.LastRecalledIds.Add(Action.PayloadValue[Index].Id);
             }
             return Next;
           })
-      .addExtraCase(
-          Actions::MemoryRecallFailedActionCreator(),
-          [](const FMemorySliceState &State,
-             const Action<FString> &Action) -> FMemorySliceState {
-            FMemorySliceState Next = State;
-            Next.RecallStatus = TEXT("error");
-            Next.Error = Action.PayloadValue;
-            return Next;
-          })
+      .addExtraCase(Actions::MemoryRecallFailedActionCreator(),
+                    [](const FMemorySliceState &State,
+                       const Action<FString> &Action) -> FMemorySliceState {
+                      FMemorySliceState Next = State;
+                      Next.RecallStatus = TEXT("error");
+                      Next.Error = Action.PayloadValue;
+                      return Next;
+                    })
       .addExtraCase(
           Actions::MemoryClearActionCreator(),
           [](const FMemorySliceState &State,
-             const Action<rtk::FEmptyPayload> &Action)
-              -> FMemorySliceState {
+             const Action<rtk::FEmptyPayload> &Action) -> FMemorySliceState {
             return FMemorySliceState();
           })
       .build();
@@ -183,6 +178,11 @@ inline TArray<FMemoryItem> SelectAllMemories(const FMemorySliceState &State) {
   return GetMemoryAdapter().getSelectors().selectAll(State.Entities);
 }
 
+/**
+ * User Story: As recall-result consumers, I need a selector that resolves the
+ * last recalled memory ids into entities for immediate post-recall rendering.
+ * (From TS)
+ */
 inline TArray<FMemoryItem>
 SelectLastRecalledMemories(const FMemorySliceState &State) {
   TArray<FMemoryItem> Results;

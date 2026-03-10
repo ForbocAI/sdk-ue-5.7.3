@@ -83,14 +83,14 @@ TArray<FString> BuildCommandArgs(const FString &Command, const FString &Params) 
 
 } // namespace
 
-UForbocAI_SDKCommandlet::UForbocAI_SDKCommandlet() {
+UForbocAICommandlet::UForbocAICommandlet() {
   IsClient = false;
   IsEditor = false;
   IsServer = false;
   LogToConsole = true;
 }
 
-int32 UForbocAI_SDKCommandlet::Main(const FString &Params) {
+int32 UForbocAICommandlet::Main(const FString &Params) {
   SDKConfig::InitializeConfig();
 
   FString Command;
@@ -108,7 +108,7 @@ int32 UForbocAI_SDKCommandlet::Main(const FString &Params) {
                             ApiKey.IsEmpty() ? SDKConfig::GetApiKey() : ApiKey);
   }
 
-  UE_LOG(LogTemp, Display, TEXT("ForbocAI SDK CLI (UE5) - Command: %s"),
+  UE_LOG(LogTemp, Display, TEXT("ForbocAI CLI (UE5) - Command: %s"),
          *Command);
 
   const TArray<FString> Args = BuildCommandArgs(Command, Params);
@@ -116,16 +116,16 @@ int32 UForbocAI_SDKCommandlet::Main(const FString &Params) {
   return 0;
 }
 
-UForbocAI_SDKCommandlet::CommandResult
-UForbocAI_SDKCommandlet::executeCommand(const FString &Command,
-                                        const TArray<FString> &Args) {
+UForbocAICommandlet::CommandResult
+UForbocAICommandlet::executeCommand(const FString &Command,
+                                    const TArray<FString> &Args) {
   return CLIOps::DispatchCommand(Command, Args);
 }
 
-UForbocAI_SDKCommandlet::CommandExecution
-UForbocAI_SDKCommandlet::createCommandPipeline(const FString &Command,
-                                               const TArray<FString> &Args) {
-  return UForbocAI_SDKCommandlet::CommandExecution::create(
+UForbocAICommandlet::CommandExecution
+UForbocAICommandlet::createCommandPipeline(const FString &Command,
+                                           const TArray<FString> &Args) {
+  return UForbocAICommandlet::CommandExecution::create(
       [this, Command, Args](std::function<void()> Resolve,
                             std::function<void(std::string)> Reject) {
         const auto RejectMessage = [&Reject](const auto &Error) {
@@ -160,7 +160,7 @@ UForbocAI_SDKCommandlet::createCommandPipeline(const FString &Command,
 }
 
 CLITypes::ValidationPipeline<FString, FString>
-UForbocAI_SDKCommandlet::commandValidationPipeline() {
+UForbocAICommandlet::commandValidationPipeline() {
   return CLITypes::ValidationPipeline<FString, FString>()
       .add([](const FString &Command) -> CLITypes::Either<FString, FString> {
         if (Command.IsEmpty()) {

@@ -85,13 +85,13 @@ bool FSoulSliceImportTest::RunTest(const FString &Parameters) {
 
   // Success
   FSoul Soul;
-  Soul.NpcId = TEXT("npc_soul");
+  Soul.Id = TEXT("npc_soul");
   Soul.Persona = TEXT("Wise sage");
   State = SSlice.Reducer(State, SoulSlice::Actions::ImportSoulSuccess(Soul));
   TestEqual("ImportStatus success", State.ImportStatus,
             FString(TEXT("success")));
   TestTrue("Has last import", State.bHasLastImport);
-  TestEqual("Imported soul npcId", State.LastImport.NpcId,
+  TestEqual("Imported soul id", State.LastImport.Id,
             FString(TEXT("npc_soul")));
 
   return true;

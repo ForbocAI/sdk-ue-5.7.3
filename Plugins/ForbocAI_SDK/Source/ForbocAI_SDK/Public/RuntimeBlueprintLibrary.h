@@ -6,8 +6,8 @@
 #include "RuntimeBlueprintLibrary.generated.h"
 
 /**
- * Blueprint-callable wrappers around SDKOps.
- * Exposes the core ForbocAI SDK operations to Blueprints.
+ * Blueprint-callable wrappers around Ops.
+ * Exposes the core ForbocAI operations to Blueprints.
  */
 UCLASS()
 class FORBOCAI_SDK_API UForbocAIBlueprintLibrary

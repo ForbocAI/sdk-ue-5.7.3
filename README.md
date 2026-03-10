@@ -122,7 +122,7 @@ The SDK includes a built-in Commandlet for verification and administration.
 ```bash
 "/Users/Shared/Epic Games/UE_5.7/Engine/Binaries/Mac/UnrealEditor-Cmd" \
   "/Path/To/Your.uproject" \
-  -run=ForbocAI_SDK -Command=doctor \
+  -run=ForbocAI -Command=doctor \
   -nosplash -nopause -unattended
 ```
 
@@ -131,7 +131,7 @@ The SDK includes a built-in Commandlet for verification and administration.
 ```powershell
 & "C:\Program Files\Epic Games\UE_5.7\Engine\Binaries\Win64\UnrealEditor-Cmd.exe" `
   "C:\Path\To\Your.uproject" `
-  -run=ForbocAI_SDK -Command=doctor `
+  -run=ForbocAI -Command=doctor `
   -nosplash -nopause -unattended
 ```
 
@@ -140,7 +140,7 @@ The SDK includes a built-in Commandlet for verification and administration.
 ```bash
 "/opt/UnrealEngine/Engine/Binaries/Linux/UnrealEditor-Cmd" \
   "/path/to/Your.uproject" \
-  -run=ForbocAI_SDK -Command=doctor \
+  -run=ForbocAI -Command=doctor \
   -nosplash -nopause -unattended
 ```
 
@@ -159,7 +159,7 @@ The SDK includes a built-in Commandlet for verification and administration.
 
 **Example `doctor` output:**
 ```
-ForbocAI SDK CLI (UE5) - Command: doctor
+ForbocAI CLI (UE5) - Command: doctor
 API Status: online (v1.0.0)
 ```
 

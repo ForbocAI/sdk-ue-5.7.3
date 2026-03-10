@@ -8,15 +8,15 @@ namespace rtk {
 // API thunks
 // ---------------------------------------------------------------------------
 
-inline ThunkAction<FApiStatusResponse, FSDKState> doctorThunk() {
+inline ThunkAction<FApiStatusResponse, FStoreState> doctorThunk() {
   return [](std::function<AnyAction(const AnyAction &)> Dispatch,
-            std::function<FSDKState()> GetState)
+            std::function<FStoreState()> GetState)
              -> func::AsyncResult<FApiStatusResponse> {
     return APISlice::Endpoints::getApiStatus()(Dispatch, GetState);
   };
 }
 
-inline ThunkAction<FApiStatusResponse, FSDKState> checkApiStatusThunk() {
+inline ThunkAction<FApiStatusResponse, FStoreState> checkApiStatusThunk() {
   return doctorThunk();
 }
 

@@ -1,4 +1,5 @@
 #pragma once
+// asynchronous moves, zero hidden side quests
 
 #include "Core/ThunkDetail.h"
 #include "Cortex/CortexSlice.h"
@@ -8,29 +9,36 @@
 namespace rtk {
 
 // Forward declarations for cross-thunk references
-inline ThunkAction<FCortexResponse, FSDKState>
+inline ThunkAction<FCortexResponse, FStoreState>
 completeNodeCortexThunk(const FString &Prompt,
                         const FCortexConfig &Config = FCortexConfig());
 
-inline ThunkAction<FCortexResponse, FSDKState>
+inline ThunkAction<FCortexResponse, FStoreState>
 completeRemoteThunk(const FString &CortexId, const FString &Prompt,
                     const FCortexConfig &Config);
 
 // ---------------------------------------------------------------------------
 // Node cortex thunks (mirrors TS nodeCortexSlice.ts)
+// NEURAL_LINK_ESTABLISHED for local cortex calls
 // ---------------------------------------------------------------------------
 
-inline ThunkAction<FCortexStatus, FSDKState>
+/**
+ * User Story: As model bootstrap logic, I need reliable file download with
+ * redirect handling so required GGUF assets arrive before init. (From TS)
+ */
+
+inline ThunkAction<FCortexStatus, FStoreState>
 initNodeCortexThunk(const FString &ModelPath) {
   return [ModelPath](std::function<AnyAction(const AnyAction &)> Dispatch,
-                     std::function<FSDKState()> GetState)
+                     std::function<FStoreState()> GetState)
              -> func::AsyncResult<FCortexStatus> {
     Dispatch(CortexSlice::Actions::CortexInitPending(ModelPath));
 
     return func::AsyncResult<FCortexStatus>::create(
         [ModelPath, Dispatch](std::function<void(FCortexStatus)> Resolve,
                               std::function<void(std::string)> Reject) {
-          Async(EAsyncExecution::Thread, [ModelPath, Dispatch, Resolve, Reject]() {
+          Async(EAsyncExecution::Thread, [ModelPath, Dispatch, Resolve,
+                                          Reject]() {
             Native::Llama::Context &Handle = detail::NodeCortexHandle();
             if (Handle) {
               Native::Llama::FreeModel(Handle);
@@ -45,14 +53,17 @@ initNodeCortexThunk(const FString &ModelPath) {
             Status.bReady = (Handle != nullptr);
             Status.Engine = ECortexEngine::NodeLlamaCpp;
             Status.DownloadProgress = Status.bReady ? 1.0f : 0.0f;
-            Status.Error = Status.bReady ? TEXT("") : TEXT("Failed to load model");
+            Status.Error =
+                Status.bReady ? TEXT("") : TEXT("Failed to load model");
 
-            AsyncTask(ENamedThreads::GameThread, [Dispatch, Resolve, Reject, Status]() {
+            AsyncTask(ENamedThreads::GameThread, [Dispatch, Resolve, Reject,
+                                                  Status]() {
               if (Status.bReady) {
                 Dispatch(CortexSlice::Actions::CortexInitFulfilled(Status));
                 Resolve(Status);
               } else {
-                Dispatch(CortexSlice::Actions::CortexInitRejected(Status.Error));
+                Dispatch(
+                    CortexSlice::Actions::CortexInitRejected(Status.Error));
                 Reject(TCHAR_TO_UTF8(*Status.Error));
               }
             });
@@ -61,17 +72,18 @@ initNodeCortexThunk(const FString &ModelPath) {
   };
 }
 
-inline ThunkAction<FCortexResponse, FSDKState>
+inline ThunkAction<FCortexResponse, FStoreState>
 completeNodeCortexThunk(const FString &Prompt, const FCortexConfig &Config) {
   return [Prompt, Config](std::function<AnyAction(const AnyAction &)> Dispatch,
-                          std::function<FSDKState()> GetState)
+                          std::function<FStoreState()> GetState)
              -> func::AsyncResult<FCortexResponse> {
     Dispatch(CortexSlice::Actions::CortexCompletePending(Prompt));
 
     return func::AsyncResult<FCortexResponse>::create(
         [Prompt, Config, Dispatch](std::function<void(FCortexResponse)> Resolve,
                                    std::function<void(std::string)> Reject) {
-          Async(EAsyncExecution::Thread, [Prompt, Config, Dispatch, Resolve, Reject]() {
+          Async(EAsyncExecution::Thread, [Prompt, Config, Dispatch, Resolve,
+                                          Reject]() {
             Native::Llama::Context Handle = detail::NodeCortexHandle();
             if (!Handle) {
               const FString Error = TEXT("Local cortex is not initialized");
@@ -87,7 +99,8 @@ completeNodeCortexThunk(const FString &Prompt, const FCortexConfig &Config) {
             Response.Text = Native::Llama::Infer(Handle, Prompt, Config);
             Response.Stats = TEXT("local-node");
 
-            AsyncTask(ENamedThreads::GameThread, [Dispatch, Resolve, Response]() {
+            AsyncTask(ENamedThreads::GameThread, [Dispatch, Resolve,
+                                                  Response]() {
               Dispatch(CortexSlice::Actions::CortexCompleteFulfilled(Response));
               Resolve(Response);
             });
@@ -96,10 +109,14 @@ completeNodeCortexThunk(const FString &Prompt, const FCortexConfig &Config) {
   };
 }
 
-inline ThunkAction<TArray<float>, FSDKState>
+/**
+ * User Story: As completion thunks and adapters, I need access to cached node
+ * context sessions by model key after initialization. (From TS)
+ */
+inline ThunkAction<TArray<float>, FStoreState>
 generateNodeEmbeddingThunk(const FString &Text) {
   return [Text](std::function<AnyAction(const AnyAction &)> Dispatch,
-                std::function<FSDKState()> GetState)
+                std::function<FStoreState()> GetState)
              -> func::AsyncResult<TArray<float>> {
     return func::AsyncResult<TArray<float>>::create(
         [Text](std::function<void(TArray<float>)> Resolve,
@@ -118,10 +135,10 @@ generateNodeEmbeddingThunk(const FString &Text) {
 // Remote cortex thunks (mirrors TS cortexSlice.ts)
 // ---------------------------------------------------------------------------
 
-inline ThunkAction<TArray<FCortexModelInfo>, FSDKState>
+inline ThunkAction<TArray<FCortexModelInfo>, FStoreState>
 listCortexModelsThunk() {
   return [](std::function<AnyAction(const AnyAction &)> Dispatch,
-            std::function<FSDKState()> GetState)
+            std::function<FStoreState()> GetState)
              -> func::AsyncResult<TArray<FCortexModelInfo>> {
     const auto ApiKeyError = Errors::requireApiKeyGuidance(
         SDKConfig::GetApiUrl(), SDKConfig::GetApiKey());
@@ -132,11 +149,11 @@ listCortexModelsThunk() {
   };
 }
 
-inline ThunkAction<FCortexStatus, FSDKState>
+inline ThunkAction<FCortexStatus, FStoreState>
 initRemoteCortexThunk(const FString &Model = TEXT("api-integrated"),
                       const FString &AuthKey = TEXT("")) {
   return [Model, AuthKey](std::function<AnyAction(const AnyAction &)> Dispatch,
-                          std::function<FSDKState()> GetState)
+                          std::function<FStoreState()> GetState)
              -> func::AsyncResult<FCortexStatus> {
     const auto ApiKeyError = Errors::requireApiKeyGuidance(
         SDKConfig::GetApiUrl(), SDKConfig::GetApiKey());
@@ -147,26 +164,28 @@ initRemoteCortexThunk(const FString &Model = TEXT("api-integrated"),
     Dispatch(CortexSlice::Actions::CortexInitPending(Model));
 
     return func::AsyncChain::then<FCortexInitResponse, FCortexStatus>(
-        APISlice::Endpoints::postCortexInit(
-            TypeFactory::CortexInitRequest(Model, AuthKey))(Dispatch, GetState),
-        [Model, Dispatch](const FCortexInitResponse &Response) {
-          FCortexStatus Status;
-          Status.Id = Response.CortexId;
-          Status.Model = Model;
-          Status.bReady = Response.State.Equals(TEXT("ready"),
-                                                ESearchCase::IgnoreCase);
-          Status.Engine = ECortexEngine::Remote;
-          Status.DownloadProgress = Status.bReady ? 1.0f : 0.0f;
-          Status.Error = Status.bReady ? TEXT("") : Response.State;
-          if (Status.bReady) {
-            Dispatch(CortexSlice::Actions::CortexInitFulfilled(Status));
-            return detail::ResolveAsync(Status);
-          }
-          Dispatch(CortexSlice::Actions::CortexInitRejected(Status.Error));
-          return detail::RejectAsync<FCortexStatus>(
-              Status.Error.IsEmpty() ? TEXT("Remote cortex init failed")
-                                     : Status.Error);
-        })
+               APISlice::Endpoints::postCortexInit(
+                   TypeFactory::CortexInitRequest(Model, AuthKey))(Dispatch,
+                                                                   GetState),
+               [Model, Dispatch](const FCortexInitResponse &Response) {
+                 FCortexStatus Status;
+                 Status.Id = Response.CortexId;
+                 Status.Model = Model;
+                 Status.bReady = Response.State.Equals(TEXT("ready"),
+                                                       ESearchCase::IgnoreCase);
+                 Status.Engine = ECortexEngine::Remote;
+                 Status.DownloadProgress = Status.bReady ? 1.0f : 0.0f;
+                 Status.Error = Status.bReady ? TEXT("") : Response.State;
+                 if (Status.bReady) {
+                   Dispatch(CortexSlice::Actions::CortexInitFulfilled(Status));
+                   return detail::ResolveAsync(Status);
+                 }
+                 Dispatch(
+                     CortexSlice::Actions::CortexInitRejected(Status.Error));
+                 return detail::RejectAsync<FCortexStatus>(
+                     Status.Error.IsEmpty() ? TEXT("Remote cortex init failed")
+                                            : Status.Error);
+               })
         .catch_([Dispatch](std::string Error) {
           Dispatch(CortexSlice::Actions::CortexInitRejected(
               FString(UTF8_TO_TCHAR(Error.c_str()))));
@@ -174,17 +193,17 @@ initRemoteCortexThunk(const FString &Model = TEXT("api-integrated"),
   };
 }
 
-inline ThunkAction<FCortexResponse, FSDKState>
+inline ThunkAction<FCortexResponse, FStoreState>
 completeRemoteThunk(const FString &CortexId, const FString &Prompt) {
   return completeRemoteThunk(CortexId, Prompt, FCortexConfig());
 }
 
-inline ThunkAction<FCortexResponse, FSDKState>
+inline ThunkAction<FCortexResponse, FStoreState>
 completeRemoteThunk(const FString &CortexId, const FString &Prompt,
                     const FCortexConfig &Config) {
-  return [CortexId, Prompt, Config](
-             std::function<AnyAction(const AnyAction &)> Dispatch,
-             std::function<FSDKState()> GetState)
+  return [CortexId, Prompt,
+          Config](std::function<AnyAction(const AnyAction &)> Dispatch,
+                  std::function<FStoreState()> GetState)
              -> func::AsyncResult<FCortexResponse> {
     const auto ApiKeyError = Errors::requireApiKeyGuidance(
         SDKConfig::GetApiUrl(), SDKConfig::GetApiKey());
@@ -194,15 +213,16 @@ completeRemoteThunk(const FString &CortexId, const FString &Prompt,
 
     Dispatch(CortexSlice::Actions::CortexCompletePending(Prompt));
     return func::AsyncChain::then<FCortexResponse, FCortexResponse>(
-        APISlice::Endpoints::postCortexComplete(
-            CortexId,
-            TypeFactory::CortexCompleteRequest(
-                Prompt, Config.MaxTokens, Config.Temperature, Config.Stop,
-                Config.JsonSchemaJson))(Dispatch, GetState),
-        [Dispatch](const FCortexResponse &Response) {
-          Dispatch(CortexSlice::Actions::CortexCompleteFulfilled(Response));
-          return detail::ResolveAsync(Response);
-        })
+               APISlice::Endpoints::postCortexComplete(
+                   CortexId, TypeFactory::CortexCompleteRequest(
+                                 Prompt, Config.MaxTokens, Config.Temperature,
+                                 Config.Stop, Config.JsonSchemaJson))(Dispatch,
+                                                                      GetState),
+               [Dispatch](const FCortexResponse &Response) {
+                 Dispatch(
+                     CortexSlice::Actions::CortexCompleteFulfilled(Response));
+                 return detail::ResolveAsync(Response);
+               })
         .catch_([Dispatch](std::string Error) {
           Dispatch(CortexSlice::Actions::CortexCompleteRejected(
               FString(UTF8_TO_TCHAR(Error.c_str()))));
