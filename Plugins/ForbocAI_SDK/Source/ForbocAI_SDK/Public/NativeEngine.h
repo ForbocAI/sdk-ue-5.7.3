@@ -1,5 +1,6 @@
 #pragma once
 
+#include "Core/functional_core.hpp"
 #include "CoreMinimal.h"
 #include "Cortex/CortexTypes.h"
 #include "Memory/MemoryTypes.h"
@@ -15,8 +16,11 @@ namespace Llama {
 
 using Context = void *;
 
-/** Loads a GGUF model from path */
+/** Loads a GGUF model for inference (SmolLM, Llama3, etc.) */
 FORBOCAI_SDK_API Context LoadModel(const FString &Path);
+
+/** Loads a GGUF embedding model (e.g. all-MiniLM-L6-v2) for memory. */
+FORBOCAI_SDK_API Context LoadEmbeddingModel(const FString &Path);
 
 /** Frees the model context */
 FORBOCAI_SDK_API void FreeModel(Context Ctx);
@@ -33,6 +37,17 @@ FORBOCAI_SDK_API FString Infer(Context Ctx, const FString &Prompt,
 FORBOCAI_SDK_API TArray<float> Embed(Context Ctx, const FString &Text);
 
 } // namespace Llama
+
+namespace File {
+
+/**
+ * Downloads a binary file from a URL to a local path asynchronously.
+ * Supports simple redirects if needed. Returns empty on failure.
+ */
+FORBOCAI_SDK_API func::AsyncResult<FString>
+DownloadBinary(const FString &Url, const FString &DestPath);
+
+} // namespace File
 
 namespace Sqlite {
 

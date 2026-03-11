@@ -78,7 +78,7 @@ nodeMemoryStoreThunk(const FMemoryItem &Item) {
 
             FMemoryItem Stored = Item;
             Stored.Embedding =
-                Native::Llama::Embed(detail::NodeCortexHandle(), Stored.Text);
+                Native::Llama::Embed(detail::NodeEmbeddingHandle(), Stored.Text);
             const bool bStored =
                 Native::Sqlite::Upsert(Db, Stored, Stored.Embedding);
 
@@ -121,7 +121,7 @@ nodeMemoryRecallThunk(const FMemoryRecallRequest &Request) {
             }
 
             const TArray<float> QueryEmbedding =
-                Native::Llama::Embed(detail::NodeCortexHandle(), Request.Query);
+                Native::Llama::Embed(detail::NodeEmbeddingHandle(), Request.Query);
             TArray<FMemoryItem> Results =
                 Native::Sqlite::Search(Db, QueryEmbedding, Request.Limit);
 
@@ -197,11 +197,62 @@ inline ThunkAction<rtk::FEmptyPayload, FStoreState> clearNodeMemoryThunk() {
   };
 }
 
-inline ThunkAction<rtk::FEmptyPayload, FStoreState> initNodeVectorThunk() {
-  return [](std::function<AnyAction(const AnyAction &)> Dispatch,
-            std::function<FStoreState()> GetState)
+inline ThunkAction<rtk::FEmptyPayload, FStoreState>
+initNodeVectorThunk(const FString &EmbeddingModelPath = TEXT("")) {
+  return [EmbeddingModelPath](std::function<AnyAction(const AnyAction &)> Dispatch,
+                              std::function<FStoreState()> GetState)
              -> func::AsyncResult<rtk::FEmptyPayload> {
-    return detail::ResolveAsync(rtk::FEmptyPayload{});
+    static const FString EmbeddingUrl =
+        TEXT("https://huggingface.co/second-state/All-MiniLM-L6-v2-Embedding-GGUF/"
+             "resolve/main/all-MiniLM-L6-v2-Q4_K_M.gguf");
+
+    return func::AsyncResult<rtk::FEmptyPayload>::create(
+        [EmbeddingModelPath](std::function<void(rtk::FEmptyPayload)> Resolve,
+                             std::function<void(std::string)> Reject) {
+#if WITH_FORBOC_NATIVE
+          const FString Path = EmbeddingModelPath.IsEmpty()
+                                   ? detail::DefaultEmbeddingModelPath()
+                                   : EmbeddingModelPath;
+
+          auto LoadOnWorker = [Path, Resolve, Reject]() {
+            Async(EAsyncExecution::Thread, [Path, Resolve, Reject]() {
+              Native::Llama::Context &Handle = detail::NodeEmbeddingHandle();
+              if (Handle) {
+                Native::Llama::FreeModel(Handle);
+                Handle = nullptr;
+              }
+
+              Handle = Native::Llama::LoadEmbeddingModel(Path);
+
+              AsyncTask(ENamedThreads::GameThread, [Handle, Resolve, Reject]() {
+                if (Handle) {
+                  Resolve(rtk::FEmptyPayload{});
+                } else {
+                  Reject("Failed to load embedding model");
+                }
+              });
+            });
+          };
+
+          if (!FPaths::FileExists(Path)) {
+            Native::File::DownloadBinary(EmbeddingUrl, Path)
+                .then([LoadOnWorker](const FString &) mutable { LoadOnWorker(); })
+                .catch_([Reject](std::string Error) mutable {
+                  if (Error.empty()) {
+                    Reject("Embedding download failed");
+                  } else {
+                    Reject(Error);
+                  }
+                })
+                .execute();
+          } else {
+            LoadOnWorker();
+          }
+#else
+          static_cast<void>(EmbeddingModelPath);
+          Resolve(rtk::FEmptyPayload{});
+#endif
+        });
   };
 }
 

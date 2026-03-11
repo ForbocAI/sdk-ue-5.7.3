@@ -1,8 +1,10 @@
 #pragma once
 
+// clang-format off
 #include "CoreMinimal.h"
-#include "NPC/AgentTypes.h"
+#include "NPC/NPCBaseTypes.h"
 #include "BridgeTypes.generated.h"
+// clang-format on
 
 /**
  * Validation Result — Immutable data.
@@ -11,13 +13,13 @@ USTRUCT(BlueprintType)
 struct FValidationResult {
   GENERATED_BODY()
 
-  UPROPERTY(BlueprintReadOnly)
+  UPROPERTY(BlueprintReadOnly, Category = "Bridge")
   bool bValid;
 
-  UPROPERTY(BlueprintReadOnly)
+  UPROPERTY(BlueprintReadOnly, Category = "Bridge")
   FString Reason;
 
-  UPROPERTY(BlueprintReadOnly)
+  UPROPERTY(BlueprintReadOnly, Category = "Bridge")
   FAgentAction CorrectedAction;
 
   FValidationResult() : bValid(true) {}
@@ -30,13 +32,13 @@ USTRUCT(BlueprintType)
 struct FBridgeValidationContext {
   GENERATED_BODY()
 
-  UPROPERTY(BlueprintReadOnly)
+  UPROPERTY(BlueprintReadOnly, Category = "Bridge")
   FString NpcStateJson;
 
-  UPROPERTY(BlueprintReadOnly)
+  UPROPERTY(BlueprintReadOnly, Category = "Bridge")
   FString WorldStateJson;
 
-  UPROPERTY(BlueprintReadOnly)
+  UPROPERTY(BlueprintReadOnly, Category = "Bridge")
   FString ConstraintsJson;
 
   FBridgeValidationContext() {}
@@ -49,13 +51,13 @@ USTRUCT(BlueprintType)
 struct FBridgeRule {
   GENERATED_BODY()
 
-  UPROPERTY(BlueprintReadOnly)
+  UPROPERTY(BlueprintReadOnly, Category = "Bridge")
   FString RuleName;
 
-  UPROPERTY(BlueprintReadOnly)
+  UPROPERTY(BlueprintReadOnly, Category = "Bridge")
   FString RuleDescription;
 
-  UPROPERTY(BlueprintReadOnly)
+  UPROPERTY(BlueprintReadOnly, Category = "Bridge")
   TArray<FString> RuleActionTypes;
 
   FBridgeRule() {}
@@ -68,13 +70,13 @@ USTRUCT(BlueprintType)
 struct FDirectiveRuleSet {
   GENERATED_BODY()
 
-  UPROPERTY(BlueprintReadOnly)
+  UPROPERTY(BlueprintReadOnly, Category = "Bridge")
   FString Id;
 
-  UPROPERTY(BlueprintReadOnly)
+  UPROPERTY(BlueprintReadOnly, Category = "Bridge")
   FString RulesetId;
 
-  UPROPERTY(BlueprintReadOnly)
+  UPROPERTY(BlueprintReadOnly, Category = "Bridge")
   TArray<FBridgeRule> RulesetRules;
 
   FDirectiveRuleSet() {}
@@ -84,10 +86,10 @@ USTRUCT(BlueprintType)
 struct FBridgeValidateRequest {
   GENERATED_BODY()
 
-  UPROPERTY(BlueprintReadOnly)
+  UPROPERTY(BlueprintReadOnly, Category = "Bridge")
   FAgentAction Action;
 
-  UPROPERTY(BlueprintReadOnly)
+  UPROPERTY(BlueprintReadOnly, Category = "Bridge")
   FBridgeValidationContext Context;
 };
 

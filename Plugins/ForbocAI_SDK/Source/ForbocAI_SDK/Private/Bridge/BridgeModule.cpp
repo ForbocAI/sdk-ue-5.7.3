@@ -1,6 +1,7 @@
 #include "Bridge/BridgeModule.h"
-#include "NPC/NPCModule.h"
 #include "Bridge/BridgeSlice.h"
+#include "CLI/CliOperations.h"
+#include "NPC/NPCModule.h"
 #include "Core/functional_core.hpp"
 #include "HAL/PlatformFilemanager.h"
 #include "Misc/FileHelper.h"
@@ -41,6 +42,37 @@ bridgeValidationPipeline();
 }
 
 // ==========================================
+// LOCAL VALIDATION — Pure, used by thunk
+// ==========================================
+
+namespace BridgeHelpers {
+
+FValidationResult RunLocalBridgeValidation(const FAgentAction &Action,
+                                          const TArray<FValidationRule> &Rules,
+                                          const FBridgeRuleContext &Context) {
+  auto validationPipeline = bridgeValidationPipeline();
+  auto result = validationPipeline.run(Action);
+
+  if (result.isLeft) {
+    return TypeFactory::Invalid(result.left);
+  }
+
+  FAgentAction validatedAction = result.right;
+  for (const FValidationRule &Rule : Rules) {
+    if (Rule.ActionTypes.Contains(validatedAction.Type)) {
+      const FValidationResult RuleResult =
+          Rule.Validator(validatedAction, Context);
+      if (!RuleResult.bValid) {
+        return RuleResult;
+      }
+    }
+  }
+  return TypeFactory::Valid(TEXT("All rules passed"));
+}
+
+} // namespace BridgeHelpers
+
+// ==========================================
 // BRIDGE OPERATIONS — Free functions
 // ==========================================
 
@@ -53,38 +85,9 @@ TArray<FValidationRule> BridgeOps::CreateDefaultRules() {
 FValidationResult BridgeOps::Validate(const FAgentAction &Action,
                                       const TArray<FValidationRule> &Rules,
                                       const FBridgeRuleContext &Context) {
-  // Use functional validation pipeline
-  auto validationPipeline = BridgeHelpers::bridgeValidationPipeline();
-  auto result = validationPipeline.run(Action);
-
   auto Store = ConfigureStore();
-  Store.dispatch(BridgeSlice::Actions::BridgeValidationPending());
-
-  if (result.isLeft) {
-    Store.dispatch(
-        BridgeSlice::Actions::BridgeValidationFailure(result.left));
-    return TypeFactory::Invalid(result.left);
-  }
-
-  FAgentAction validatedAction = result.right;
-
-  for (const FValidationRule &Rule : Rules) {
-    if (Rule.ActionTypes.Contains(validatedAction.Type)) {
-      const FValidationResult RuleResult =
-          Rule.Validator(validatedAction, Context);
-
-      if (!RuleResult.bValid) {
-        Store.dispatch(BridgeSlice::Actions::BridgeValidationFailure(
-            RuleResult.Reason));
-        return RuleResult;
-      }
-    }
-  }
-
-  FValidationResult FinalSuccess = TypeFactory::Valid(TEXT("All rules passed"));
-  Store.dispatch(BridgeSlice::Actions::BridgeValidationSuccess(
-      FinalSuccess));
-  return FinalSuccess;
+  return Ops::WaitForResult(
+      Store.dispatch(rtk::localValidateBridgeThunk(Action, Rules, Context)));
 }
 
 TArray<FValidationRule> BridgeOps::CreateRPGRules() {

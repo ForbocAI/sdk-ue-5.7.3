@@ -1,7 +1,9 @@
 #pragma once
 
+// clang-format off
 #include "CoreMinimal.h"
 #include "MemoryTypes.generated.h"
+// clang-format on
 
 /**
  * Memory Item — Immutable data.
@@ -10,25 +12,25 @@ USTRUCT(BlueprintType)
 struct FMemoryItem {
   GENERATED_BODY()
 
-  UPROPERTY(BlueprintReadOnly)
+  UPROPERTY(BlueprintReadOnly, Category = "Memory")
   FString Id;
 
-  UPROPERTY(BlueprintReadOnly)
+  UPROPERTY(BlueprintReadOnly, Category = "Memory")
   FString Text;
 
-  UPROPERTY(BlueprintReadOnly)
+  UPROPERTY(BlueprintReadOnly, Category = "Memory")
   TArray<float> Embedding;
 
-  UPROPERTY(BlueprintReadOnly)
+  UPROPERTY(BlueprintReadOnly, Category = "Memory")
   int64 Timestamp;
 
-  UPROPERTY(BlueprintReadOnly)
+  UPROPERTY(BlueprintReadOnly, Category = "Memory")
   FString Type;
 
-  UPROPERTY(BlueprintReadOnly)
+  UPROPERTY(BlueprintReadOnly, Category = "Memory")
   float Importance;
 
-  UPROPERTY(BlueprintReadOnly)
+  UPROPERTY(BlueprintReadOnly, Category = "Memory")
   float Similarity;
 
   FMemoryItem() : Timestamp(0), Importance(0.5f), Similarity(0.0f) {}
@@ -41,19 +43,19 @@ USTRUCT(BlueprintType)
 struct FMemoryConfig {
   GENERATED_BODY()
 
-  UPROPERTY(BlueprintReadOnly)
+  UPROPERTY(BlueprintReadOnly, Category = "Memory")
   FString DatabasePath;
 
-  UPROPERTY(BlueprintReadOnly)
+  UPROPERTY(BlueprintReadOnly, Category = "Memory")
   int32 MaxMemories;
 
-  UPROPERTY(BlueprintReadOnly)
+  UPROPERTY(BlueprintReadOnly, Category = "Memory")
   int32 VectorDimension;
 
-  UPROPERTY(BlueprintReadOnly)
+  UPROPERTY(BlueprintReadOnly, Category = "Memory")
   bool UseGPU;
 
-  UPROPERTY(BlueprintReadOnly)
+  UPROPERTY(BlueprintReadOnly, Category = "Memory")
   int32 MaxRecallResults;
 
   FMemoryConfig()
@@ -81,13 +83,13 @@ USTRUCT(BlueprintType)
 struct FMemoryRecallRequest {
   GENERATED_BODY()
 
-  UPROPERTY(BlueprintReadOnly)
+  UPROPERTY(BlueprintReadOnly, Category = "Memory")
   FString Query;
 
-  UPROPERTY(BlueprintReadOnly)
+  UPROPERTY(BlueprintReadOnly, Category = "Memory")
   int32 Limit;
 
-  UPROPERTY(BlueprintReadOnly)
+  UPROPERTY(BlueprintReadOnly, Category = "Memory")
   float Threshold;
 
   FMemoryRecallRequest() : Limit(10), Threshold(0.7f) {}
@@ -97,10 +99,10 @@ USTRUCT(BlueprintType)
 struct FRemoteMemoryStoreRequest {
   GENERATED_BODY()
 
-  UPROPERTY(BlueprintReadOnly)
+  UPROPERTY(BlueprintReadOnly, Category = "Memory")
   FString Observation;
 
-  UPROPERTY(BlueprintReadOnly)
+  UPROPERTY(BlueprintReadOnly, Category = "Memory")
   float Importance;
 
   FRemoteMemoryStoreRequest() : Importance(0.8f) {}
@@ -110,10 +112,10 @@ USTRUCT(BlueprintType)
 struct FRemoteMemoryRecallRequest {
   GENERATED_BODY()
 
-  UPROPERTY(BlueprintReadOnly)
+  UPROPERTY(BlueprintReadOnly, Category = "Memory")
   FString Query;
 
-  UPROPERTY(BlueprintReadOnly)
+  UPROPERTY(BlueprintReadOnly, Category = "Memory")
   float Similarity;
 
   FRemoteMemoryRecallRequest() : Similarity(0.0f) {}

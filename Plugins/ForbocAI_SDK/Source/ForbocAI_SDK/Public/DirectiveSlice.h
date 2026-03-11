@@ -257,4 +257,32 @@ inline Slice<FDirectiveSliceState> CreateDirectiveSlice() {
       .build();
 }
 
+/**
+ * User Story: As directive orchestration state, I need selectors for the
+ * directive run entities and the active directive.
+ * (From TS: selectDirectiveById, selectAllDirectives, selectActiveDirectiveId,
+ * selectActiveDirective)
+ */
+inline func::Maybe<FDirectiveRun> SelectDirectiveById(
+    const FDirectiveSliceState &State, const FString &Id) {
+  return GetDirectiveAdapter().getSelectors().selectById(State.Entities, Id);
+}
+
+inline TArray<FDirectiveRun> SelectAllDirectives(
+    const FDirectiveSliceState &State) {
+  return GetDirectiveAdapter().getSelectors().selectAll(State.Entities);
+}
+
+inline FString SelectActiveDirectiveId(const FDirectiveSliceState &State) {
+  return State.ActiveDirectiveId;
+}
+
+inline func::Maybe<FDirectiveRun> SelectActiveDirective(
+    const FDirectiveSliceState &State) {
+  if (State.ActiveDirectiveId.IsEmpty()) {
+    return func::nothing<FDirectiveRun>();
+  }
+  return SelectDirectiveById(State, State.ActiveDirectiveId);
+}
+
 } // namespace DirectiveSlice

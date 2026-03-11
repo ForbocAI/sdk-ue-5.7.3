@@ -94,8 +94,8 @@ bool FOpsConfigTest::RunTest(const FString &Parameters) {
   SDKConfig::SetConfigFilePathOverride(TempConfigPath);
   SDKConfig::ReloadConfig();
 
-  TestEqual("Default runtime API URL matches node default",
-            SDKConfig::GetApiUrl(), FString(TEXT("http://localhost:8080")));
+  TestEqual("Default runtime API URL is canonical api.forboc.ai",
+            SDKConfig::GetApiUrl(), FString(TEXT("https://api.forboc.ai")));
   TestTrue("Unset persisted apiUrl is empty",
            Ops::ConfigGet(TEXT("apiUrl")).IsEmpty());
 

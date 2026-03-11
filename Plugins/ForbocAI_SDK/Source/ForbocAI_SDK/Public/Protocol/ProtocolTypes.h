@@ -1,10 +1,12 @@
 #pragma once
 
+// clang-format off
 #include "CoreMinimal.h"
 #include "Cortex/CortexTypes.h"
 #include "Memory/MemoryTypes.h"
-#include "NPC/AgentTypes.h"
+#include "NPC/NPCBaseTypes.h"
 #include "ProtocolTypes.generated.h"
+// clang-format on
 
 UENUM(BlueprintType)
 enum class EDirectiveStatus : uint8 { Running, Completed, Failed };
@@ -13,68 +15,68 @@ USTRUCT(BlueprintType)
 struct FDirectiveRun {
   GENERATED_BODY()
 
-  UPROPERTY(BlueprintReadOnly)
+  UPROPERTY(BlueprintReadOnly, Category = "Protocol")
   FString Id;
 
-  UPROPERTY(BlueprintReadOnly)
+  UPROPERTY(BlueprintReadOnly, Category = "Protocol")
   FString NpcId;
 
-  UPROPERTY(BlueprintReadOnly)
+  UPROPERTY(BlueprintReadOnly, Category = "Protocol")
   FString Observation;
 
-  UPROPERTY(BlueprintReadOnly)
+  UPROPERTY(BlueprintReadOnly, Category = "Protocol")
   EDirectiveStatus Status;
 
-  UPROPERTY(BlueprintReadOnly)
+  UPROPERTY(BlueprintReadOnly, Category = "Protocol")
   int64 StartedAt;
 
-  UPROPERTY(BlueprintReadOnly)
+  UPROPERTY(BlueprintReadOnly, Category = "Protocol")
   int64 CompletedAt;
 
-  UPROPERTY(BlueprintReadOnly)
+  UPROPERTY(BlueprintReadOnly, Category = "Protocol")
   FString Error;
 
-  UPROPERTY(BlueprintReadOnly)
+  UPROPERTY(BlueprintReadOnly, Category = "Protocol")
   FString MemoryRecallQuery;
 
-  UPROPERTY(BlueprintReadOnly)
+  UPROPERTY(BlueprintReadOnly, Category = "Protocol")
   int32 MemoryRecallLimit;
 
-  UPROPERTY(BlueprintReadOnly)
+  UPROPERTY(BlueprintReadOnly, Category = "Protocol")
   float MemoryRecallThreshold;
 
-  UPROPERTY(BlueprintReadOnly)
+  UPROPERTY(BlueprintReadOnly, Category = "Protocol")
   FString ContextPrompt;
 
-  UPROPERTY(BlueprintReadOnly)
+  UPROPERTY(BlueprintReadOnly, Category = "Protocol")
   FCortexConfig ContextConstraints;
 
-  UPROPERTY(BlueprintReadOnly)
+  UPROPERTY(BlueprintReadOnly, Category = "Protocol")
   bool bVerdictValid;
 
-  UPROPERTY(BlueprintReadOnly)
+  UPROPERTY(BlueprintReadOnly, Category = "Protocol")
   FString VerdictDialogue;
 
-  UPROPERTY(BlueprintReadOnly)
+  UPROPERTY(BlueprintReadOnly, Category = "Protocol")
   FString VerdictActionType;
 
   FDirectiveRun()
       : Status(EDirectiveStatus::Running), StartedAt(0), CompletedAt(0),
-        MemoryRecallLimit(0), MemoryRecallThreshold(0.0f), bVerdictValid(false) {
-  }
+        MemoryRecallLimit(0), MemoryRecallThreshold(0.0f),
+        bVerdictValid(false) {}
 };
 
 USTRUCT(BlueprintType)
 struct FMemoryRecallInstruction {
   GENERATED_BODY()
 
-  UPROPERTY(BlueprintReadOnly)
+  UPROPERTY(BlueprintReadOnly, Category = "Protocol")
   FString Query;
 
-  UPROPERTY(BlueprintReadOnly)
+  UPROPERTY(BlueprintReadOnly, Category = "Protocol")
   int32 Limit;
 
-  UPROPERTY(BlueprintReadOnly)
+  UPROPERTY(BlueprintReadOnly, Category = "Protocol")
   float Threshold;
 
   FMemoryRecallInstruction() : Limit(5), Threshold(0.7f) {}
@@ -84,13 +86,13 @@ USTRUCT(BlueprintType)
 struct FMemoryStoreInstruction {
   GENERATED_BODY()
 
-  UPROPERTY(BlueprintReadOnly)
+  UPROPERTY(BlueprintReadOnly, Category = "Protocol")
   FString Text;
 
-  UPROPERTY(BlueprintReadOnly)
+  UPROPERTY(BlueprintReadOnly, Category = "Protocol")
   FString Type;
 
-  UPROPERTY(BlueprintReadOnly)
+  UPROPERTY(BlueprintReadOnly, Category = "Protocol")
   float Importance;
 
   FMemoryStoreInstruction() : Importance(0.5f) {}
@@ -100,16 +102,16 @@ USTRUCT(BlueprintType)
 struct FRecalledMemory {
   GENERATED_BODY()
 
-  UPROPERTY(BlueprintReadOnly)
+  UPROPERTY(BlueprintReadOnly, Category = "Protocol")
   FString Text;
 
-  UPROPERTY(BlueprintReadOnly)
+  UPROPERTY(BlueprintReadOnly, Category = "Protocol")
   FString Type;
 
-  UPROPERTY(BlueprintReadOnly)
+  UPROPERTY(BlueprintReadOnly, Category = "Protocol")
   float Importance;
 
-  UPROPERTY(BlueprintReadOnly)
+  UPROPERTY(BlueprintReadOnly, Category = "Protocol")
   float Similarity;
 
   FRecalledMemory() : Importance(0.5f), Similarity(0.0f) {}
@@ -127,43 +129,43 @@ USTRUCT(BlueprintType)
 struct FNPCInstruction {
   GENERATED_BODY()
 
-  UPROPERTY(BlueprintReadOnly)
+  UPROPERTY(BlueprintReadOnly, Category = "Protocol")
   ENPCInstructionType Type;
 
-  UPROPERTY(BlueprintReadOnly)
+  UPROPERTY(BlueprintReadOnly, Category = "Protocol")
   FString Query;
 
-  UPROPERTY(BlueprintReadOnly)
+  UPROPERTY(BlueprintReadOnly, Category = "Protocol")
   int32 Limit;
 
-  UPROPERTY(BlueprintReadOnly)
+  UPROPERTY(BlueprintReadOnly, Category = "Protocol")
   float Threshold;
 
-  UPROPERTY(BlueprintReadOnly)
+  UPROPERTY(BlueprintReadOnly, Category = "Protocol")
   FString Prompt;
 
-  UPROPERTY(BlueprintReadOnly)
+  UPROPERTY(BlueprintReadOnly, Category = "Protocol")
   FCortexConfig Constraints;
 
-  UPROPERTY(BlueprintReadOnly)
+  UPROPERTY(BlueprintReadOnly, Category = "Protocol")
   bool bValid;
 
-  UPROPERTY(BlueprintReadOnly)
+  UPROPERTY(BlueprintReadOnly, Category = "Protocol")
   FString Signature;
 
-  UPROPERTY(BlueprintReadOnly)
+  UPROPERTY(BlueprintReadOnly, Category = "Protocol")
   TArray<FMemoryStoreInstruction> MemoryStore;
 
-  UPROPERTY(BlueprintReadOnly)
+  UPROPERTY(BlueprintReadOnly, Category = "Protocol")
   FAgentState StateTransform;
 
-  UPROPERTY(BlueprintReadOnly)
+  UPROPERTY(BlueprintReadOnly, Category = "Protocol")
   FAgentAction Action;
 
-  UPROPERTY(BlueprintReadOnly)
+  UPROPERTY(BlueprintReadOnly, Category = "Protocol")
   bool bHasAction;
 
-  UPROPERTY(BlueprintReadOnly)
+  UPROPERTY(BlueprintReadOnly, Category = "Protocol")
   FString Dialogue;
 
   FNPCInstruction()
@@ -173,8 +175,9 @@ struct FNPCInstruction {
 
 namespace TypeFactory {
 
-inline FMemoryRecallInstruction MemoryRecallInstruction(
-    const FString &Query, int32 Limit = 5, float Threshold = 0.7f) {
+inline FMemoryRecallInstruction
+MemoryRecallInstruction(const FString &Query, int32 Limit = 5,
+                        float Threshold = 0.7f) {
   FMemoryRecallInstruction Instruction;
   Instruction.Query = Query;
   Instruction.Limit = Limit;

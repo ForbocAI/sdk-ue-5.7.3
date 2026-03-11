@@ -203,9 +203,20 @@ inline FAgentAction ActionFromObject(const TSharedPtr<FJsonObject> &Object) {
     return Action;
   }
 
-  Action.Type = OptionalStringFromField(Object, TEXT("type"));
-  Action.Target = OptionalStringFromField(Object, TEXT("target"));
-  Action.Reason = OptionalStringFromField(Object, TEXT("reason"));
+  // Normalize API field names: the Haskell API may return gaType/actionTarget/
+  // actionReason instead of type/target/reason. Match TS postVerdict transform.
+  Action.Type = OptionalStringFromField(Object, TEXT("gaType"));
+  if (Action.Type.IsEmpty()) {
+    Action.Type = OptionalStringFromField(Object, TEXT("type"));
+  }
+  Action.Target = OptionalStringFromField(Object, TEXT("actionTarget"));
+  if (Action.Target.IsEmpty()) {
+    Action.Target = OptionalStringFromField(Object, TEXT("target"));
+  }
+  Action.Reason = OptionalStringFromField(Object, TEXT("actionReason"));
+  if (Action.Reason.IsEmpty()) {
+    Action.Reason = OptionalStringFromField(Object, TEXT("reason"));
+  }
 
   double Confidence = 1.0;
   if (Object->TryGetNumberField(TEXT("confidence"), Confidence)) {

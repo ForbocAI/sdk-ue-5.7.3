@@ -49,6 +49,7 @@ void UForbocAISubsystem::ProcessNPC(FString NpcId, FString Input) {
       .then([this](const FAgentResponse &Result) {
         if (!Result.Dialogue.IsEmpty()) {
           OnMessageReceived.Broadcast(Result.Dialogue);
+          OnTTSRequested.Broadcast(Result.Dialogue);
         }
         if (!Result.Action.Type.IsEmpty()) {
           OnNPCActionReceived.Broadcast(Result.Action);
@@ -83,6 +84,69 @@ FAgentState UForbocAISubsystem::GetNPCState(FString NpcId) const {
     return NPC.value.State;
   }
   return FAgentState();
+}
+
+FString UForbocAISubsystem::GetActiveNPCId() const {
+  if (!Store.IsValid()) {
+    return FString();
+  }
+
+  const FStoreState State = Store->getState();
+  return NPCSlice::SelectActiveNpcId(State.NPCs);
+}
+
+bool UForbocAISubsystem::GetActiveNPC(FNPCInternalState &OutNPC) const {
+  if (!Store.IsValid()) {
+    return false;
+  }
+
+  const FStoreState State = Store->getState();
+  const func::Maybe<FNPCInternalState> Active =
+      NPCSlice::SelectActiveNPC(State.NPCs);
+  if (!Active.hasValue) {
+    return false;
+  }
+
+  OutNPC = Active.value;
+  return true;
+}
+
+TArray<FMemoryItem> UForbocAISubsystem::GetLastRecalledMemories() const {
+  if (!Store.IsValid()) {
+    return TArray<FMemoryItem>();
+  }
+
+  const FStoreState State = Store->getState();
+  return MemorySlice::SelectLastRecalledMemories(State.Memory);
+}
+
+bool UForbocAISubsystem::GetLastBridgeValidation(
+    FValidationResult &OutResult) const {
+  if (!Store.IsValid()) {
+    return false;
+  }
+
+  const FStoreState State = Store->getState();
+  if (!State.Bridge.bHasLastValidation) {
+    return false;
+  }
+
+  OutResult = State.Bridge.LastValidation;
+  return true;
+}
+
+bool UForbocAISubsystem::GetLastImportedSoul(FSoul &OutSoul) const {
+  if (!Store.IsValid()) {
+    return false;
+  }
+
+  const FStoreState State = Store->getState();
+  if (!State.Soul.bHasLastImport) {
+    return false;
+  }
+
+  OutSoul = State.Soul.LastImport;
+  return true;
 }
 
 void UForbocAISubsystem::HandleAction(const rtk::AnyAction &Action) {

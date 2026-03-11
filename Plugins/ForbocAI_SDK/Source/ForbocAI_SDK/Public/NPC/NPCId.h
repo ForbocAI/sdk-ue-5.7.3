@@ -19,10 +19,15 @@ inline FString ToBase36(uint64 Value) {
   return Encoded;
 }
 
+/**
+ * Generates an NPC id matching TS SDK shape: ag_<base36 timestamp>
+ * TS: generateNPCId() => `ag_${Date.now().toString(36)}`
+ * Parity: Unix milliseconds, base36.
+ */
 inline FString GenerateNPCId() {
-  const int64 Milliseconds =
-      FDateTime::UtcNow().GetTicks() / ETimespan::TicksPerMillisecond;
-  return TEXT("ag_") + ToBase36(static_cast<uint64>(Milliseconds));
+  const int64 UnixMs =
+      FDateTime::UtcNow().ToUnixTimestamp() * 1000;
+  return TEXT("ag_") + ToBase36(static_cast<uint64>(UnixMs));
 }
 
 } // namespace NPCId

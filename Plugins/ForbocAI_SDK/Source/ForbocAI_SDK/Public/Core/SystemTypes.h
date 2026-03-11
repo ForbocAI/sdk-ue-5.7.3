@@ -1,7 +1,9 @@
 #pragma once
 
+// clang-format off
 #include "CoreMinimal.h"
 #include "SystemTypes.generated.h"
+// clang-format on
 
 /**
  * Api Status Response
@@ -10,10 +12,10 @@ USTRUCT(BlueprintType)
 struct FApiStatusResponse {
   GENERATED_BODY()
 
-  UPROPERTY(BlueprintReadOnly)
+  UPROPERTY(BlueprintReadOnly, Category = "System")
   FString Status;
 
-  UPROPERTY(BlueprintReadOnly)
+  UPROPERTY(BlueprintReadOnly, Category = "System")
   FString Version;
 
   FApiStatusResponse() {}

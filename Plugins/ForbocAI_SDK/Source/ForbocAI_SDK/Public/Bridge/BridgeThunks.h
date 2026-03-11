@@ -1,15 +1,46 @@
 #pragma once
 
-#include "Core/ThunkDetail.h"
+#include "Bridge/BridgeModule.h"
 #include "Bridge/BridgeSlice.h"
+#include "Core/ThunkDetail.h"
 #include "Errors.h"
 #include "RuntimeConfig.h"
+
+namespace BridgeHelpers {
+/** Pure local validation. Implemented in BridgeModule.cpp. */
+FValidationResult RunLocalBridgeValidation(const FAgentAction &Action,
+                                          const TArray<FValidationRule> &Rules,
+                                          const FBridgeRuleContext &Context);
+} // namespace BridgeHelpers
 
 namespace rtk {
 
 // ---------------------------------------------------------------------------
 // Bridge thunks (mirrors TS bridgeSlice.ts)
 // ---------------------------------------------------------------------------
+
+/** Local rule-based validation (no API). Dispatches slice actions; store-visible. */
+inline ThunkAction<FValidationResult, FStoreState>
+localValidateBridgeThunk(const FAgentAction &Action,
+                         const TArray<FValidationRule> &Rules,
+                         const FBridgeRuleContext &Context) {
+  return [Action, Rules, Context](
+             std::function<AnyAction(const AnyAction &)> Dispatch,
+             std::function<FStoreState()> GetState)
+             -> func::AsyncResult<FValidationResult> {
+    Dispatch(BridgeSlice::Actions::BridgeValidationPending());
+
+    FValidationResult Result =
+        BridgeHelpers::RunLocalBridgeValidation(Action, Rules, Context);
+
+    if (Result.bValid) {
+      Dispatch(BridgeSlice::Actions::BridgeValidationSuccess(Result));
+    } else {
+      Dispatch(BridgeSlice::Actions::BridgeValidationFailure(Result.Reason));
+    }
+    return detail::ResolveAsync(Result);
+  };
+}
 
 inline ThunkAction<FValidationResult, FStoreState>
 validateBridgeThunk(const FAgentAction &Action,

@@ -1,4 +1,5 @@
 #include "NPC/NPCModule.h"
+#include "NPC/NPCId.h"
 #include "Containers/UnrealString.h"
 #include "Core/functional_core.hpp"
 #include "HttpModule.h"
@@ -16,28 +17,6 @@
 // ==========================================
 
 namespace {
-
-FString ToBase36(uint64 Value) {
-  static const TCHAR Digits[] = TEXT("0123456789abcdefghijklmnopqrstuvwxyz");
-
-  if (Value == 0) {
-    return TEXT("0");
-  }
-
-  FString Encoded;
-  while (Value > 0) {
-    const int32 DigitIndex = static_cast<int32>(Value % 36ull);
-    Encoded.InsertAt(0, FString(1, &Digits[DigitIndex]));
-    Value /= 36ull;
-  }
-
-  return Encoded;
-}
-
-FString GenerateNPCId() {
-  return FString::Printf(TEXT("ag_%s"),
-                         *ToBase36(FDateTime::UtcNow().ToUnixTimestamp()));
-}
 
 FString SerializeContextMap(const TMap<FString, FString> &Context) {
   if (Context.IsEmpty()) {
@@ -60,7 +39,7 @@ FString SerializeContextMap(const TMap<FString, FString> &Context) {
 
 FAgent AgentFactory::Create(const FAgentConfig &Config) {
   FAgent Agent;
-  Agent.Id = Config.Id.IsEmpty() ? GenerateNPCId() : Config.Id;
+  Agent.Id = Config.Id.IsEmpty() ? NPCId::GenerateNPCId() : Config.Id;
   Agent.Persona = Config.Persona;
   Agent.State = Config.InitialState;
   Agent.ApiUrl =

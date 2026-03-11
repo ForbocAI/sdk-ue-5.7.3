@@ -1,7 +1,9 @@
 #pragma once
 
+// clang-format off
 #include "CoreMinimal.h"
 #include "CortexTypes.generated.h"
+// clang-format on
 
 /**
  * Cortex Engine Type
@@ -16,10 +18,10 @@ USTRUCT(BlueprintType)
 struct FCortexInitRequest {
   GENERATED_BODY()
 
-  UPROPERTY(BlueprintReadOnly)
+  UPROPERTY(BlueprintReadOnly, Category = "Cortex")
   FString RequestedModel;
 
-  UPROPERTY(BlueprintReadOnly)
+  UPROPERTY(BlueprintReadOnly, Category = "Cortex")
   FString AuthKey;
 
   FCortexInitRequest() {}
@@ -32,13 +34,13 @@ USTRUCT(BlueprintType)
 struct FCortexInitResponse {
   GENERATED_BODY()
 
-  UPROPERTY(BlueprintReadOnly)
+  UPROPERTY(BlueprintReadOnly, Category = "Cortex")
   FString CortexId;
 
-  UPROPERTY(BlueprintReadOnly)
+  UPROPERTY(BlueprintReadOnly, Category = "Cortex")
   FString Runtime;
 
-  UPROPERTY(BlueprintReadOnly)
+  UPROPERTY(BlueprintReadOnly, Category = "Cortex")
   FString State;
 
   FCortexInitResponse() {}
@@ -51,20 +53,20 @@ USTRUCT(BlueprintType)
 struct FCortexCompleteRequest {
   GENERATED_BODY()
 
-  UPROPERTY(BlueprintReadOnly)
+  UPROPERTY(BlueprintReadOnly, Category = "Cortex")
   FString Prompt;
 
-  UPROPERTY(BlueprintReadOnly)
+  UPROPERTY(BlueprintReadOnly, Category = "Cortex")
   int32 MaxTokens;
 
-  UPROPERTY(BlueprintReadOnly)
+  UPROPERTY(BlueprintReadOnly, Category = "Cortex")
   float Temperature;
 
-  UPROPERTY(BlueprintReadOnly)
+  UPROPERTY(BlueprintReadOnly, Category = "Cortex")
   TArray<FString> Stop;
 
   // JSON-encoded schema payload used for remote completion requests.
-  UPROPERTY(BlueprintReadOnly)
+  UPROPERTY(BlueprintReadOnly, Category = "Cortex")
   FString JsonSchemaJson;
 
   FCortexCompleteRequest() : MaxTokens(-1), Temperature(-1.0f) {}
@@ -77,13 +79,13 @@ USTRUCT(BlueprintType)
 struct FCortexModelInfo {
   GENERATED_BODY()
 
-  UPROPERTY(BlueprintReadOnly)
+  UPROPERTY(BlueprintReadOnly, Category = "Cortex")
   FString Id;
 
-  UPROPERTY(BlueprintReadOnly)
+  UPROPERTY(BlueprintReadOnly, Category = "Cortex")
   FString Name;
 
-  UPROPERTY(BlueprintReadOnly)
+  UPROPERTY(BlueprintReadOnly, Category = "Cortex")
   int32 Parameters;
 
   FCortexModelInfo() : Parameters(0) {}
@@ -96,22 +98,22 @@ USTRUCT(BlueprintType)
 struct FCortexStatus {
   GENERATED_BODY()
 
-  UPROPERTY(BlueprintReadOnly)
+  UPROPERTY(BlueprintReadOnly, Category = "Cortex")
   FString Id;
 
-  UPROPERTY(BlueprintReadOnly)
+  UPROPERTY(BlueprintReadOnly, Category = "Cortex")
   FString Model;
 
-  UPROPERTY(BlueprintReadOnly)
+  UPROPERTY(BlueprintReadOnly, Category = "Cortex")
   bool bReady;
 
-  UPROPERTY(BlueprintReadOnly)
+  UPROPERTY(BlueprintReadOnly, Category = "Cortex")
   ECortexEngine Engine;
 
-  UPROPERTY(BlueprintReadOnly)
+  UPROPERTY(BlueprintReadOnly, Category = "Cortex")
   float DownloadProgress;
 
-  UPROPERTY(BlueprintReadOnly)
+  UPROPERTY(BlueprintReadOnly, Category = "Cortex")
   FString Error;
 
   FCortexStatus()
@@ -125,29 +127,30 @@ USTRUCT(BlueprintType)
 struct FCortexConfig {
   GENERATED_BODY()
 
-  UPROPERTY(BlueprintReadOnly)
+  UPROPERTY(BlueprintReadOnly, Category = "Cortex")
   FString Model;
 
-  UPROPERTY(BlueprintReadOnly)
+  UPROPERTY(BlueprintReadOnly, Category = "Cortex")
   bool UseGPU;
 
-  UPROPERTY(BlueprintReadOnly)
+  UPROPERTY(BlueprintReadOnly, Category = "Cortex")
   int32 MaxTokens;
 
-  UPROPERTY(BlueprintReadOnly)
+  UPROPERTY(BlueprintReadOnly, Category = "Cortex")
   float Temperature;
 
-  UPROPERTY(BlueprintReadOnly)
+  UPROPERTY(BlueprintReadOnly, Category = "Cortex")
   int32 TopK;
 
-  UPROPERTY(BlueprintReadOnly)
+  UPROPERTY(BlueprintReadOnly, Category = "Cortex")
   float TopP;
 
-  UPROPERTY(BlueprintReadOnly)
+  UPROPERTY(BlueprintReadOnly, Category = "Cortex")
   TArray<FString> Stop;
 
-  // JSON-encoded schema payload used when a caller needs schema-constrained output.
-  UPROPERTY(BlueprintReadOnly)
+  // JSON-encoded schema payload used when a caller needs schema-constrained
+  // output.
+  UPROPERTY(BlueprintReadOnly, Category = "Cortex")
   FString JsonSchemaJson;
 
   FCortexConfig()
@@ -171,13 +174,13 @@ USTRUCT(BlueprintType)
 struct FCortexResponse {
   GENERATED_BODY()
 
-  UPROPERTY(BlueprintReadOnly)
+  UPROPERTY(BlueprintReadOnly, Category = "Cortex")
   FString Id;
 
-  UPROPERTY(BlueprintReadOnly)
+  UPROPERTY(BlueprintReadOnly, Category = "Cortex")
   FString Text;
 
-  UPROPERTY(BlueprintReadOnly)
+  UPROPERTY(BlueprintReadOnly, Category = "Cortex")
   FString Stats;
 };
 
@@ -197,10 +200,10 @@ inline FCortexCompleteRequest CortexCompleteRequest(FString Prompt) {
   return R;
 }
 
-inline FCortexCompleteRequest CortexCompleteRequest(
-    FString Prompt, int32 MaxTokens, float Temperature,
-    const TArray<FString> &Stop = TArray<FString>(),
-    FString JsonSchemaJson = TEXT("")) {
+inline FCortexCompleteRequest
+CortexCompleteRequest(FString Prompt, int32 MaxTokens, float Temperature,
+                      const TArray<FString> &Stop = TArray<FString>(),
+                      FString JsonSchemaJson = TEXT("")) {
   FCortexCompleteRequest R;
   R.Prompt = MoveTemp(Prompt);
   R.MaxTokens = MaxTokens;
@@ -210,13 +213,11 @@ inline FCortexCompleteRequest CortexCompleteRequest(
   return R;
 }
 
-inline FCortexConfig CortexConfig(FString Model = TEXT("smollm2-135m"),
-                                  bool UseGPU = false, int32 MaxTokens = 512,
-                                  float Temperature = 0.7f, int32 TopK = 40,
-                                  float TopP = 0.9f,
-                                  const TArray<FString> &Stop =
-                                      TArray<FString>(),
-                                  FString JsonSchemaJson = TEXT("")) {
+inline FCortexConfig
+CortexConfig(FString Model = TEXT("smollm2-135m"), bool UseGPU = false,
+             int32 MaxTokens = 512, float Temperature = 0.7f, int32 TopK = 40,
+             float TopP = 0.9f, const TArray<FString> &Stop = TArray<FString>(),
+             FString JsonSchemaJson = TEXT("")) {
   FCortexConfig C;
   C.Model = MoveTemp(Model);
   C.UseGPU = UseGPU;

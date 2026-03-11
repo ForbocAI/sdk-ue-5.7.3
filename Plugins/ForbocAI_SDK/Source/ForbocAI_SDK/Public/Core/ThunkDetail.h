@@ -28,6 +28,12 @@ inline Native::Llama::Context &NodeCortexHandle() {
   return Handle;
 }
 
+/** Embedding model (all-MiniLM-L6-v2). Separate from inference model. */
+inline Native::Llama::Context &NodeEmbeddingHandle() {
+  static Native::Llama::Context Handle = nullptr;
+  return Handle;
+}
+
 inline Native::Sqlite::DB &NodeMemoryHandle() {
   static Native::Sqlite::DB Handle = nullptr;
   return Handle;
@@ -120,7 +126,12 @@ inline FString SerializeQueryVectorResult(const TArray<FMemoryItem> &Memories) {
 // ---------------------------------------------------------------------------
 
 inline FString DefaultNodeMemoryPath() {
-  return FPaths::ProjectSavedDir() + TEXT("ForbocAI_Memory.sqlite");
+  return FPaths::ProjectSavedDir() +
+         TEXT("ForbocAI/vectors/forbocai_vectors.db");
+}
+
+inline FString DefaultEmbeddingModelPath() {
+  return FPaths::ProjectSavedDir() + TEXT("ForbocAI/models/all-MiniLM-L6-v2-Q4_K_M.gguf");
 }
 
 inline FString &NodeMemoryPathStorage() {
@@ -161,11 +172,25 @@ inline FAgentResponse BuildAgentResponse(const FNPCInstruction &Instruction) {
 // Arweave helpers
 // ---------------------------------------------------------------------------
 
+/**
+ * Upload a signed soul payload to Arweave.
+ *
+ * Matches TS SDK handler_ArweaveUpload behaviour:
+ *  - 3 attempts max (configurable via MaxRetries)
+ *  - Exponential backoff between retries: 250ms * 2^(attempt-1)
+ *  - 60-second HTTP timeout per attempt
+ *  - txId derivation order:
+ *      1. (UE-only enhancement) x-id response header
+ *      2. Response JSON ".id" field        (same as TS)
+ *      3. Generated hash fallback          (same as TS)
+ *  - On exhausted retries, resolves with error result (does NOT reject)
+ */
 inline func::AsyncResult<FArweaveUploadResult>
 UploadSignedSoul(const FArweaveUploadInstruction &Instruction,
-                 const FString &SignedPayload) {
+                 const FString &SignedPayload,
+                 int32 MaxRetries = 3) {
   return func::AsyncResult<FArweaveUploadResult>::create(
-      [Instruction, SignedPayload](
+      [Instruction, SignedPayload, MaxRetries](
           std::function<void(FArweaveUploadResult)> Resolve,
           std::function<void(std::string)> Reject) {
         const FString Url = !Instruction.UploadUrl.IsEmpty()
@@ -179,60 +204,151 @@ UploadSignedSoul(const FArweaveUploadInstruction &Instruction,
           return;
         }
 
-        TSharedRef<IHttpRequest, ESPMode::ThreadSafe> Request =
-            FHttpModule::Get().CreateRequest();
-        Request->SetURL(Url);
-        Request->SetVerb(TEXT("POST"));
-        Request->SetHeader(TEXT("Content-Type"),
-                           Instruction.ContentType.IsEmpty()
-                               ? TEXT("application/octet-stream")
-                               : Instruction.ContentType);
-        if (!Instruction.AuiAuthHeader.IsEmpty()) {
-          Request->SetHeader(TEXT("Authorization"), Instruction.AuiAuthHeader);
-        }
-        if (!Instruction.TagsJson.IsEmpty()) {
-          Request->SetHeader(TEXT("X-Forboc-Tags"), Instruction.TagsJson);
-        }
-        Request->SetContentAsString(Payload);
-        Request->OnProcessRequestComplete().BindLambda(
-            [Instruction, Resolve, Reject](FHttpRequestPtr Req,
-                                           FHttpResponsePtr Res,
-                                           bool bWasSuccessful) {
-              if (!bWasSuccessful || !Res.IsValid()) {
-                Reject("Arweave upload failed");
-                return;
-              }
+        // Shared mutable attempt counter, accessed from the async task.
+        struct FRetryState {
+          int32 Attempt = 0;
+          int32 MaxRetries = 3;
+          FString Url;
+          FString Payload;
+          FArweaveUploadInstruction Instruction;
+          std::function<void(FArweaveUploadResult)> Resolve;
+          std::function<void(std::string)> Reject;
+        };
 
-              FArweaveUploadResult Result;
-              Result.ResponseJson = Res->GetContentAsString();
-              Result.StatusCode = Res->GetResponseCode();
-              Result.bSuccess = Result.StatusCode >= 200 && Result.StatusCode < 300;
-              Result.Status = FString::FromInt(Result.StatusCode);
-              Result.Error = Result.bSuccess
-                                 ? TEXT("")
-                                 : FString::Printf(TEXT("upload_failed_status_%d"),
-                                                   Result.StatusCode);
-              Result.TxId = Res->GetHeader(TEXT("x-id"));
-              if (Result.TxId.IsEmpty()) {
-                TSharedPtr<FJsonObject> ResponseObject;
-                if (JsonInterop::ParseJsonObject(Result.ResponseJson, ResponseObject) &&
-                    ResponseObject.IsValid()) {
-                  Result.TxId = ResponseObject->GetStringField(TEXT("id"));
+        TSharedPtr<FRetryState> State = MakeShared<FRetryState>();
+        State->MaxRetries = MaxRetries;
+        State->Url = Url;
+        State->Payload = Payload;
+        State->Instruction = Instruction;
+        State->Resolve = Resolve;
+        State->Reject = Reject;
+
+        // Forward-declared so the lambda can reference itself for retries.
+        TSharedPtr<TFunction<void()>> TryOnce = MakeShared<TFunction<void()>>();
+        *TryOnce = [State, TryOnce]() {
+          State->Attempt += 1;
+
+          TSharedRef<IHttpRequest, ESPMode::ThreadSafe> Request =
+              FHttpModule::Get().CreateRequest();
+          Request->SetURL(State->Url);
+          Request->SetVerb(TEXT("POST"));
+          Request->SetTimeout(60.0f); // 60-second timeout (matches TS SDK)
+          Request->SetHeader(TEXT("Content-Type"),
+                             State->Instruction.ContentType.IsEmpty()
+                                 ? TEXT("application/octet-stream")
+                                 : State->Instruction.ContentType);
+          if (!State->Instruction.AuiAuthHeader.IsEmpty()) {
+            Request->SetHeader(TEXT("Authorization"),
+                               State->Instruction.AuiAuthHeader);
+          }
+          if (!State->Instruction.TagsJson.IsEmpty()) {
+            Request->SetHeader(TEXT("X-Forboc-Tags"),
+                               State->Instruction.TagsJson);
+          }
+          Request->SetContentAsString(State->Payload);
+
+          Request->OnProcessRequestComplete().BindLambda(
+              [State, TryOnce](FHttpRequestPtr Req, FHttpResponsePtr Res,
+                               bool bWasSuccessful) {
+                // --- Network-level failure (timeout, DNS, connection reset) ---
+                if (!bWasSuccessful || !Res.IsValid()) {
+                  if (State->Attempt < State->MaxRetries) {
+                    const float BackoffSec =
+                        0.250f *
+                        FMath::Pow(2.0f,
+                                   static_cast<float>(State->Attempt - 1));
+                    AsyncTask(ENamedThreads::AnyBackgroundThreadNormalTask,
+                              [State, TryOnce, BackoffSec]() {
+                                FPlatformProcess::Sleep(BackoffSec);
+                                AsyncTask(ENamedThreads::GameThread,
+                                          [TryOnce]() { (*TryOnce)(); });
+                              });
+                    return;
+                  }
+                  // All retries exhausted — resolve with error (not reject,
+                  // matching TS SDK).
+                  FArweaveUploadResult Result;
+                  Result.StatusCode = 0;
+                  Result.bSuccess = false;
+                  Result.Status = TEXT("0");
+                  Result.Error = TEXT("upload_request_failed:network_error");
+                  Result.TxId = FString::Printf(
+                      TEXT("ar_tx_failed_%lld"), FDateTime::UtcNow().ToUnixTimestamp());
+                  State->Resolve(Result);
+                  return;
                 }
-              }
-              if (Result.TxId.IsEmpty()) {
-                Result.TxId = LexToString(GetTypeHash(Result.ResponseJson));
-              }
-              Result.ArweaveUrl = !Instruction.GatewayUrl.IsEmpty()
-                                      ? Instruction.GatewayUrl + TEXT("/") +
-                                            Result.TxId
-                                      : TEXT("");
-              Resolve(Result);
-            });
-        Request->ProcessRequest();
+
+                // --- Got an HTTP response ---
+                FArweaveUploadResult Result;
+                Result.ResponseJson = Res->GetContentAsString();
+                Result.StatusCode = Res->GetResponseCode();
+                Result.bSuccess =
+                    Result.StatusCode >= 200 && Result.StatusCode < 300;
+                Result.Status = FString::FromInt(Result.StatusCode);
+                Result.Error =
+                    Result.bSuccess
+                        ? TEXT("")
+                        : FString::Printf(TEXT("upload_failed_status_%d"),
+                                          Result.StatusCode);
+
+                // Non-2xx: retry if attempts remain.
+                if (!Result.bSuccess &&
+                    State->Attempt < State->MaxRetries) {
+                  const float BackoffSec =
+                      0.250f *
+                      FMath::Pow(2.0f,
+                                 static_cast<float>(State->Attempt - 1));
+                  AsyncTask(ENamedThreads::AnyBackgroundThreadNormalTask,
+                            [State, TryOnce, BackoffSec]() {
+                              FPlatformProcess::Sleep(BackoffSec);
+                              AsyncTask(ENamedThreads::GameThread,
+                                        [TryOnce]() { (*TryOnce)(); });
+                            });
+                  return;
+                }
+
+                // --- Derive txId ---
+                // 1. UE-only enhancement: check x-id response header.
+                Result.TxId = Res->GetHeader(TEXT("x-id"));
+                // 2. Response JSON ".id" field (matches TS SDK).
+                if (Result.TxId.IsEmpty()) {
+                  TSharedPtr<FJsonObject> ResponseObject;
+                  if (JsonInterop::ParseJsonObject(Result.ResponseJson,
+                                                   ResponseObject) &&
+                      ResponseObject.IsValid()) {
+                    Result.TxId =
+                        ResponseObject->GetStringField(TEXT("id"));
+                  }
+                }
+                // 3. Generated fallback (matches TS SDK).
+                if (Result.TxId.IsEmpty()) {
+                  Result.TxId =
+                      LexToString(GetTypeHash(Result.ResponseJson));
+                }
+
+                Result.ArweaveUrl =
+                    !State->Instruction.GatewayUrl.IsEmpty()
+                        ? State->Instruction.GatewayUrl + TEXT("/") +
+                              Result.TxId
+                        : TEXT("");
+                State->Resolve(Result);
+              });
+          Request->ProcessRequest();
+        };
+
+        // Fire the first attempt.
+        (*TryOnce)();
       });
 }
 
+/**
+ * Download a soul payload from Arweave.
+ *
+ * Matches TS SDK handler_ArweaveDownload behaviour:
+ *  - 60-second HTTP timeout
+ *  - No retry (single attempt)
+ *  - Returns structured result with status/success/error fields
+ */
 inline func::AsyncResult<FArweaveDownloadResult>
 DownloadSoulPayload(const FArweaveDownloadInstruction &Instruction) {
   return func::AsyncResult<FArweaveDownloadResult>::create(
@@ -253,6 +369,7 @@ DownloadSoulPayload(const FArweaveDownloadInstruction &Instruction) {
             FHttpModule::Get().CreateRequest();
         Request->SetURL(Url);
         Request->SetVerb(TEXT("GET"));
+        Request->SetTimeout(60.0f); // 60-second timeout (matches TS SDK)
         Request->OnProcessRequestComplete().BindLambda(
             [Instruction, Resolve, Reject](FHttpRequestPtr Req,
                                            FHttpResponsePtr Res,

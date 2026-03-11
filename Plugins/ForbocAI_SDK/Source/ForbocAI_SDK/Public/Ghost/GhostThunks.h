@@ -132,6 +132,10 @@ stopGhostThunk(const FString &SessionId) {
   };
 }
 
+// Local ghost execution (no API). Defined in GhostModule.cpp (uses GhostInternal).
+ThunkAction<FGhostTestResult, FStoreState>
+runLocalGhostTestThunk(const FAgent &Agent, const FString &Scenario);
+
 inline ThunkAction<TArray<FGhostHistoryEntry>, FStoreState>
 getGhostHistoryThunk(int32 Limit = 10) {
   return [Limit](std::function<AnyAction(const AnyAction &)> Dispatch,

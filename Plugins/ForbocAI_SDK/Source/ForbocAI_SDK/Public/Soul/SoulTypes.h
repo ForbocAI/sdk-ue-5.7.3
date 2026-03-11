@@ -1,30 +1,32 @@
 #pragma once
 
+// clang-format off
 #include "CoreMinimal.h"
 #include "Memory/MemoryTypes.h"
-#include "NPC/AgentTypes.h"
+#include "NPC/NPCBaseTypes.h"
 #include "SoulTypes.generated.h"
+// clang-format on
 
 USTRUCT(BlueprintType)
 struct FArweaveUploadInstruction {
   GENERATED_BODY()
 
-  UPROPERTY(BlueprintReadOnly)
+  UPROPERTY(BlueprintReadOnly, Category = "Soul")
   FString UploadUrl;
 
-  UPROPERTY(BlueprintReadOnly)
+  UPROPERTY(BlueprintReadOnly, Category = "Soul")
   FString GatewayUrl;
 
-  UPROPERTY(BlueprintReadOnly)
+  UPROPERTY(BlueprintReadOnly, Category = "Soul")
   FString PayloadJson;
 
-  UPROPERTY(BlueprintReadOnly)
+  UPROPERTY(BlueprintReadOnly, Category = "Soul")
   FString ContentType;
 
-  UPROPERTY(BlueprintReadOnly)
+  UPROPERTY(BlueprintReadOnly, Category = "Soul")
   FString AuiAuthHeader;
 
-  UPROPERTY(BlueprintReadOnly)
+  UPROPERTY(BlueprintReadOnly, Category = "Soul")
   FString TagsJson;
 };
 
@@ -32,25 +34,25 @@ USTRUCT(BlueprintType)
 struct FArweaveUploadResult {
   GENERATED_BODY()
 
-  UPROPERTY(BlueprintReadOnly)
+  UPROPERTY(BlueprintReadOnly, Category = "Soul")
   FString TxId;
 
-  UPROPERTY(BlueprintReadOnly)
+  UPROPERTY(BlueprintReadOnly, Category = "Soul")
   FString Status;
 
-  UPROPERTY(BlueprintReadOnly)
+  UPROPERTY(BlueprintReadOnly, Category = "Soul")
   int32 StatusCode;
 
-  UPROPERTY(BlueprintReadOnly)
+  UPROPERTY(BlueprintReadOnly, Category = "Soul")
   bool bSuccess;
 
-  UPROPERTY(BlueprintReadOnly)
+  UPROPERTY(BlueprintReadOnly, Category = "Soul")
   FString Error;
 
-  UPROPERTY(BlueprintReadOnly)
+  UPROPERTY(BlueprintReadOnly, Category = "Soul")
   FString ArweaveUrl;
 
-  UPROPERTY(BlueprintReadOnly)
+  UPROPERTY(BlueprintReadOnly, Category = "Soul")
   FString ResponseJson;
 
   FArweaveUploadResult() : StatusCode(0), bSuccess(false) {}
@@ -60,16 +62,16 @@ USTRUCT(BlueprintType)
 struct FArweaveDownloadInstruction {
   GENERATED_BODY()
 
-  UPROPERTY(BlueprintReadOnly)
+  UPROPERTY(BlueprintReadOnly, Category = "Soul")
   FString TxId;
 
-  UPROPERTY(BlueprintReadOnly)
+  UPROPERTY(BlueprintReadOnly, Category = "Soul")
   FString ExpectedTxId;
 
-  UPROPERTY(BlueprintReadOnly)
+  UPROPERTY(BlueprintReadOnly, Category = "Soul")
   FString GatewayUrl;
 
-  UPROPERTY(BlueprintReadOnly)
+  UPROPERTY(BlueprintReadOnly, Category = "Soul")
   FString DownloadUrl;
 };
 
@@ -77,28 +79,28 @@ USTRUCT(BlueprintType)
 struct FArweaveDownloadResult {
   GENERATED_BODY()
 
-  UPROPERTY(BlueprintReadOnly)
+  UPROPERTY(BlueprintReadOnly, Category = "Soul")
   FString TxId;
 
-  UPROPERTY(BlueprintReadOnly)
+  UPROPERTY(BlueprintReadOnly, Category = "Soul")
   FString BodyJson;
 
-  UPROPERTY(BlueprintReadOnly)
+  UPROPERTY(BlueprintReadOnly, Category = "Soul")
   FString Payload;
 
-  UPROPERTY(BlueprintReadOnly)
+  UPROPERTY(BlueprintReadOnly, Category = "Soul")
   FString Status;
 
-  UPROPERTY(BlueprintReadOnly)
+  UPROPERTY(BlueprintReadOnly, Category = "Soul")
   int32 StatusCode;
 
-  UPROPERTY(BlueprintReadOnly)
+  UPROPERTY(BlueprintReadOnly, Category = "Soul")
   bool bSuccess;
 
-  UPROPERTY(BlueprintReadOnly)
+  UPROPERTY(BlueprintReadOnly, Category = "Soul")
   FString Error;
 
-  UPROPERTY(BlueprintReadOnly)
+  UPROPERTY(BlueprintReadOnly, Category = "Soul")
   FString ResponseJson;
 
   FArweaveDownloadResult() : StatusCode(0), bSuccess(false) {}
@@ -108,25 +110,25 @@ USTRUCT(BlueprintType)
 struct FSoul {
   GENERATED_BODY()
 
-  UPROPERTY(BlueprintReadOnly)
+  UPROPERTY(BlueprintReadOnly, Category = "Soul")
   FString Id;
 
-  UPROPERTY(BlueprintReadOnly)
+  UPROPERTY(BlueprintReadOnly, Category = "Soul")
   FString Version;
 
-  UPROPERTY(BlueprintReadOnly)
+  UPROPERTY(BlueprintReadOnly, Category = "Soul")
   FString Name;
 
-  UPROPERTY(BlueprintReadOnly)
+  UPROPERTY(BlueprintReadOnly, Category = "Soul")
   FString Persona;
 
-  UPROPERTY(BlueprintReadOnly)
+  UPROPERTY(BlueprintReadOnly, Category = "Soul")
   TArray<FMemoryItem> Memories;
 
-  UPROPERTY(BlueprintReadOnly)
+  UPROPERTY(BlueprintReadOnly, Category = "Soul")
   FAgentState State;
 
-  UPROPERTY(BlueprintReadOnly)
+  UPROPERTY(BlueprintReadOnly, Category = "Soul")
   FString Signature;
 };
 
@@ -134,13 +136,13 @@ USTRUCT(BlueprintType)
 struct FSoulExportPhase1Request {
   GENERATED_BODY()
 
-  UPROPERTY(BlueprintReadOnly)
+  UPROPERTY(BlueprintReadOnly, Category = "Soul")
   FString NpcIdRef;
 
-  UPROPERTY(BlueprintReadOnly)
+  UPROPERTY(BlueprintReadOnly, Category = "Soul")
   FString Persona;
 
-  UPROPERTY(BlueprintReadOnly)
+  UPROPERTY(BlueprintReadOnly, Category = "Soul")
   FAgentState NpcState;
 };
 
@@ -148,13 +150,13 @@ USTRUCT(BlueprintType)
 struct FSoulExportPhase1Response {
   GENERATED_BODY()
 
-  UPROPERTY(BlueprintReadOnly)
+  UPROPERTY(BlueprintReadOnly, Category = "Soul")
   FArweaveUploadInstruction se1Instruction;
 
-  UPROPERTY(BlueprintReadOnly)
+  UPROPERTY(BlueprintReadOnly, Category = "Soul")
   FString se1SignedPayload;
 
-  UPROPERTY(BlueprintReadOnly)
+  UPROPERTY(BlueprintReadOnly, Category = "Soul")
   FString se1Signature;
 };
 
@@ -162,13 +164,13 @@ USTRUCT(BlueprintType)
 struct FSoulExportConfirmRequest {
   GENERATED_BODY()
 
-  UPROPERTY(BlueprintReadOnly)
+  UPROPERTY(BlueprintReadOnly, Category = "Soul")
   FArweaveUploadResult secUploadResult;
 
-  UPROPERTY(BlueprintReadOnly)
+  UPROPERTY(BlueprintReadOnly, Category = "Soul")
   FString secSignedPayload;
 
-  UPROPERTY(BlueprintReadOnly)
+  UPROPERTY(BlueprintReadOnly, Category = "Soul")
   FString secSignature;
 };
 
@@ -176,16 +178,16 @@ USTRUCT(BlueprintType)
 struct FSoulExportResponse {
   GENERATED_BODY()
 
-  UPROPERTY(BlueprintReadOnly)
+  UPROPERTY(BlueprintReadOnly, Category = "Soul")
   FString TxId;
 
-  UPROPERTY(BlueprintReadOnly)
+  UPROPERTY(BlueprintReadOnly, Category = "Soul")
   FString ArweaveUrl;
 
-  UPROPERTY(BlueprintReadOnly)
+  UPROPERTY(BlueprintReadOnly, Category = "Soul")
   FString Signature;
 
-  UPROPERTY(BlueprintReadOnly)
+  UPROPERTY(BlueprintReadOnly, Category = "Soul")
   FSoul Soul;
 };
 
@@ -193,7 +195,7 @@ USTRUCT(BlueprintType)
 struct FSoulImportPhase1Request {
   GENERATED_BODY()
 
-  UPROPERTY(BlueprintReadOnly)
+  UPROPERTY(BlueprintReadOnly, Category = "Soul")
   FString TxIdRef;
 };
 
@@ -201,7 +203,7 @@ USTRUCT(BlueprintType)
 struct FSoulImportPhase1Response {
   GENERATED_BODY()
 
-  UPROPERTY(BlueprintReadOnly)
+  UPROPERTY(BlueprintReadOnly, Category = "Soul")
   FArweaveDownloadInstruction si1Instruction;
 };
 
@@ -209,10 +211,10 @@ USTRUCT(BlueprintType)
 struct FSoulImportConfirmRequest {
   GENERATED_BODY()
 
-  UPROPERTY(BlueprintReadOnly)
+  UPROPERTY(BlueprintReadOnly, Category = "Soul")
   FString sicTxId;
 
-  UPROPERTY(BlueprintReadOnly)
+  UPROPERTY(BlueprintReadOnly, Category = "Soul")
   FArweaveDownloadResult sicDownloadResult;
 };
 
@@ -220,13 +222,13 @@ USTRUCT(BlueprintType)
 struct FSoulExportResult {
   GENERATED_BODY()
 
-  UPROPERTY(BlueprintReadOnly)
+  UPROPERTY(BlueprintReadOnly, Category = "Soul")
   FString TxId;
 
-  UPROPERTY(BlueprintReadOnly)
+  UPROPERTY(BlueprintReadOnly, Category = "Soul")
   FString Url;
 
-  UPROPERTY(BlueprintReadOnly)
+  UPROPERTY(BlueprintReadOnly, Category = "Soul")
   FSoul Soul;
 };
 
@@ -234,19 +236,19 @@ USTRUCT(BlueprintType)
 struct FSoulListItem {
   GENERATED_BODY()
 
-  UPROPERTY(BlueprintReadOnly)
+  UPROPERTY(BlueprintReadOnly, Category = "Soul")
   FString TxId;
 
-  UPROPERTY(BlueprintReadOnly)
+  UPROPERTY(BlueprintReadOnly, Category = "Soul")
   FString Name;
 
-  UPROPERTY(BlueprintReadOnly)
+  UPROPERTY(BlueprintReadOnly, Category = "Soul")
   FString NpcId;
 
-  UPROPERTY(BlueprintReadOnly)
+  UPROPERTY(BlueprintReadOnly, Category = "Soul")
   FString ExportedAt;
 
-  UPROPERTY(BlueprintReadOnly)
+  UPROPERTY(BlueprintReadOnly, Category = "Soul")
   FString ArweaveUrl;
 };
 
@@ -254,7 +256,7 @@ USTRUCT(BlueprintType)
 struct FSoulListResponse {
   GENERATED_BODY()
 
-  UPROPERTY(BlueprintReadOnly)
+  UPROPERTY(BlueprintReadOnly, Category = "Soul")
   TArray<FSoulListItem> Souls;
 };
 
@@ -262,10 +264,10 @@ USTRUCT(BlueprintType)
 struct FSoulVerifyResult {
   GENERATED_BODY()
 
-  UPROPERTY(BlueprintReadOnly)
+  UPROPERTY(BlueprintReadOnly, Category = "Soul")
   bool bValid;
 
-  UPROPERTY(BlueprintReadOnly)
+  UPROPERTY(BlueprintReadOnly, Category = "Soul")
   FString Reason;
 
   FSoulVerifyResult() : bValid(false) {}
@@ -273,9 +275,9 @@ struct FSoulVerifyResult {
 
 namespace TypeFactory {
 
-inline FSoul Soul(const FString &Id, const FString &Version, const FString &Name,
-                  const FString &Persona, const FAgentState &State,
-                  const TArray<FMemoryItem> &Memories,
+inline FSoul Soul(const FString &Id, const FString &Version,
+                  const FString &Name, const FString &Persona,
+                  const FAgentState &State, const TArray<FMemoryItem> &Memories,
                   const FString &Signature = TEXT("")) {
   FSoul Value;
   Value.Id = Id;
@@ -309,7 +311,8 @@ SoulExportConfirmRequest(const FArweaveUploadResult &UploadResult,
   return Value;
 }
 
-inline FSoulImportPhase1Request SoulImportPhase1Request(const FString &TxIdRef) {
+inline FSoulImportPhase1Request
+SoulImportPhase1Request(const FString &TxIdRef) {
   FSoulImportPhase1Request Value;
   Value.TxIdRef = TxIdRef;
   return Value;

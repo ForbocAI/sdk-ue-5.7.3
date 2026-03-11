@@ -9,7 +9,7 @@
 #include "Cortex/CortexTypes.h"
 #include "Ghost/GhostTypes.h"
 #include "Memory/MemoryTypes.h"
-#include "NPC/AgentTypes.h"
+#include "NPC/NPCBaseTypes.h"
 #include "Protocol/ProtocolRequestTypes.h"
 #include "Protocol/ProtocolTypes.h"
 #include "Soul/SoulTypes.h"

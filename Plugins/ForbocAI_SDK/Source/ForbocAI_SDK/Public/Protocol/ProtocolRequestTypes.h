@@ -1,20 +1,22 @@
 #pragma once
 
+// clang-format off
 #include "CoreMinimal.h"
 #include "Protocol/ProtocolTypes.h"
 #include "ProtocolRequestTypes.generated.h"
+// clang-format on
 
 USTRUCT(BlueprintType)
 struct FNPCActorInfo {
   GENERATED_BODY()
 
-  UPROPERTY(BlueprintReadOnly)
+  UPROPERTY(BlueprintReadOnly, Category = "Protocol")
   FString NpcId;
 
-  UPROPERTY(BlueprintReadOnly)
+  UPROPERTY(BlueprintReadOnly, Category = "Protocol")
   FString Persona;
 
-  UPROPERTY(BlueprintReadOnly)
+  UPROPERTY(BlueprintReadOnly, Category = "Protocol")
   FAgentState Data;
 };
 
@@ -22,40 +24,40 @@ USTRUCT(BlueprintType)
 struct FNPCProcessTape {
   GENERATED_BODY()
 
-  UPROPERTY(BlueprintReadOnly)
+  UPROPERTY(BlueprintReadOnly, Category = "Protocol")
   FString Observation;
 
-  UPROPERTY(BlueprintReadOnly)
+  UPROPERTY(BlueprintReadOnly, Category = "Protocol")
   FString ContextJson;
 
-  UPROPERTY(BlueprintReadOnly)
+  UPROPERTY(BlueprintReadOnly, Category = "Protocol")
   FAgentState NpcState;
 
-  UPROPERTY(BlueprintReadOnly)
+  UPROPERTY(BlueprintReadOnly, Category = "Protocol")
   FString Persona;
 
-  UPROPERTY(BlueprintReadOnly)
+  UPROPERTY(BlueprintReadOnly, Category = "Protocol")
   bool bHasActor;
 
-  UPROPERTY(BlueprintReadOnly)
+  UPROPERTY(BlueprintReadOnly, Category = "Protocol")
   FNPCActorInfo Actor;
 
-  UPROPERTY(BlueprintReadOnly)
+  UPROPERTY(BlueprintReadOnly, Category = "Protocol")
   TArray<FRecalledMemory> Memories;
 
-  UPROPERTY(BlueprintReadOnly)
+  UPROPERTY(BlueprintReadOnly, Category = "Protocol")
   FString Prompt;
 
-  UPROPERTY(BlueprintReadOnly)
+  UPROPERTY(BlueprintReadOnly, Category = "Protocol")
   FCortexConfig Constraints;
 
-  UPROPERTY(BlueprintReadOnly)
+  UPROPERTY(BlueprintReadOnly, Category = "Protocol")
   FString GeneratedOutput;
 
-  UPROPERTY(BlueprintReadOnly)
+  UPROPERTY(BlueprintReadOnly, Category = "Protocol")
   FString RulesetId;
 
-  UPROPERTY(BlueprintReadOnly)
+  UPROPERTY(BlueprintReadOnly, Category = "Protocol")
   bool bVectorQueried;
 
   FNPCProcessTape() : bHasActor(false), bVectorQueried(false) {}
@@ -65,13 +67,13 @@ USTRUCT(BlueprintType)
 struct FNPCProcessRequest {
   GENERATED_BODY()
 
-  UPROPERTY(BlueprintReadOnly)
+  UPROPERTY(BlueprintReadOnly, Category = "Protocol")
   FNPCProcessTape Tape;
 
-  UPROPERTY(BlueprintReadOnly)
+  UPROPERTY(BlueprintReadOnly, Category = "Protocol")
   FString LastResultJson;
 
-  UPROPERTY(BlueprintReadOnly)
+  UPROPERTY(BlueprintReadOnly, Category = "Protocol")
   bool bHasLastResult;
 
   FNPCProcessRequest() : bHasLastResult(false) {}
@@ -81,10 +83,10 @@ USTRUCT(BlueprintType)
 struct FNPCProcessResponse {
   GENERATED_BODY()
 
-  UPROPERTY(BlueprintReadOnly)
+  UPROPERTY(BlueprintReadOnly, Category = "Protocol")
   FNPCInstruction Instruction;
 
-  UPROPERTY(BlueprintReadOnly)
+  UPROPERTY(BlueprintReadOnly, Category = "Protocol")
   FNPCProcessTape Tape;
 };
 
@@ -92,13 +94,13 @@ USTRUCT(BlueprintType)
 struct FDirectiveRequest {
   GENERATED_BODY()
 
-  UPROPERTY(BlueprintReadOnly)
+  UPROPERTY(BlueprintReadOnly, Category = "Protocol")
   FString Observation;
 
-  UPROPERTY(BlueprintReadOnly)
+  UPROPERTY(BlueprintReadOnly, Category = "Protocol")
   FAgentState NpcState;
 
-  UPROPERTY(BlueprintReadOnly)
+  UPROPERTY(BlueprintReadOnly, Category = "Protocol")
   FString ContextJson;
 };
 
@@ -106,7 +108,7 @@ USTRUCT(BlueprintType)
 struct FDirectiveResponse {
   GENERATED_BODY()
 
-  UPROPERTY(BlueprintReadOnly)
+  UPROPERTY(BlueprintReadOnly, Category = "Protocol")
   FMemoryRecallInstruction MemoryRecall;
 };
 
@@ -114,16 +116,16 @@ USTRUCT(BlueprintType)
 struct FContextRequest {
   GENERATED_BODY()
 
-  UPROPERTY(BlueprintReadOnly)
+  UPROPERTY(BlueprintReadOnly, Category = "Protocol")
   TArray<FRecalledMemory> Memories;
 
-  UPROPERTY(BlueprintReadOnly)
+  UPROPERTY(BlueprintReadOnly, Category = "Protocol")
   FString Observation;
 
-  UPROPERTY(BlueprintReadOnly)
+  UPROPERTY(BlueprintReadOnly, Category = "Protocol")
   FAgentState NpcState;
 
-  UPROPERTY(BlueprintReadOnly)
+  UPROPERTY(BlueprintReadOnly, Category = "Protocol")
   FString Persona;
 };
 
@@ -131,10 +133,10 @@ USTRUCT(BlueprintType)
 struct FContextResponse {
   GENERATED_BODY()
 
-  UPROPERTY(BlueprintReadOnly)
+  UPROPERTY(BlueprintReadOnly, Category = "Protocol")
   FString Prompt;
 
-  UPROPERTY(BlueprintReadOnly)
+  UPROPERTY(BlueprintReadOnly, Category = "Protocol")
   FCortexConfig Constraints;
 };
 
@@ -142,13 +144,13 @@ USTRUCT(BlueprintType)
 struct FVerdictRequest {
   GENERATED_BODY()
 
-  UPROPERTY(BlueprintReadOnly)
+  UPROPERTY(BlueprintReadOnly, Category = "Protocol")
   FString GeneratedOutput;
 
-  UPROPERTY(BlueprintReadOnly)
+  UPROPERTY(BlueprintReadOnly, Category = "Protocol")
   FString Observation;
 
-  UPROPERTY(BlueprintReadOnly)
+  UPROPERTY(BlueprintReadOnly, Category = "Protocol")
   FAgentState NpcState;
 };
 
@@ -156,25 +158,25 @@ USTRUCT(BlueprintType)
 struct FVerdictResponse {
   GENERATED_BODY()
 
-  UPROPERTY(BlueprintReadOnly)
+  UPROPERTY(BlueprintReadOnly, Category = "Protocol")
   bool bValid;
 
-  UPROPERTY(BlueprintReadOnly)
+  UPROPERTY(BlueprintReadOnly, Category = "Protocol")
   FString Signature;
 
-  UPROPERTY(BlueprintReadOnly)
+  UPROPERTY(BlueprintReadOnly, Category = "Protocol")
   TArray<FMemoryStoreInstruction> MemoryStore;
 
-  UPROPERTY(BlueprintReadOnly)
+  UPROPERTY(BlueprintReadOnly, Category = "Protocol")
   FAgentState StateDelta;
 
-  UPROPERTY(BlueprintReadOnly)
+  UPROPERTY(BlueprintReadOnly, Category = "Protocol")
   FAgentAction Action;
 
-  UPROPERTY(BlueprintReadOnly)
+  UPROPERTY(BlueprintReadOnly, Category = "Protocol")
   bool bHasAction;
 
-  UPROPERTY(BlueprintReadOnly)
+  UPROPERTY(BlueprintReadOnly, Category = "Protocol")
   FString Dialogue;
 
   FVerdictResponse() : bValid(true), bHasAction(false) {}

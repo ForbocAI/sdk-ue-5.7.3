@@ -37,37 +37,104 @@ initNodeCortexThunk(const FString &ModelPath) {
     return func::AsyncResult<FCortexStatus>::create(
         [ModelPath, Dispatch](std::function<void(FCortexStatus)> Resolve,
                               std::function<void(std::string)> Reject) {
-          Async(EAsyncExecution::Thread, [ModelPath, Dispatch, Resolve,
-                                          Reject]() {
-            Native::Llama::Context &Handle = detail::NodeCortexHandle();
-            if (Handle) {
-              Native::Llama::FreeModel(Handle);
-              Handle = nullptr;
+#if WITH_FORBOC_NATIVE
+          // Map known model ids to Hugging Face GGUF URLs, mirroring TS SDK.
+          const FString DefaultModelId = TEXT("smollm2-135m");
+          const FString SmolUrl =
+              TEXT("https://huggingface.co/bartowski/SmolLM2-135M-Instruct-"
+                   "GGUF/resolve/main/SmolLM2-135M-Instruct-Q4_K_M.gguf");
+          const FString Llama3Url =
+              TEXT("https://huggingface.co/lmstudio-community/Meta-Llama-3-8B-"
+                   "Instruct-GGUF/resolve/main/Meta-Llama-3-8B-Instruct-"
+                   "Q4_K_M.gguf");
+
+          FString EffectiveModel = ModelPath.IsEmpty() ? DefaultModelId : ModelPath;
+          FString Url;
+          if (EffectiveModel.Equals(TEXT("smollm2-135m"),
+                                    ESearchCase::IgnoreCase)) {
+            Url = SmolUrl;
+          } else if (EffectiveModel.Equals(TEXT("llama3-8b"),
+                                           ESearchCase::IgnoreCase)) {
+            Url = Llama3Url;
+          }
+
+          const FString ModelsDir =
+              FPaths::ProjectSavedDir() + TEXT("ForbocAI/models/");
+          const FString FileName =
+              Url.IsEmpty() ? EffectiveModel : FPaths::GetCleanFilename(Url);
+          const FString LocalPath =
+              FPaths::ConvertRelativePathToFull(ModelsDir / FileName);
+
+          auto LoadOnWorker = [LocalPath, EffectiveModel, Dispatch, Resolve,
+                               Reject]() {
+            Async(EAsyncExecution::Thread,
+                  [LocalPath, EffectiveModel, Dispatch, Resolve, Reject]() {
+                    Native::Llama::Context &Handle = detail::NodeCortexHandle();
+                    if (Handle) {
+                      Native::Llama::FreeModel(Handle);
+                      Handle = nullptr;
+                    }
+
+                    Handle = Native::Llama::LoadModel(LocalPath);
+
+                    FCortexStatus Status;
+                    Status.Id = TEXT("local-llama");
+                    Status.Model = EffectiveModel;
+                    Status.bReady = (Handle != nullptr);
+                    Status.Engine = ECortexEngine::NodeLlamaCpp;
+                    Status.DownloadProgress = Status.bReady ? 1.0f : 0.0f;
+                    Status.Error = Status.bReady
+                                       ? TEXT("")
+                                       : TEXT("Failed to load model");
+
+                    AsyncTask(ENamedThreads::GameThread,
+                              [Dispatch, Resolve, Reject, Status]() {
+                                if (Status.bReady) {
+                                  Dispatch(CortexSlice::Actions::
+                                               CortexInitFulfilled(Status));
+                                  Resolve(Status);
+                                } else {
+                                  Dispatch(CortexSlice::Actions::
+                                               CortexInitRejected(Status.Error));
+                                  Reject(TCHAR_TO_UTF8(*Status.Error));
+                                }
+                              });
+                  });
+          };
+
+          // If we know a URL and the file is missing, download first.
+          if (!Url.IsEmpty() && !FPaths::FileExists(LocalPath)) {
+            Native::File::DownloadBinary(Url, LocalPath)
+                .then([LoadOnWorker](const FString &) mutable { LoadOnWorker(); })
+                .catch_([Dispatch, Reject](std::string Error) mutable {
+                  const FString Msg = Error.empty()
+                                          ? TEXT("Model download failed")
+                                          : FString(UTF8_TO_TCHAR(Error.c_str()));
+                  Dispatch(CortexSlice::Actions::CortexInitRejected(Msg));
+                  Reject(TCHAR_TO_UTF8(*Msg));
+                })
+                .execute();
+          } else {
+            // Either local path already exists, or user passed a custom path.
+            if (!FPaths::FileExists(LocalPath) && Url.IsEmpty()) {
+              // Custom path without URL: use directly.
+              LoadOnWorker();
+            } else {
+              LoadOnWorker();
             }
-
-            Handle = Native::Llama::LoadModel(ModelPath);
-
-            FCortexStatus Status;
-            Status.Id = TEXT("local-llama");
-            Status.Model = ModelPath;
-            Status.bReady = (Handle != nullptr);
-            Status.Engine = ECortexEngine::NodeLlamaCpp;
-            Status.DownloadProgress = Status.bReady ? 1.0f : 0.0f;
-            Status.Error =
-                Status.bReady ? TEXT("") : TEXT("Failed to load model");
-
-            AsyncTask(ENamedThreads::GameThread, [Dispatch, Resolve, Reject,
-                                                  Status]() {
-              if (Status.bReady) {
-                Dispatch(CortexSlice::Actions::CortexInitFulfilled(Status));
-                Resolve(Status);
-              } else {
-                Dispatch(
-                    CortexSlice::Actions::CortexInitRejected(Status.Error));
-                Reject(TCHAR_TO_UTF8(*Status.Error));
-              }
-            });
-          });
+          }
+#else
+          static_cast<void>(ModelPath);
+          FCortexStatus Status;
+          Status.Id = TEXT("local-llama");
+          Status.Model = ModelPath;
+          Status.bReady = false;
+          Status.Engine = ECortexEngine::NodeLlamaCpp;
+          Status.DownloadProgress = 0.0f;
+          Status.Error = TEXT("Native cortex not available on this build");
+          Dispatch(CortexSlice::Actions::CortexInitRejected(Status.Error));
+          Reject(TCHAR_TO_UTF8(*Status.Error));
+#endif
         });
   };
 }
@@ -123,7 +190,7 @@ generateNodeEmbeddingThunk(const FString &Text) {
                std::function<void(std::string)> Reject) {
           Async(EAsyncExecution::Thread, [Text, Resolve]() {
             TArray<float> Embedding =
-                Native::Llama::Embed(detail::NodeCortexHandle(), Text);
+                Native::Llama::Embed(detail::NodeEmbeddingHandle(), Text);
             AsyncTask(ENamedThreads::GameThread,
                       [Resolve, Embedding]() { Resolve(Embedding); });
           });

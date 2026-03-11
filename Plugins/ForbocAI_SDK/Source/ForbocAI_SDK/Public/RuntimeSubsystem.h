@@ -11,6 +11,8 @@ DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FOnNPCActionReceived, FAgentAction,
                                             Action);
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FOnMessageReceived, FString,
                                             Message);
+DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FOnTTSRequested, FString,
+                                            Message);
 DECLARE_DYNAMIC_MULTICAST_DELEGATE(FOnTypingStart);
 DECLARE_DYNAMIC_MULTICAST_DELEGATE(FOnTypingEnd);
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FOnSoulExportComplete, FString,
@@ -35,7 +37,7 @@ public:
    * Initializes the SDK with the provided configuration.
    */
   UFUNCTION(BlueprintCallable, Category = "Forboc AI|SDK")
-  void Init(FString ApiKey, FString ApiUrl = TEXT("http://localhost:8080"));
+  void Init(FString ApiKey, FString ApiUrl = TEXT("https://api.forboc.ai"));
 
   /**
    * Triggers the recursive protocol loop for an NPC.
@@ -56,6 +58,37 @@ public:
   UFUNCTION(BlueprintPure, Category = "Forboc AI|NPC")
   FAgentState GetNPCState(FString NpcId) const;
 
+  /**
+   * Gets the active NPC id, if any.
+   */
+  UFUNCTION(BlueprintPure, Category = "Forboc AI|NPC")
+  FString GetActiveNPCId() const;
+
+  /**
+   * Gets the active NPC internal state, if any.
+   */
+  UFUNCTION(BlueprintPure, Category = "Forboc AI|NPC")
+  bool GetActiveNPC(FNPCInternalState &OutNPC) const;
+
+  /**
+   * Gets the last recalled memories for the active NPC turn.
+   * Wrapper over the memory slice selector for Blueprint consumers.
+   */
+  UFUNCTION(BlueprintPure, Category = "Forboc AI|Memory")
+  TArray<FMemoryItem> GetLastRecalledMemories() const;
+
+  /**
+   * Gets the last bridge validation result, if present.
+   */
+  UFUNCTION(BlueprintPure, Category = "Forboc AI|Bridge")
+  bool GetLastBridgeValidation(FValidationResult &OutResult) const;
+
+  /**
+   * Gets the last imported Soul, if present.
+   */
+  UFUNCTION(BlueprintPure, Category = "Forboc AI|Soul")
+  bool GetLastImportedSoul(FSoul &OutSoul) const;
+
   /** Delegate triggered when a new action is received from the NPC. */
   UPROPERTY(BlueprintAssignable, Category = "Forboc AI|Events")
   FOnNPCActionReceived OnNPCActionReceived;
@@ -63,6 +96,10 @@ public:
   /** Delegate triggered when finalized dialogue is produced for an NPC turn. */
   UPROPERTY(BlueprintAssignable, Category = "Forboc AI|Events")
   FOnMessageReceived OnMessageReceived;
+
+  /** Delegate triggered when finalized dialogue is ready for TTS consumers. */
+  UPROPERTY(BlueprintAssignable, Category = "Forboc AI|Events")
+  FOnTTSRequested OnTTSRequested;
 
   /** Delegate triggered when an NPC turn begins asynchronous processing. */
   UPROPERTY(BlueprintAssignable, Category = "Forboc AI|Events")

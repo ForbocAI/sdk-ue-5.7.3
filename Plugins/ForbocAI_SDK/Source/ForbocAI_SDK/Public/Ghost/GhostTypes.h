@@ -1,32 +1,34 @@
 #pragma once
 
+// clang-format off
 #include "CoreMinimal.h"
-#include "NPC/AgentTypes.h"
+#include "NPC/NPCBaseTypes.h"
 #include "GhostTypes.generated.h"
+// clang-format on
 
 USTRUCT(BlueprintType)
 struct FGhostTestResult {
   GENERATED_BODY()
 
-  UPROPERTY(BlueprintReadOnly)
+  UPROPERTY(BlueprintReadOnly, Category = "Ghost")
   FString Scenario;
 
-  UPROPERTY(BlueprintReadOnly)
+  UPROPERTY(BlueprintReadOnly, Category = "Ghost")
   bool bPassed;
 
-  UPROPERTY(BlueprintReadOnly)
+  UPROPERTY(BlueprintReadOnly, Category = "Ghost")
   FString ActualResponse;
 
-  UPROPERTY(BlueprintReadOnly)
+  UPROPERTY(BlueprintReadOnly, Category = "Ghost")
   FString ErrorMessage;
 
-  UPROPERTY(BlueprintReadOnly)
+  UPROPERTY(BlueprintReadOnly, Category = "Ghost")
   FString Screenshot;
 
-  UPROPERTY(BlueprintReadOnly)
+  UPROPERTY(BlueprintReadOnly, Category = "Ghost")
   int32 Iteration;
 
-  UPROPERTY(BlueprintReadOnly)
+  UPROPERTY(BlueprintReadOnly, Category = "Ghost")
   int64 Duration;
 
   FGhostTestResult() : bPassed(false), Iteration(0), Duration(0) {}
@@ -36,22 +38,22 @@ USTRUCT(BlueprintType)
 struct FGhostHistoryEntry {
   GENERATED_BODY()
 
-  UPROPERTY(BlueprintReadOnly)
+  UPROPERTY(BlueprintReadOnly, Category = "Ghost")
   FString SessionId;
 
-  UPROPERTY(BlueprintReadOnly)
+  UPROPERTY(BlueprintReadOnly, Category = "Ghost")
   FString TestSuite;
 
-  UPROPERTY(BlueprintReadOnly)
+  UPROPERTY(BlueprintReadOnly, Category = "Ghost")
   int64 StartedAt;
 
-  UPROPERTY(BlueprintReadOnly)
+  UPROPERTY(BlueprintReadOnly, Category = "Ghost")
   int64 CompletedAt;
 
-  UPROPERTY(BlueprintReadOnly)
+  UPROPERTY(BlueprintReadOnly, Category = "Ghost")
   FString Status;
 
-  UPROPERTY(BlueprintReadOnly)
+  UPROPERTY(BlueprintReadOnly, Category = "Ghost")
   float PassRate;
 
   FGhostHistoryEntry() : StartedAt(0), CompletedAt(0), PassRate(0.0f) {}
@@ -61,10 +63,10 @@ USTRUCT(BlueprintType)
 struct FGhostRunResponse {
   GENERATED_BODY()
 
-  UPROPERTY(BlueprintReadOnly)
+  UPROPERTY(BlueprintReadOnly, Category = "Ghost")
   FString SessionId;
 
-  UPROPERTY(BlueprintReadOnly)
+  UPROPERTY(BlueprintReadOnly, Category = "Ghost")
   FString RunStatus;
 };
 
@@ -72,10 +74,10 @@ USTRUCT(BlueprintType)
 struct FGhostRunRequest {
   GENERATED_BODY()
 
-  UPROPERTY(BlueprintReadOnly)
+  UPROPERTY(BlueprintReadOnly, Category = "Ghost")
   FString TestSuite;
 
-  UPROPERTY(BlueprintReadOnly)
+  UPROPERTY(BlueprintReadOnly, Category = "Ghost")
   int32 Duration;
 
   FGhostRunRequest() : Duration(300) {}
@@ -85,28 +87,28 @@ USTRUCT(BlueprintType)
 struct FGhostConfig {
   GENERATED_BODY()
 
-  UPROPERTY(BlueprintReadOnly)
+  UPROPERTY(BlueprintReadOnly, Category = "Ghost")
   FAgent Agent;
 
-  UPROPERTY(BlueprintReadOnly)
+  UPROPERTY(BlueprintReadOnly, Category = "Ghost")
   TArray<FString> Scenarios;
 
-  UPROPERTY(BlueprintReadOnly)
+  UPROPERTY(BlueprintReadOnly, Category = "Ghost")
   int32 MaxIterations;
 
-  UPROPERTY(BlueprintReadOnly)
+  UPROPERTY(BlueprintReadOnly, Category = "Ghost")
   bool bVerbose;
 
-  UPROPERTY(BlueprintReadOnly)
+  UPROPERTY(BlueprintReadOnly, Category = "Ghost")
   FString ApiUrl;
 
-  UPROPERTY(BlueprintReadOnly)
+  UPROPERTY(BlueprintReadOnly, Category = "Ghost")
   FString ApiKey;
 
-  UPROPERTY(BlueprintReadOnly)
+  UPROPERTY(BlueprintReadOnly, Category = "Ghost")
   FString TestSuite;
 
-  UPROPERTY(BlueprintReadOnly)
+  UPROPERTY(BlueprintReadOnly, Category = "Ghost")
   int32 Duration;
 
   FGhostConfig() : MaxIterations(100), bVerbose(false), Duration(300) {}
@@ -116,40 +118,40 @@ USTRUCT(BlueprintType)
 struct FGhostTestReport {
   GENERATED_BODY()
 
-  UPROPERTY(BlueprintReadOnly)
+  UPROPERTY(BlueprintReadOnly, Category = "Ghost")
   FString SessionId;
 
-  UPROPERTY(BlueprintReadOnly)
+  UPROPERTY(BlueprintReadOnly, Category = "Ghost")
   FGhostConfig Config;
 
-  UPROPERTY(BlueprintReadOnly)
+  UPROPERTY(BlueprintReadOnly, Category = "Ghost")
   TArray<FGhostTestResult> Results;
 
-  UPROPERTY(BlueprintReadOnly)
+  UPROPERTY(BlueprintReadOnly, Category = "Ghost")
   int32 TotalTests;
 
-  UPROPERTY(BlueprintReadOnly)
+  UPROPERTY(BlueprintReadOnly, Category = "Ghost")
   int32 PassedTests;
 
-  UPROPERTY(BlueprintReadOnly)
+  UPROPERTY(BlueprintReadOnly, Category = "Ghost")
   int32 FailedTests;
 
-  UPROPERTY(BlueprintReadOnly)
+  UPROPERTY(BlueprintReadOnly, Category = "Ghost")
   int32 SkippedTests;
 
-  UPROPERTY(BlueprintReadOnly)
+  UPROPERTY(BlueprintReadOnly, Category = "Ghost")
   int64 Duration;
 
-  UPROPERTY(BlueprintReadOnly)
+  UPROPERTY(BlueprintReadOnly, Category = "Ghost")
   float Coverage;
 
-  UPROPERTY(BlueprintReadOnly)
+  UPROPERTY(BlueprintReadOnly, Category = "Ghost")
   TMap<FString, float> Metrics;
 
-  UPROPERTY(BlueprintReadOnly)
+  UPROPERTY(BlueprintReadOnly, Category = "Ghost")
   float SuccessRate;
 
-  UPROPERTY(BlueprintReadOnly)
+  UPROPERTY(BlueprintReadOnly, Category = "Ghost")
   FString Summary;
 
   FGhostTestReport()
@@ -168,22 +170,22 @@ USTRUCT(BlueprintType)
 struct FGhostStatusResponse {
   GENERATED_BODY()
 
-  UPROPERTY(BlueprintReadOnly)
+  UPROPERTY(BlueprintReadOnly, Category = "Ghost")
   FString GhostSessionId;
 
-  UPROPERTY(BlueprintReadOnly)
+  UPROPERTY(BlueprintReadOnly, Category = "Ghost")
   FString GhostStatus;
 
-  UPROPERTY(BlueprintReadOnly)
+  UPROPERTY(BlueprintReadOnly, Category = "Ghost")
   float GhostProgress;
 
-  UPROPERTY(BlueprintReadOnly)
+  UPROPERTY(BlueprintReadOnly, Category = "Ghost")
   int64 GhostStartedAt;
 
-  UPROPERTY(BlueprintReadOnly)
+  UPROPERTY(BlueprintReadOnly, Category = "Ghost")
   int32 GhostDuration;
 
-  UPROPERTY(BlueprintReadOnly)
+  UPROPERTY(BlueprintReadOnly, Category = "Ghost")
   TArray<FString> GhostErrors;
 
   FGhostStatusResponse()
@@ -194,19 +196,19 @@ USTRUCT(BlueprintType)
 struct FGhostResultRecord {
   GENERATED_BODY()
 
-  UPROPERTY(BlueprintReadOnly)
+  UPROPERTY(BlueprintReadOnly, Category = "Ghost")
   FString TestName;
 
-  UPROPERTY(BlueprintReadOnly)
+  UPROPERTY(BlueprintReadOnly, Category = "Ghost")
   bool bTestPassed;
 
-  UPROPERTY(BlueprintReadOnly)
+  UPROPERTY(BlueprintReadOnly, Category = "Ghost")
   int64 TestDuration;
 
-  UPROPERTY(BlueprintReadOnly)
+  UPROPERTY(BlueprintReadOnly, Category = "Ghost")
   FString TestError;
 
-  UPROPERTY(BlueprintReadOnly)
+  UPROPERTY(BlueprintReadOnly, Category = "Ghost")
   FString TestScreenshot;
 
   FGhostResultRecord() : bTestPassed(false), TestDuration(0) {}
@@ -216,31 +218,31 @@ USTRUCT(BlueprintType)
 struct FGhostResultsResponse {
   GENERATED_BODY()
 
-  UPROPERTY(BlueprintReadOnly)
+  UPROPERTY(BlueprintReadOnly, Category = "Ghost")
   FString ResultsSessionId;
 
-  UPROPERTY(BlueprintReadOnly)
+  UPROPERTY(BlueprintReadOnly, Category = "Ghost")
   int32 ResultsTotalTests;
 
-  UPROPERTY(BlueprintReadOnly)
+  UPROPERTY(BlueprintReadOnly, Category = "Ghost")
   int32 ResultsPassed;
 
-  UPROPERTY(BlueprintReadOnly)
+  UPROPERTY(BlueprintReadOnly, Category = "Ghost")
   int32 ResultsFailed;
 
-  UPROPERTY(BlueprintReadOnly)
+  UPROPERTY(BlueprintReadOnly, Category = "Ghost")
   int32 ResultsSkipped;
 
-  UPROPERTY(BlueprintReadOnly)
+  UPROPERTY(BlueprintReadOnly, Category = "Ghost")
   int64 ResultsDuration;
 
-  UPROPERTY(BlueprintReadOnly)
+  UPROPERTY(BlueprintReadOnly, Category = "Ghost")
   TArray<FGhostResultRecord> ResultsTests;
 
-  UPROPERTY(BlueprintReadOnly)
+  UPROPERTY(BlueprintReadOnly, Category = "Ghost")
   float ResultsCoverage;
 
-  UPROPERTY(BlueprintReadOnly)
+  UPROPERTY(BlueprintReadOnly, Category = "Ghost")
   TMap<FString, float> ResultsMetrics;
 
   FGhostResultsResponse()
@@ -252,13 +254,13 @@ USTRUCT(BlueprintType)
 struct FGhostStopResponse {
   GENERATED_BODY()
 
-  UPROPERTY(BlueprintReadOnly)
+  UPROPERTY(BlueprintReadOnly, Category = "Ghost")
   bool bStopped;
 
-  UPROPERTY(BlueprintReadOnly)
+  UPROPERTY(BlueprintReadOnly, Category = "Ghost")
   FString StopStatus;
 
-  UPROPERTY(BlueprintReadOnly)
+  UPROPERTY(BlueprintReadOnly, Category = "Ghost")
   FString StopSessionId;
 
   FGhostStopResponse() : bStopped(false) {}
@@ -268,21 +270,18 @@ USTRUCT(BlueprintType)
 struct FGhostHistoryResponse {
   GENERATED_BODY()
 
-  UPROPERTY(BlueprintReadOnly)
+  UPROPERTY(BlueprintReadOnly, Category = "Ghost")
   TArray<FGhostHistoryEntry> Sessions;
 };
 
 namespace TypeFactory {
 
-inline FGhostConfig GhostConfig(const FAgent &Agent,
-                                const TArray<FString> &Scenarios =
-                                    TArray<FString>(),
-                                int32 MaxIterations = 100,
-                                bool bVerbose = false,
-                                const FString &ApiUrl = TEXT(""),
-                                const FString &ApiKey = TEXT(""),
-                                const FString &TestSuite = TEXT(""),
-                                int32 Duration = 300) {
+inline FGhostConfig
+GhostConfig(const FAgent &Agent,
+            const TArray<FString> &Scenarios = TArray<FString>(),
+            int32 MaxIterations = 100, bool bVerbose = false,
+            const FString &ApiUrl = TEXT(""), const FString &ApiKey = TEXT(""),
+            const FString &TestSuite = TEXT(""), int32 Duration = 300) {
   FGhostConfig Config;
   Config.Agent = Agent;
   Config.Scenarios = Scenarios;

@@ -1,5 +1,6 @@
 #pragma once
 
+// clang-format off
 #include "Core/rtk.hpp"
 #include "CoreMinimal.h"
 #include "Dom/JsonObject.h"
@@ -7,15 +8,16 @@
 #include "Serialization/JsonSerializer.h"
 #include "Types.h"
 #include "NPCTypes.generated.h"
+// clang-format on
 
 USTRUCT(BlueprintType)
 struct FNPCHistoryEntry {
   GENERATED_BODY()
 
-  UPROPERTY(BlueprintReadOnly)
+  UPROPERTY(BlueprintReadOnly, Category = "NPC")
   FString Role;
 
-  UPROPERTY(BlueprintReadOnly)
+  UPROPERTY(BlueprintReadOnly, Category = "NPC")
   FString Content;
 };
 
@@ -23,13 +25,13 @@ USTRUCT(BlueprintType)
 struct FNPCStateLogEntry {
   GENERATED_BODY()
 
-  UPROPERTY(BlueprintReadOnly)
+  UPROPERTY(BlueprintReadOnly, Category = "NPC")
   int64 Timestamp;
 
-  UPROPERTY(BlueprintReadOnly)
+  UPROPERTY(BlueprintReadOnly, Category = "NPC")
   FAgentState Delta;
 
-  UPROPERTY(BlueprintReadOnly)
+  UPROPERTY(BlueprintReadOnly, Category = "NPC")
   FAgentState State;
 
   FNPCStateLogEntry() : Timestamp(0) {}
@@ -39,28 +41,28 @@ USTRUCT(BlueprintType)
 struct FNPCInternalState {
   GENERATED_BODY()
 
-  UPROPERTY(BlueprintReadOnly)
+  UPROPERTY(BlueprintReadOnly, Category = "NPC")
   FString Id;
 
-  UPROPERTY(BlueprintReadOnly)
+  UPROPERTY(BlueprintReadOnly, Category = "NPC")
   FString Persona;
 
-  UPROPERTY(BlueprintReadOnly)
+  UPROPERTY(BlueprintReadOnly, Category = "NPC")
   FAgentState State;
 
-  UPROPERTY(BlueprintReadOnly)
+  UPROPERTY(BlueprintReadOnly, Category = "NPC")
   TArray<FNPCHistoryEntry> History;
 
   FAgentAction LastAction;
   bool bHasLastAction;
 
-  UPROPERTY(BlueprintReadOnly)
+  UPROPERTY(BlueprintReadOnly, Category = "NPC")
   bool bIsBlocked;
 
-  UPROPERTY(BlueprintReadOnly)
+  UPROPERTY(BlueprintReadOnly, Category = "NPC")
   FString BlockReason;
 
-  UPROPERTY(BlueprintReadOnly)
+  UPROPERTY(BlueprintReadOnly, Category = "NPC")
   TArray<FNPCStateLogEntry> StateLog;
 
   FNPCInternalState() : bHasLastAction(false), bIsBlocked(false) {}
@@ -71,13 +73,12 @@ namespace NPCSlice {
 using namespace rtk;
 using namespace func;
 using ::FNPCHistoryEntry;
-using ::FNPCStateLogEntry;
 using ::FNPCInternalState;
+using ::FNPCStateLogEntry;
 
 inline FString NPCIdSelector(const FNPCInternalState &NPC) { return NPC.Id; }
 
-inline EntityAdapterOps<FNPCInternalState>
-GetNPCAdapter() {
+inline EntityAdapterOps<FNPCInternalState> GetNPCAdapter() {
   return createEntityAdapter<FNPCInternalState>(&NPCIdSelector);
 }
 
@@ -107,8 +108,8 @@ inline FAgentState MergeStateDelta(const FAgentState &Current,
     return Delta;
   }
 
-  if (!FJsonSerializer::Deserialize(TJsonReaderFactory<>::Create(Delta.JsonData),
-                                    DeltaJson) ||
+  if (!FJsonSerializer::Deserialize(
+          TJsonReaderFactory<>::Create(Delta.JsonData), DeltaJson) ||
       !DeltaJson.IsValid()) {
     return Delta;
   }

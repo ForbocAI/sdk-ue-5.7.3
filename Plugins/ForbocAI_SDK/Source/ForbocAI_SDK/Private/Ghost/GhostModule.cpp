@@ -1,11 +1,12 @@
 #include "Ghost/GhostModule.h"
-#include "NPC/NPCModule.h"
-#include "Core/functional_core.hpp"
 #include "Ghost/GhostModuleInternal.h"
 #include "Ghost/GhostSlice.h"
+#include "Ghost/GhostThunks.h"
+#include "Core/functional_core.hpp"
 #include "HAL/PlatformFilemanager.h"
 #include "Misc/FileHelper.h"
 #include "Misc/Paths.h"
+#include "NPC/NPCModule.h"
 #include "RuntimeStore.h"
 #include "Serialization/JsonSerializer.h"
 
@@ -20,54 +21,16 @@ FGhost GhostOps::Create(const FGhostConfig &Config) {
   return Ghost;
 }
 
-// Single test implementation (Async)
+// Single test — G.6: dispatch runLocalGhostTestThunk
 GhostTypes::GhostTestRunResult GhostOps::RunTest(const FGhost &Ghost,
                                                  const FString &Scenario) {
-  return GhostTypes::AsyncResult<FGhostTestResult>::create(
-      [Ghost, Scenario](std::function<void(FGhostTestResult)> resolve,
-                        std::function<void(std::string)> reject) {
-        if (!Ghost.bInitialized) {
-          reject("Ghost not initialized");
-          return;
-        }
-
-        if (Scenario.IsEmpty()) {
-          reject("Scenario cannot be empty");
-          return;
-        }
-
-        auto Store = ConfigureStore();
-        Store.dispatch(
-            GhostSlice::Actions::GhostSessionStarted(Scenario, TEXT("running")));
-
-        // Create agent from configuration
-        FAgent Agent = Ghost.Config.Agent;
-
-        // Run the scenario test via Internal helper
-        GhostInternal::RunScenarioTest(Agent, Scenario)
-            .then([resolve, Store, Scenario](FGhostTestResult Result) {
-              FGhostTestReport Report;
-              Report.Results.Add(Result);
-              Report.TotalTests = 1;
-              Report.PassedTests = Result.bPassed ? 1 : 0;
-              Report.FailedTests = Result.bPassed ? 0 : 1;
-              Report.SuccessRate = Result.bPassed ? 1.0f : 0.0f;
-              Report.Summary = Result.bPassed ? TEXT("Passed") : TEXT("Failed");
-              Store.dispatch(
-                  GhostSlice::Actions::GhostSessionCompleted(Report));
-              resolve(Result);
-            })
-            .catch_([reject, Store, Scenario](std::string Error) {
-              FGhostTestResult Failure;
-              Failure.Scenario = Scenario;
-              Failure.bPassed = false;
-              Failure.ErrorMessage = FString(Error.c_str());
-              Store.dispatch(GhostSlice::Actions::GhostSessionFailed(
-                  Scenario, Failure.ErrorMessage));
-              reject(Error);
-            })
-            .execute();
-      });
+  if (!Ghost.bInitialized) {
+    return GhostTypes::AsyncResult<FGhostTestResult>::create(
+        [](std::function<void(FGhostTestResult)>,
+           std::function<void(std::string)> Reject) { Reject("Ghost not initialized"); });
+  }
+  auto Store = ConfigureStore();
+  return Store.dispatch(rtk::runLocalGhostTestThunk(Ghost.Config.Agent, Scenario));
 }
 
 // All tests implementation (Async)
