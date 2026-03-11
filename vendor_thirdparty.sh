@@ -27,7 +27,7 @@ SQLITE_VERSION="3460100"
 SQLITE_URL="https://www.sqlite.org/${SQLITE_YEAR}/sqlite-amalgamation-${SQLITE_VERSION}.zip"
 SQLITE_VEC_VERSION="v0.1.6"
 SQLITE_VEC_URL="https://github.com/asg017/sqlite-vec/archive/refs/tags/${SQLITE_VEC_VERSION}.tar.gz"
-LLAMA_CPP_TAG="b5447"
+LLAMA_CPP_TAG="b8191"
 LLAMA_CPP_URL="https://github.com/ggml-org/llama.cpp/archive/refs/tags/${LLAMA_CPP_TAG}.tar.gz"
 
 # Colors
@@ -151,8 +151,12 @@ vendor_llama_headers() {
     return 1
   fi
 
+  # Create lib dirs so Build.cs can find libs once built
+  mkdir -p "$THIRDPARTY_DIR/llama.cpp/lib/Mac" "$THIRDPARTY_DIR/llama.cpp/lib/Win64"
+
   log "llama.cpp headers installed"
   log "  Include: $LLAMA_INCLUDE"
+  log "  Lib dirs: lib/Mac/, lib/Win64/ (place libllama.a / llama.lib)"
   echo ""
   warn "IMPORTANT: You still need to build libllama.a / llama.lib"
   warn "  Mac:   cmake -B build -DBUILD_SHARED_LIBS=OFF && cmake --build build --target llama"

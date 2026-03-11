@@ -1,4 +1,5 @@
 #include "API/APISlice.h"
+#include "Core/JsonInterop.h"
 #include "CoreMinimal.h"
 #include "Misc/AutomationTest.h"
 
@@ -150,5 +151,27 @@ bool FApiCodecBridgeValidationWrapperTest::RunTest(const FString &Parameters) {
            APISlice::Detail::DecodeValidationResult(Json, Result));
   TestFalse("Wrapped validity mapped", Result.bValid);
   TestEqual("Wrapped reason mapped", Result.Reason, FString(TEXT("blocked")));
+  return true;
+}
+
+// Response normalization: gaType→type, actionReason→reason, actionTarget→target
+// (Haskell API may return aliased field names; JsonInterop::ActionFromObject normalizes)
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+    FApiCodecActionFromObjectGaTypeTest,
+    "ForbocAI.Core.API.ActionFromObjectGaTypeAliases",
+    EAutomationTestFlags_ApplicationContextMask |
+        EAutomationTestFlags::EngineFilter)
+bool FApiCodecActionFromObjectGaTypeTest::RunTest(const FString &Parameters) {
+  TSharedPtr<FJsonObject> Obj = MakeShared<FJsonObject>();
+  Obj->SetStringField(TEXT("gaType"), TEXT("speak"));
+  Obj->SetStringField(TEXT("actionTarget"), TEXT("player"));
+  Obj->SetStringField(TEXT("actionReason"), TEXT("greeting"));
+
+  FAgentAction Action = JsonInterop::ActionFromObject(Obj);
+
+  TestEqual("gaType maps to Type", Action.Type, FString(TEXT("speak")));
+  TestEqual("actionTarget maps to Target", Action.Target, FString(TEXT("player")));
+  TestEqual("actionReason maps to Reason", Action.Reason,
+            FString(TEXT("greeting")));
   return true;
 }
