@@ -37,7 +37,7 @@ public:
    * Initializes the SDK with the provided configuration.
    */
   UFUNCTION(BlueprintCallable, Category = "Forboc AI|SDK")
-  void Init(FString ApiKey, FString ApiUrl = TEXT("https://api.forboc.ai"));
+  void Init(FString ApiKey, FString ApiUrl = SDKConfig::DEFAULT_API_URL);
 
   /**
    * Triggers the recursive protocol loop for an NPC.

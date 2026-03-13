@@ -1,6 +1,6 @@
-// API endpoint integration tests — real api.forboc.ai
+// API endpoint integration tests — uses SDKConfig resolution (localhost:8080 default, FORBOCAI_API_URL override)
 // I.5 — Auth, response normalization, representative endpoints, error handling
-// Requires FORBOCAI_API_KEY for auth tests.
+// Requires FORBOCAI_API_KEY for auth tests. Set FORBOCAI_API_URL=https://api.forboc.ai for production.
 
 #include "API/APICodecs.h"
 #include "API/APIEndpoints.h"
@@ -88,7 +88,7 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(
     EAutomationTestFlags_ApplicationContextMask |
         EAutomationTestFlags::EngineFilter)
 bool FApiEndpointStatusNoAuthTest::RunTest(const FString &Parameters) {
-  SDKConfig::SetApiConfig(TEXT("https://api.forboc.ai"), TEXT(""));
+  SDKConfig::SetApiConfig(SDKConfig::GetApiUrl(), TEXT(""));
 
   auto State = MakeShared<FApiEndpointTestState>();
   ADD_LATENT_AUTOMATION_COMMAND(
@@ -125,7 +125,7 @@ bool FApiEndpointSoulsValidKeyTest::RunTest(const FString &Parameters) {
     AddInfo(TEXT("Skip: FORBOCAI_API_KEY not set"));
     return true;
   }
-  SDKConfig::SetApiConfig(TEXT("https://api.forboc.ai"), Key);
+  SDKConfig::SetApiConfig(SDKConfig::GetApiUrl(), Key);
 
   auto State = MakeShared<FApiEndpointTestState>();
   ADD_LATENT_AUTOMATION_COMMAND(
@@ -159,7 +159,7 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(
     EAutomationTestFlags_ApplicationContextMask |
         EAutomationTestFlags::EngineFilter)
 bool FApiEndpointSoulsNoKeyTest::RunTest(const FString &Parameters) {
-  SDKConfig::SetApiConfig(TEXT("https://api.forboc.ai"), TEXT(""));
+  SDKConfig::SetApiConfig(SDKConfig::GetApiUrl(), TEXT(""));
 
   auto State = MakeShared<FApiEndpointTestState>();
   ADD_LATENT_AUTOMATION_COMMAND(
@@ -188,7 +188,7 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(
     EAutomationTestFlags_ApplicationContextMask |
         EAutomationTestFlags::EngineFilter)
 bool FApiEndpointSoulsInvalidKeyTest::RunTest(const FString &Parameters) {
-  SDKConfig::SetApiConfig(TEXT("https://api.forboc.ai"),
+  SDKConfig::SetApiConfig(SDKConfig::GetApiUrl(),
                           TEXT("invalid_key_12345"));
 
   auto State = MakeShared<FApiEndpointTestState>();
@@ -218,7 +218,7 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(
     EAutomationTestFlags_ApplicationContextMask |
         EAutomationTestFlags::EngineFilter)
 bool FApiEndpointNotFoundTest::RunTest(const FString &Parameters) {
-  SDKConfig::SetApiConfig(TEXT("https://api.forboc.ai"), TEXT(""));
+  SDKConfig::SetApiConfig(SDKConfig::GetApiUrl(), TEXT(""));
 
   auto State = MakeShared<FApiEndpointTestState>();
   ADD_LATENT_AUTOMATION_COMMAND(FHttpGetWaitComplete(
@@ -252,7 +252,7 @@ bool FApiEndpointPostDirectiveTest::RunTest(const FString &Parameters) {
     AddInfo(TEXT("Skip: FORBOCAI_API_KEY not set"));
     return true;
   }
-  SDKConfig::SetApiConfig(TEXT("https://api.forboc.ai"), Key);
+  SDKConfig::SetApiConfig(SDKConfig::GetApiUrl(), Key);
 
   const FString NpcId = TEXT("api_ep_test_npc");
   const FString Url =

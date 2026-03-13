@@ -19,8 +19,9 @@
  */
 namespace SDKConfig {
 
-/** Canonical API base URL; no /v1. Aligns with TS SDK and workspace rules. */
-inline constexpr TCHAR DEFAULT_API_URL[] = TEXT("https://api.forboc.ai");
+/** Dev default: localhost. Production: api.forboc.ai (set via env or config). */
+inline constexpr TCHAR DEFAULT_API_URL[] = TEXT("http://localhost:8080");
+inline constexpr TCHAR PRODUCTION_API_URL[] = TEXT("https://api.forboc.ai");
 inline constexpr int32 DEFAULT_VECTOR_DIMENSION = 384;
 inline constexpr int32 DEFAULT_MAX_RECALL_RESULTS = 10;
 

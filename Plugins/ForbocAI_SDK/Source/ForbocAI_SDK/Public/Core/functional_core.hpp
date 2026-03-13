@@ -39,9 +39,9 @@
 //  16. AsyncResult          — Functional async result handling
 //  17. HttpResult           — Functional HTTP result wrapper
 //  18. AsyncChain           — AsyncResult chaining helpers
-//
-// NOTE: LegacyAsyncHttp (formerly §19) has been removed.
-//       UE-specific HTTP helpers now live in Core/AsyncHttp.h.
+//  19. Dispatcher            — Dictionary-based typed dispatch
+//  20. multi_match           — Multi-case value-based pattern matching
+//  21. from_nullable         — Lift nullable values into Maybe
 //
 // REQUIREMENTS:
 //   Several helpers default-construct inactive payloads or
@@ -868,6 +868,175 @@ auto then(const AsyncResult<T> &res, F f) -> AsyncResult<U> {
       });
 }
 } // namespace AsyncChain
+
+// ==========================================
+// 19. Dispatcher (Dictionary-Based Typed Dispatch)
+// ==========================================
+// A lookup table mapping keys to handler functions.
+// Returns Maybe<Result> from dispatch — just(handler())
+// if the key exists, nothing<Result>() if not.
+//
+// Construction: use createDispatcher<Key, Result>() with
+//               a vector of {key, handler} pairs.
+// Dispatch:     use the dispatch() free function.
+//
+// Usage:
+//   auto d = func::createDispatcher<FString, int>({
+//       {TEXT("a"), []() { return 1; }},
+//       {TEXT("b"), []() { return 2; }},
+//   });
+//   auto result = func::dispatch(d, TEXT("a")); // just(1)
+//   auto miss   = func::dispatch(d, TEXT("z")); // nothing
+// ==========================================
+
+template <typename Key, typename Result> struct Dispatcher {
+  std::unordered_map<Key, std::function<Result()>> table;
+};
+
+// Factory function: createDispatcher(entries)
+template <typename Key, typename Result>
+Dispatcher<Key, Result> createDispatcher(
+    std::vector<std::pair<Key, std::function<Result()>>> entries) {
+  Dispatcher<Key, Result> d;
+  for (size_t i = 0; i < entries.size(); ++i) {
+    d.table[entries[i].first] = entries[i].second;
+  }
+  return d;
+}
+
+// Free function: dispatch(d, key) -> Maybe<Result>
+template <typename Key, typename Result>
+Maybe<Result> dispatch(const Dispatcher<Key, Result> &d, const Key &key) {
+  typename std::unordered_map<Key, std::function<Result()>>::const_iterator it =
+      d.table.find(key);
+  if (it != d.table.end()) {
+    return just(it->second());
+  }
+  return nothing<Result>();
+}
+
+// Free function: has(d, key) -> bool
+template <typename Key, typename Result>
+bool has(const Dispatcher<Key, Result> &d, const Key &key) {
+  return d.table.find(key) != d.table.end();
+}
+
+// Free function: keys(d) -> vector<Key>
+template <typename Key, typename Result>
+std::vector<Key> keys(const Dispatcher<Key, Result> &d) {
+  std::vector<Key> result;
+  for (typename std::unordered_map<Key, std::function<Result()>>::const_iterator
+           it = d.table.begin();
+       it != d.table.end(); ++it) {
+    result.push_back(it->first);
+  }
+  return result;
+}
+
+// ==========================================
+// 20. multi_match (Multi-Case Value-Based Pattern Matching)
+// ==========================================
+// Tries each predicate/handler pair in order.
+// Returns just(handler(value)) from the first predicate
+// that returns true. Returns nothing<R>() if no match.
+//
+// Helper factories:
+//   wildcard<T>()   — always-true predicate (default arm)
+//   equals<T>(val)  — value-equality predicate
+//   when<T,R>(pred, handler) — construct a MatchCase
+//
+// Usage:
+//   auto result = func::multi_match<FString, int>(
+//       input,
+//       {
+//           func::when<FString, int>(
+//               func::equals<FString>(TEXT("a")),
+//               [](const FString&) { return 1; }),
+//           func::when<FString, int>(
+//               func::wildcard<FString>(),
+//               [](const FString&) { return 0; }),
+//       });
+// ==========================================
+
+template <typename T, typename R> struct MatchCase {
+  std::function<bool(const T &)> predicate;
+  std::function<R(const T &)> handler;
+};
+
+// Factory: when(predicate, handler)
+template <typename T, typename R>
+MatchCase<T, R> when(std::function<bool(const T &)> pred,
+                     std::function<R(const T &)> handler) {
+  MatchCase<T, R> c;
+  c.predicate = std::move(pred);
+  c.handler = std::move(handler);
+  return c;
+}
+
+// Predicate factory: wildcard — always matches
+template <typename T> std::function<bool(const T &)> wildcard() {
+  return [](const T &) { return true; };
+}
+
+// Predicate factory: equals — matches when value == expected
+template <typename T> std::function<bool(const T &)> equals(T expected) {
+  return [expected](const T &value) { return value == expected; };
+}
+
+// multi_match: value -> cases -> Maybe<R>
+template <typename T, typename R>
+Maybe<R> multi_match(const T &value, const std::vector<MatchCase<T, R>> &cases) {
+  for (size_t i = 0; i < cases.size(); ++i) {
+    if (cases[i].predicate(value)) {
+      return just(cases[i].handler(value));
+    }
+  }
+  return nothing<R>();
+}
+
+// ==========================================
+// 21. from_nullable (Lift Nullable to Maybe)
+// ==========================================
+// Converts pointer-like nullable values to Maybe.
+// Null/nullptr → nothing, otherwise → just(*ptr).
+//
+// Usage:
+//   int* p = ...;
+//   Maybe<int> m = func::from_nullable(p);
+//
+//   // For Maybe-wrapped lookups:
+//   Maybe<FString> m = func::from_nullable_value(
+//       value, !value.IsEmpty());
+// ==========================================
+
+// from_nullable for raw pointers: T* -> Maybe<T>
+template <typename T> Maybe<T> from_nullable(const T *ptr) {
+  if (ptr) {
+    return just(*ptr);
+  }
+  return nothing<T>();
+}
+
+// from_nullable_value: lift a value with an explicit validity flag
+template <typename T> Maybe<T> from_nullable_value(T value, bool valid) {
+  if (valid) {
+    return just(std::move(value));
+  }
+  return nothing<T>();
+}
+
+// require_just: extract from Maybe or throw — boundary code helper
+template <typename T>
+T require_just(const Maybe<T> &m, const std::string &errorMsg) {
+  if (m.hasValue) {
+    return m.value;
+  }
+#if defined(__cpp_exceptions) || defined(__EXCEPTIONS) || defined(_CPPUNWIND)
+  throw std::runtime_error(errorMsg);
+#else
+  std::abort();
+#endif
+}
 
 } // namespace func
 

@@ -1,5 +1,5 @@
-// processNPC full protocol loop — real api.forboc.ai — I.2 Thunk Integration Tests
-// Requires FORBOCAI_API_KEY. Exercises tape evolution, NPC state, history, block behavior.
+// processNPC full protocol loop — uses SDKConfig resolution (localhost:8080 default) — I.2 Thunk Integration Tests
+// Requires FORBOCAI_API_KEY. Set FORBOCAI_API_URL for production. Exercises tape evolution, NPC state, history, block behavior.
 
 #include "Core/rtk.hpp"
 #include "CoreMinimal.h"
@@ -28,7 +28,7 @@ struct FProcessNPCParams {
   FString Persona;
 };
 
-// Starts processNPC and polls until complete. Uses real api.forboc.ai.
+// Starts processNPC and polls until complete. Uses SDKConfig resolution.
 DEFINE_LATENT_AUTOMATION_COMMAND_THREE_PARAMETER(
     FProcessNPCWaitComplete, TSharedPtr<FProcessNPCTestState>, State,
     FProcessNPCParams, Params, int32, PollCount);
@@ -74,7 +74,7 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(
     EAutomationTestFlags_ApplicationContextMask |
         EAutomationTestFlags::EngineFilter)
 bool FProcessNPCMockFinalizeValidTest::RunTest(const FString &Parameters) {
-  SDKConfig::SetApiConfig(TEXT("https://api.forboc.ai"),
+  SDKConfig::SetApiConfig(SDKConfig::GetApiUrl(),
                           FPlatformMisc::GetEnvironmentVariable(
                               TEXT("FORBOCAI_API_KEY")));
 
@@ -130,7 +130,7 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(
     EAutomationTestFlags_ApplicationContextMask |
         EAutomationTestFlags::EngineFilter)
 bool FProcessNPCMockFinalizeInvalidTest::RunTest(const FString &Parameters) {
-  SDKConfig::SetApiConfig(TEXT("https://api.forboc.ai"),
+  SDKConfig::SetApiConfig(SDKConfig::GetApiUrl(),
                           FPlatformMisc::GetEnvironmentVariable(
                               TEXT("FORBOCAI_API_KEY")));
 
@@ -174,7 +174,7 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(
     EAutomationTestFlags_ApplicationContextMask |
         EAutomationTestFlags::EngineFilter)
 bool FProcessNPCDirectiveLifecycleTest::RunTest(const FString &Parameters) {
-  SDKConfig::SetApiConfig(TEXT("https://api.forboc.ai"),
+  SDKConfig::SetApiConfig(SDKConfig::GetApiUrl(),
                           FPlatformMisc::GetEnvironmentVariable(
                               TEXT("FORBOCAI_API_KEY")));
 
