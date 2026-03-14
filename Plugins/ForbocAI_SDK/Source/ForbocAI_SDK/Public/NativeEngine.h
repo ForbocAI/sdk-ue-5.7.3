@@ -33,6 +33,15 @@ FORBOCAI_SDK_API FString Infer(Context Ctx, const FString &Prompt,
 FORBOCAI_SDK_API FString Infer(Context Ctx, const FString &Prompt,
                                const FCortexConfig &Config);
 
+/** Per-token callback for streaming inference. */
+using TokenCallback = std::function<void(const FString &Token)>;
+
+/** Performs streaming inference, calling OnToken per generated token.
+ *  Returns the full accumulated text. Stop tokens are checked after each token. */
+FORBOCAI_SDK_API FString InferStream(Context Ctx, const FString &Prompt,
+                                     const FCortexConfig &Config,
+                                     const TokenCallback &OnToken);
+
 /** Generates a deterministic embedding vector for text. */
 FORBOCAI_SDK_API TArray<float> Embed(Context Ctx, const FString &Text);
 

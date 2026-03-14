@@ -86,6 +86,14 @@ FString GetDatabasePath(const FMemoryConfig &Config) {
     return FString();
   }
 
+  // G6: Reject paths with directory traversal sequences
+  if (Config.DatabasePath.Contains(TEXT(".."))) {
+    UE_LOG(LogTemp, Error,
+           TEXT("ForbocAI: Rejected database path containing '..': %s"),
+           *Config.DatabasePath);
+    return FString();
+  }
+
   if (FPaths::IsRelative(Config.DatabasePath)) {
     return FPaths::Combine(FPaths::ProjectContentDir(), TEXT("ForbocAI"),
                            Config.DatabasePath);

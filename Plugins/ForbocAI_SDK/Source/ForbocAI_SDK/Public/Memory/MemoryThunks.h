@@ -1,6 +1,7 @@
 #pragma once
 
 #include "Core/ThunkDetail.h"
+#include "Cortex/CortexSlice.h"
 #include "Memory/MemorySlice.h"
 
 namespace rtk {
@@ -207,15 +208,16 @@ initNodeVectorThunk(const FString &EmbeddingModelPath = TEXT("")) {
              "resolve/main/all-MiniLM-L6-v2-Q4_K_M.gguf");
 
     return func::AsyncResult<rtk::FEmptyPayload>::create(
-        [EmbeddingModelPath](std::function<void(rtk::FEmptyPayload)> Resolve,
-                             std::function<void(std::string)> Reject) {
+        [EmbeddingModelPath, Dispatch](
+            std::function<void(rtk::FEmptyPayload)> Resolve,
+            std::function<void(std::string)> Reject) {
 #if WITH_FORBOC_NATIVE
           const FString Path = EmbeddingModelPath.IsEmpty()
                                    ? detail::DefaultEmbeddingModelPath()
                                    : EmbeddingModelPath;
 
-          auto LoadOnWorker = [Path, Resolve, Reject]() {
-            Async(EAsyncExecution::Thread, [Path, Resolve, Reject]() {
+          auto LoadOnWorker = [Path, Dispatch, Resolve, Reject]() {
+            Async(EAsyncExecution::Thread, [Path, Dispatch, Resolve, Reject]() {
               Native::Llama::Context &Handle = detail::NodeEmbeddingHandle();
               if (Handle) {
                 Native::Llama::FreeModel(Handle);
@@ -224,13 +226,18 @@ initNodeVectorThunk(const FString &EmbeddingModelPath = TEXT("")) {
 
               Handle = Native::Llama::LoadEmbeddingModel(Path);
 
-              AsyncTask(ENamedThreads::GameThread, [Handle, Resolve, Reject]() {
-                if (Handle) {
-                  Resolve(rtk::FEmptyPayload{});
-                } else {
-                  Reject("Failed to load embedding model");
-                }
-              });
+              AsyncTask(ENamedThreads::GameThread,
+                        [Handle, Dispatch, Resolve, Reject]() {
+                          if (Handle) {
+                            // G3: Dispatch embedder readiness
+                            Dispatch(CortexSlice::Actions::SetEmbedderReady(true));
+                            Resolve(rtk::FEmptyPayload{});
+                          } else {
+                            Dispatch(
+                                CortexSlice::Actions::SetEmbedderReady(false));
+                            Reject("Failed to load embedding model");
+                          }
+                        });
             });
           };
 
@@ -250,6 +257,8 @@ initNodeVectorThunk(const FString &EmbeddingModelPath = TEXT("")) {
           }
 #else
           static_cast<void>(EmbeddingModelPath);
+          // G3: Mock mode — embedder is "ready" immediately
+          Dispatch(CortexSlice::Actions::SetEmbedderReady(true));
           Resolve(rtk::FEmptyPayload{});
 #endif
         });

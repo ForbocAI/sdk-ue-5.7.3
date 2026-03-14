@@ -104,9 +104,17 @@ initNodeCortexThunk(const FString &ModelPath) {
 
           // If we know a URL and the file is missing, download first.
           if (!Url.IsEmpty() && !FPaths::FileExists(LocalPath)) {
+            // G2: Dispatch download start
+            Dispatch(CortexSlice::Actions::SetDownloadState(true, 0.0f));
             Native::File::DownloadBinary(Url, LocalPath)
-                .then([LoadOnWorker](const FString &) mutable { LoadOnWorker(); })
+                .then([LoadOnWorker, Dispatch](const FString &) mutable {
+                  // G2: Dispatch download complete
+                  Dispatch(CortexSlice::Actions::SetDownloadState(false, 100.0f));
+                  LoadOnWorker();
+                })
                 .catch_([Dispatch, Reject](std::string Error) mutable {
+                  // G2: Clear download state on failure
+                  Dispatch(CortexSlice::Actions::SetDownloadState(false, 0.0f));
                   const FString Msg = Error.empty()
                                           ? TEXT("Model download failed")
                                           : FString(UTF8_TO_TCHAR(Error.c_str()));
@@ -194,6 +202,74 @@ generateNodeEmbeddingThunk(const FString &Text) {
             AsyncTask(ENamedThreads::GameThread,
                       [Resolve, Embedding]() { Resolve(Embedding); });
           });
+        });
+  };
+}
+
+// ---------------------------------------------------------------------------
+// G7: Streaming node cortex thunk (mirrors TS stream.ts)
+// Token-by-token callback, dispatches StreamToken per token on game thread
+// ---------------------------------------------------------------------------
+
+using FOnTokenCallback = std::function<void(const FString &Token)>;
+
+inline ThunkAction<FCortexResponse, FStoreState>
+streamNodeCortexThunk(const FString &Prompt, const FCortexConfig &Config,
+                      const FOnTokenCallback &OnToken) {
+  return [Prompt, Config, OnToken](
+             std::function<AnyAction(const AnyAction &)> Dispatch,
+             std::function<FStoreState()> GetState)
+             -> func::AsyncResult<FCortexResponse> {
+    Dispatch(CortexSlice::Actions::CortexStreamStart(Prompt));
+
+    return func::AsyncResult<FCortexResponse>::create(
+        [Prompt, Config, OnToken, Dispatch](
+            std::function<void(FCortexResponse)> Resolve,
+            std::function<void(std::string)> Reject) {
+          Async(EAsyncExecution::Thread,
+                [Prompt, Config, OnToken, Dispatch, Resolve, Reject]() {
+                  Native::Llama::Context Handle = detail::NodeCortexHandle();
+                  if (!Handle) {
+                    const FString Error =
+                        TEXT("Local cortex is not initialized");
+                    AsyncTask(ENamedThreads::GameThread,
+                              [Dispatch, Reject, Error]() {
+                                Dispatch(CortexSlice::Actions::
+                                             CortexCompleteRejected(Error));
+                                Reject(TCHAR_TO_UTF8(*Error));
+                              });
+                    return;
+                  }
+
+                  FString FullText = Native::Llama::InferStream(
+                      Handle, Prompt, Config,
+                      [&Dispatch, &OnToken](const FString &Token) {
+                        // Forward each token to game thread
+                        AsyncTask(ENamedThreads::GameThread,
+                                  [Dispatch, OnToken, Token]() {
+                                    Dispatch(CortexSlice::Actions::
+                                                 CortexStreamToken(Token));
+                                    if (OnToken) {
+                                      OnToken(Token);
+                                    }
+                                  });
+                      });
+
+                  FCortexResponse Response;
+                  Response.Id = FGuid::NewGuid().ToString();
+                  Response.Text = FullText;
+                  Response.Stats = TEXT("local-node-stream");
+
+                  AsyncTask(ENamedThreads::GameThread,
+                            [Dispatch, Resolve, Response]() {
+                              Dispatch(CortexSlice::Actions::
+                                           CortexStreamComplete(
+                                               Response.Text));
+                              Dispatch(CortexSlice::Actions::
+                                           CortexCompleteFulfilled(Response));
+                              Resolve(Response);
+                            });
+                });
         });
   };
 }

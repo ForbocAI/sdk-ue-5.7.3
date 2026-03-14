@@ -17,8 +17,18 @@ struct FCortexSliceState {
   FString LastPrompt;
   FString LastResponseText;
   FString Error;
+  // G2: Download progress tracking (mirrors TS setDownloadState)
+  bool bIsDownloading;
+  float DownloadProgress;
+  // G3: Embedding readiness tracking (mirrors TS embedderReady)
+  bool bEmbedderReady;
+  // G7: Streaming state (mirrors TS stream.ts token-by-token)
+  bool bIsStreaming;
+  FString StreamAccumulated;
 
-  FCortexSliceState() : Status(ECortexEngineStatus::Idle) {}
+  FCortexSliceState()
+      : Status(ECortexEngineStatus::Idle), bIsDownloading(false),
+        DownloadProgress(0.0f), bEmbedderReady(false), bIsStreaming(false) {}
 };
 
 namespace Actions {
@@ -84,6 +94,67 @@ inline AnyAction CortexCompleteRejected(const FString &Error) {
   return CortexCompleteFailedActionCreator()(Error);
 }
 
+// G2: Download state action
+struct FDownloadState {
+  bool bIsDownloading;
+  float Progress;
+};
+
+inline const ActionCreator<FDownloadState> &SetDownloadStateActionCreator() {
+  static const ActionCreator<FDownloadState> ActionCreator =
+      createAction<FDownloadState>(TEXT("cortex/setDownloadState"));
+  return ActionCreator;
+}
+
+inline AnyAction SetDownloadState(bool bIsDownloading, float Progress) {
+  FDownloadState State;
+  State.bIsDownloading = bIsDownloading;
+  State.Progress = Progress;
+  return SetDownloadStateActionCreator()(State);
+}
+
+// G3: Embedder readiness action
+inline const ActionCreator<bool> &SetEmbedderReadyActionCreator() {
+  static const ActionCreator<bool> ActionCreator =
+      createAction<bool>(TEXT("cortex/setEmbedderReady"));
+  return ActionCreator;
+}
+
+inline AnyAction SetEmbedderReady(bool bReady) {
+  return SetEmbedderReadyActionCreator()(bReady);
+}
+
+// G7: Streaming actions
+inline const ActionCreator<FString> &CortexStreamStartActionCreator() {
+  static const ActionCreator<FString> ActionCreator =
+      createAction<FString>(TEXT("cortex/streamStart"));
+  return ActionCreator;
+}
+
+inline const ActionCreator<FString> &CortexStreamTokenActionCreator() {
+  static const ActionCreator<FString> ActionCreator =
+      createAction<FString>(TEXT("cortex/streamToken"));
+  return ActionCreator;
+}
+
+inline const ActionCreator<FString> &CortexStreamCompleteActionCreator() {
+  static const ActionCreator<FString> ActionCreator =
+      createAction<FString>(TEXT("cortex/streamComplete"));
+  return ActionCreator;
+}
+
+inline AnyAction CortexStreamStart(const FString &Prompt) {
+  return CortexStreamStartActionCreator()(Prompt);
+}
+
+inline AnyAction CortexStreamToken(const FString &Token) {
+  return CortexStreamTokenActionCreator()(Token);
+}
+
+inline AnyAction CortexStreamComplete(const FString &FullText) {
+  return CortexStreamCompleteActionCreator()(FullText);
+}
+
 } // namespace Actions
 
 inline Slice<FCortexSliceState> CreateCortexSlice() {
@@ -140,6 +211,55 @@ inline Slice<FCortexSliceState> CreateCortexSlice() {
              const Action<FString> &Action) -> FCortexSliceState {
             FCortexSliceState Next = State;
             Next.Error = Action.PayloadValue;
+            return Next;
+          })
+      // G2: Download state reducer
+      .addExtraCase(
+          Actions::SetDownloadStateActionCreator(),
+          [](const FCortexSliceState &State,
+             const Action<Actions::FDownloadState> &Action) -> FCortexSliceState {
+            FCortexSliceState Next = State;
+            Next.bIsDownloading = Action.PayloadValue.bIsDownloading;
+            Next.DownloadProgress = Action.PayloadValue.Progress;
+            return Next;
+          })
+      // G3: Embedder readiness reducer
+      .addExtraCase(
+          Actions::SetEmbedderReadyActionCreator(),
+          [](const FCortexSliceState &State,
+             const Action<bool> &Action) -> FCortexSliceState {
+            FCortexSliceState Next = State;
+            Next.bEmbedderReady = Action.PayloadValue;
+            return Next;
+          })
+      // G7: Streaming reducers
+      .addExtraCase(
+          Actions::CortexStreamStartActionCreator(),
+          [](const FCortexSliceState &State,
+             const Action<FString> &Action) -> FCortexSliceState {
+            FCortexSliceState Next = State;
+            Next.bIsStreaming = true;
+            Next.StreamAccumulated.Empty();
+            Next.LastPrompt = Action.PayloadValue;
+            Next.Error.Empty();
+            return Next;
+          })
+      .addExtraCase(
+          Actions::CortexStreamTokenActionCreator(),
+          [](const FCortexSliceState &State,
+             const Action<FString> &Action) -> FCortexSliceState {
+            FCortexSliceState Next = State;
+            Next.StreamAccumulated += Action.PayloadValue;
+            return Next;
+          })
+      .addExtraCase(
+          Actions::CortexStreamCompleteActionCreator(),
+          [](const FCortexSliceState &State,
+             const Action<FString> &Action) -> FCortexSliceState {
+            FCortexSliceState Next = State;
+            Next.bIsStreaming = false;
+            Next.LastResponseText = Action.PayloadValue;
+            Next.StreamAccumulated.Empty();
             return Next;
           })
       .build();

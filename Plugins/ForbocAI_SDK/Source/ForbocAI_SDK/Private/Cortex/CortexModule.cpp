@@ -77,18 +77,28 @@ CortexOps::Complete(const FCortex &Cortex, const FString &Prompt,
   return Future;
 }
 
-CortexTypes::CortexStreamResult
+TFuture<CortexTypes::CortexCompletionResult>
 CortexOps::CompleteStream(const FCortex &Cortex, const FString &Prompt,
+                          const FOnCortexToken &OnToken,
                           const TMap<FString, FString> &Context) {
   static_cast<void>(Context);
-  // CompleteStream is sync; thunks are async. Dispatch completeNodeCortexThunk
-  // and block via Ops::WaitForResult pattern. For now, return sync error -
-  // streaming is not yet thunk-wired.
-  (void)Cortex;
-  (void)Prompt;
-  return CortexTypes::make_left(
-      FString(TEXT("CompleteStream requires async thunk; use Complete()")),
-      TArray<FString>{});
+  auto PromisePtr =
+      std::make_shared<TPromise<CortexTypes::CortexCompletionResult>>();
+  auto Future = PromisePtr->GetFuture();
+
+  auto Store = ConfigureStore();
+  Store.dispatch(rtk::streamNodeCortexThunk(Prompt, Cortex.Config, OnToken))
+      .then([PromisePtr](const FCortexResponse &Response) mutable {
+        PromisePtr->SetValue(CortexTypes::make_right(FString(), Response));
+      })
+      .catch_([PromisePtr](std::string Error) mutable {
+        PromisePtr->SetValue(
+            CortexTypes::make_left(FString(UTF8_TO_TCHAR(Error.c_str())),
+                                   FCortexResponse{}));
+      })
+      .execute();
+
+  return Future;
 }
 
 FString CortexOps::GetStatus(const FCortex &Cortex) {

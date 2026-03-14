@@ -279,6 +279,60 @@ FString Infer(Context Ctx, const FString &Prompt, const FCortexConfig &Config) {
   return ApplyStopTokens(Infer(Ctx, Prompt, Config.MaxTokens), Config.Stop);
 }
 
+FString InferStream(Context Ctx, const FString &Prompt,
+                    const FCortexConfig &Config,
+                    const TokenCallback &OnToken) {
+  if (!Ctx) {
+    return TEXT("Error: Model not loaded");
+  }
+
+#if WITH_FORBOC_NATIVE
+  struct StreamState {
+    FString Accumulated;
+    TokenCallback Callback;
+    TArray<FString> StopTokens;
+    bool bStopped;
+  };
+  StreamState State;
+  State.Callback = OnToken;
+  State.StopTokens = Config.Stop;
+  State.bStopped = false;
+
+  auto Utf8Prompt = StringCast<UTF8CHAR>(*Prompt);
+  LlamaFacade::InferStream(
+      reinterpret_cast<struct llama_facade_context *>(Ctx), Utf8Prompt.Get(),
+      Config.MaxTokens, 0.8f,
+      [](const char *TokenUtf8, int Len, void *UserData) {
+        StreamState *S = static_cast<StreamState *>(UserData);
+        if (S->bStopped) return;
+        FString Token(Len, UTF8_TO_TCHAR(TokenUtf8));
+        S->Accumulated += Token;
+        // Check stop tokens after each token
+        for (const FString &Stop : S->StopTokens) {
+          if (!Stop.IsEmpty() && S->Accumulated.Contains(Stop)) {
+            S->bStopped = true;
+            return;
+          }
+        }
+        S->Callback(Token);
+      },
+      &State);
+
+  return ApplyStopTokens(State.Accumulated, Config.Stop);
+#else
+  // Mock: simulate streaming by splitting the simulated response into words
+  FString Full = FString::Printf(TEXT("Simulated local response for: %s"),
+                                 *Prompt.Left(30));
+  TArray<FString> Words;
+  Full.ParseIntoArray(Words, TEXT(" "), true);
+  for (int32 i = 0; i < Words.Num(); ++i) {
+    FString Token = (i > 0 ? TEXT(" ") : TEXT("")) + Words[i];
+    OnToken(Token);
+  }
+  return Full;
+#endif
+}
+
 } // namespace Llama
 
 namespace File {
@@ -345,6 +399,14 @@ DB Open(const FString &Path) {
   const FString NormalizedPath = Path.IsEmpty()
                                      ? TEXT(":memory:")
                                      : FPaths::ConvertRelativePathToFull(Path);
+
+  // G6: Directory traversal guard — reject paths containing ".." segments
+  if (NormalizedPath != TEXT(":memory:") && NormalizedPath.Contains(TEXT(".."))) {
+    UE_LOG(LogTemp, Error,
+           TEXT("ForbocAI: Rejected database path containing '..': %s"),
+           *NormalizedPath);
+    return nullptr;
+  }
 
 #if WITH_FORBOC_SQLITE_VEC
   sqlite3 *Db = nullptr;
@@ -430,6 +492,14 @@ void ClearPath(const FString &Path) {
   const FString NormalizedPath = Path.IsEmpty()
                                      ? TEXT(":memory:")
                                      : FPaths::ConvertRelativePathToFull(Path);
+
+  // G6: Directory traversal guard
+  if (NormalizedPath != TEXT(":memory:") && NormalizedPath.Contains(TEXT(".."))) {
+    UE_LOG(LogTemp, Error,
+           TEXT("ForbocAI: Rejected database path containing '..': %s"),
+           *NormalizedPath);
+    return;
+  }
 
 #if WITH_FORBOC_SQLITE_VEC
   // Under sqlite-vec, ClearPath is a no-op; file deletion is handled by higher

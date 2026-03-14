@@ -166,6 +166,61 @@ char *Infer(llama_facade_context *Ctx, const char *PromptUtf8, int MaxTokens,
   return Result;
 }
 
+int InferStream(llama_facade_context *Ctx, const char *PromptUtf8, int MaxTokens,
+                float Temperature, TokenCallback OnToken, void *UserData) {
+  if (!Ctx || !PromptUtf8 || Ctx->IsEmbedding || !OnToken) return 0;
+
+  const llama_vocab *Vocab = llama_model_get_vocab(Ctx->Model);
+  const int32_t CtxSize = llama_n_ctx(Ctx->Ctx);
+
+  std::vector<llama_token> Tokens(CtxSize, 0);
+  int32_t N = llama_tokenize(Vocab, PromptUtf8, -1, Tokens.data(),
+                             static_cast<int32_t>(Tokens.size()), true, false);
+  if (N < 0) return 0;
+  Tokens.resize(static_cast<size_t>(N));
+
+  llama_sampler_chain_params SParams = llama_sampler_chain_default_params();
+  llama_sampler *Smpl = llama_sampler_chain_init(SParams);
+  llama_sampler_chain_add(Smpl, llama_sampler_init_top_k(40));
+  llama_sampler_chain_add(Smpl, llama_sampler_init_top_p(0.9f, 1));
+  llama_sampler_chain_add(Smpl, llama_sampler_init_temp(Temperature));
+  llama_sampler_chain_add(Smpl, llama_sampler_init_dist(LLAMA_DEFAULT_SEED));
+
+  llama_batch Batch = llama_batch_init(512, 0, 1);
+
+  int32_t Pos = 0;
+  for (size_t i = 0; i < Tokens.size(); ++i) {
+    llama_batch_add(Batch, Tokens[i], Pos, {0}, true);
+    ++Pos;
+  }
+  if (llama_decode(Ctx->Ctx, Batch) != 0) {
+    llama_batch_free(Batch);
+    llama_sampler_free(Smpl);
+    return 0;
+  }
+
+  int Generated = 0;
+  while (Generated < MaxTokens) {
+    llama_token Next = llama_sampler_sample(Smpl, Ctx->Ctx, -1);
+    if (Next == llama_vocab_eos(Vocab)) break;
+
+    char Buf[256];
+    int Len = llama_token_to_piece(Vocab, Next, Buf, sizeof(Buf), 0, false);
+    if (Len > 0) {
+      OnToken(Buf, Len, UserData);
+    }
+    llama_batch_clear(Batch);
+    llama_batch_add(Batch, Next, Pos, {0}, true);
+    ++Pos;
+    ++Generated;
+    if (llama_decode(Ctx->Ctx, Batch) != 0) break;
+  }
+
+  llama_batch_free(Batch);
+  llama_sampler_free(Smpl);
+  return Generated;
+}
+
 bool Embed(llama_facade_context *Ctx, const char *TextUtf8, float *Out,
            int Dims) {
   if (!Ctx || !TextUtf8 || !Out || Dims < 1 || !Ctx->IsEmbedding) return false;
@@ -214,6 +269,7 @@ llama_facade_context *LoadInferenceModel(const char *) { return nullptr; }
 llama_facade_context *LoadEmbeddingModel(const char *) { return nullptr; }
 void FreeContext(llama_facade_context *) {}
 char *Infer(llama_facade_context *, const char *, int, float) { return nullptr; }
+int InferStream(llama_facade_context *, const char *, int, float, TokenCallback, void *) { return 0; }
 bool Embed(llama_facade_context *, const char *, float *, int) { return false; }
 
 } // namespace LlamaFacade

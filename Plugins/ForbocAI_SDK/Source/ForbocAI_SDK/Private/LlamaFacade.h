@@ -23,6 +23,13 @@ void FreeContext(llama_facade_context *Ctx);
 char *Infer(llama_facade_context *Ctx, const char *PromptUtf8, int MaxTokens,
             float Temperature);
 
+/** Token callback for streaming inference. */
+typedef void (*TokenCallback)(const char *TokenUtf8, int Len, void *UserData);
+
+/** Generate text token-by-token, calling OnToken for each. Returns generated count. */
+int InferStream(llama_facade_context *Ctx, const char *PromptUtf8, int MaxTokens,
+                float Temperature, TokenCallback OnToken, void *UserData);
+
 /** Generate 384-dim normalized embedding. Caller provides Out[384]. */
 bool Embed(llama_facade_context *Ctx, const char *TextUtf8, float *Out, int Dims);
 

@@ -84,17 +84,21 @@ FORBOCAI_SDK_API TFuture<CortexTypes::CortexCompletionResult>
 Complete(const FCortex &Cortex, const FString &Prompt,
          const TMap<FString, FString> &Context = TMap<FString, FString>());
 
+/** Per-token callback type for streaming inference. */
+using FOnCortexToken = std::function<void(const FString &Token)>;
+
 /**
- * Streams text generation character by character.
- * Pure function: (Cortex, Prompt, Context) -> Stream
+ * Streams text generation token by token via callback (G7).
  * @param Cortex The Cortex instance to use.
  * @param Prompt The input prompt text.
+ * @param OnToken Called for each generated token on the game thread.
  * @param Context Optional context data.
- * @return A stream of generated text chunks.
+ * @return Future resolving to the full accumulated response.
  */
-FORBOCAI_SDK_API CortexTypes::CortexStreamResult CompleteStream(
-    const FCortex &Cortex, const FString &Prompt,
-    const TMap<FString, FString> &Context = TMap<FString, FString>());
+FORBOCAI_SDK_API TFuture<CortexTypes::CortexCompletionResult>
+CompleteStream(const FCortex &Cortex, const FString &Prompt,
+               const FOnCortexToken &OnToken,
+               const TMap<FString, FString> &Context = TMap<FString, FString>());
 
 /**
  * Gets the current status of the Cortex engine.
