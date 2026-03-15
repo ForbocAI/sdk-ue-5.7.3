@@ -23,6 +23,8 @@ struct FStoreState {
 
   /**
    * G8: Generic state bag for game-specific slices.
+   * User Story: As game-specific runtime extensions, I need a shared extra bag
+   * so custom slice state can live beside SDK-managed state.
    * Games can store serialized state keyed by slice name.
    * Extra reducers operate on this map alongside SDK reducers.
    */
@@ -31,18 +33,33 @@ struct FStoreState {
 
 namespace StoreInternal {
 
+/**
+ * Returns the singleton NPC slice definition.
+ * User Story: As store assembly, I need one shared NPC slice instance so every
+ * store uses the same reducer wiring.
+ */
 inline const rtk::Slice<NPCSlice::FNPCSliceState> &GetNPCSlice() {
   static const rtk::Slice<NPCSlice::FNPCSliceState> Slice =
       NPCSlice::CreateNPCSlice();
   return Slice;
 }
 
+/**
+ * Returns the singleton memory slice definition.
+ * User Story: As store assembly, I need one shared memory slice instance so
+ * memory reducers stay consistent across stores.
+ */
 inline const rtk::Slice<MemorySlice::FMemorySliceState> &GetMemorySlice() {
   static const rtk::Slice<MemorySlice::FMemorySliceState> Slice =
       MemorySlice::CreateMemorySlice();
   return Slice;
 }
 
+/**
+ * Returns the singleton directive slice definition.
+ * User Story: As store assembly, I need one shared directive slice instance so
+ * directive lifecycle updates are wired uniformly.
+ */
 inline const rtk::Slice<DirectiveSlice::FDirectiveSliceState> &
 GetDirectiveSlice() {
   static const rtk::Slice<DirectiveSlice::FDirectiveSliceState> Slice =
@@ -50,30 +67,55 @@ GetDirectiveSlice() {
   return Slice;
 }
 
+/**
+ * Returns the singleton bridge slice definition.
+ * User Story: As store assembly, I need one shared bridge slice instance so
+ * validation state uses a single reducer definition.
+ */
 inline const rtk::Slice<BridgeSlice::FBridgeSliceState> &GetBridgeSlice() {
   static const rtk::Slice<BridgeSlice::FBridgeSliceState> Slice =
       BridgeSlice::CreateBridgeSlice();
   return Slice;
 }
 
+/**
+ * Returns the singleton cortex slice definition.
+ * User Story: As store assembly, I need one shared cortex slice instance so
+ * engine state is reduced consistently in every store.
+ */
 inline const rtk::Slice<CortexSlice::FCortexSliceState> &GetCortexSlice() {
   static const rtk::Slice<CortexSlice::FCortexSliceState> Slice =
       CortexSlice::CreateCortexSlice();
   return Slice;
 }
 
+/**
+ * Returns the singleton soul slice definition.
+ * User Story: As store assembly, I need one shared soul slice instance so
+ * export and import state uses the same reducer wiring.
+ */
 inline const rtk::Slice<SoulSlice::FSoulSliceState> &GetSoulSlice() {
   static const rtk::Slice<SoulSlice::FSoulSliceState> Slice =
       SoulSlice::CreateSoulSlice();
   return Slice;
 }
 
+/**
+ * Returns the singleton ghost slice definition.
+ * User Story: As store assembly, I need one shared ghost slice instance so QA
+ * state transitions are defined once for the runtime.
+ */
 inline const rtk::Slice<GhostSlice::FGhostSliceState> &GetGhostSlice() {
   static const rtk::Slice<GhostSlice::FGhostSliceState> Slice =
       GhostSlice::CreateGhostSlice();
   return Slice;
 }
 
+/**
+ * Returns the singleton API slice definition.
+ * User Story: As store assembly, I need one shared API slice instance so
+ * endpoint cache state is wired consistently.
+ */
 inline const rtk::Slice<APISlice::FAPIState> &GetAPISlice() {
   static const rtk::Slice<APISlice::FAPIState> Slice =
       APISlice::CreateAPISlice();
@@ -84,6 +126,8 @@ inline const rtk::Slice<APISlice::FAPIState> &GetAPISlice() {
 
 /**
  * G8: Extra reducer type for game slices.
+ * User Story: As game extension points, I need a reducer hook type so custom
+ * game reducers can participate without replacing SDK reducers.
  * Receives current state + action, returns updated state.
  * Only the Extra map should be modified; SDK slice state is managed
  * by SDK reducers and must not be overwritten.
@@ -93,6 +137,11 @@ using ExtraReducerFn =
 
 namespace StoreInternal {
 
+/**
+ * Returns the extra reducers registered by game-specific extensions.
+ * User Story: As store extensibility, I need a shared reducer registry so
+ * game-specific reducers can be mounted before store creation.
+ */
 inline std::vector<ExtraReducerFn> &ExtraReducers() {
   static std::vector<ExtraReducerFn> Reducers;
   return Reducers;
@@ -100,6 +149,11 @@ inline std::vector<ExtraReducerFn> &ExtraReducers() {
 
 } // namespace StoreInternal (extension)
 
+/**
+ * Runs the SDK reducers, then applies any registered extra reducers.
+ * User Story: As root store reduction, I need SDK and game reducers composed
+ * together so one dispatch updates all registered state.
+ */
 inline FStoreState StoreReducer(const FStoreState &State,
                                 const rtk::AnyAction &Action) {
   FStoreState Next = State;
@@ -113,7 +167,10 @@ inline FStoreState StoreReducer(const FStoreState &State,
   Next.Ghost = StoreInternal::GetGhostSlice().Reducer(State.Ghost, Action);
   Next.API = StoreInternal::GetAPISlice().Reducer(State.API, Action);
 
-  // G8: Run extra reducers (game slices)
+  /**
+   * G8: Run extra reducers (game slices)
+   * User Story: As a maintainer, I need this implementation note so I can understand which milestone behavior the surrounding code is preserving.
+   */
   for (const auto &Reducer : StoreInternal::ExtraReducers()) {
     Next = Reducer(Next, Action);
   }
@@ -121,6 +178,11 @@ inline FStoreState StoreReducer(const FStoreState &State,
   return Next;
 }
 
+/**
+ * Builds middleware that clears dependent state when an NPC is removed.
+ * User Story: As NPC teardown, I need dependent slices cleaned up
+ * automatically so removed NPCs do not leave stale state behind.
+ */
 inline rtk::Middleware<FStoreState> createNpcRemovalListener() {
   return [](const rtk::MiddlewareApi<FStoreState> &Api)
              -> std::function<rtk::Dispatcher(rtk::Dispatcher)> {
@@ -154,6 +216,8 @@ inline rtk::Middleware<FStoreState> createNpcRemovalListener() {
 
 /**
  * G8: Register an extra reducer before store creation.
+ * User Story: As game integration, I need a registration hook so custom game
+ * reducers can extend the store without replacing SDK behavior.
  * Game slices call this to mount their reducers alongside SDK slices.
  *
  * Example:
@@ -169,6 +233,11 @@ inline void addExtraReducer(const ExtraReducerFn &Reducer) {
   StoreInternal::ExtraReducers().push_back(Reducer);
 }
 
+/**
+ * Creates a store with optional preloaded state and additional middleware.
+ * User Story: As runtime bootstrap, I need a configurable store factory so
+ * tests and games can start from custom state and middleware.
+ */
 inline rtk::EnhancedStore<FStoreState>
 createStore(func::Maybe<FStoreState> PreloadedState =
                 func::nothing<FStoreState>(),
@@ -176,7 +245,10 @@ createStore(func::Maybe<FStoreState> PreloadedState =
   std::vector<rtk::Middleware<FStoreState>> Middlewares;
   Middlewares.push_back(createNpcRemovalListener());
 
-  // G8: Append game-provided middleware
+  /**
+   * G8: Append game-provided middleware
+   * User Story: As a maintainer, I need this implementation note so I can understand which milestone behavior the surrounding code is preserving.
+   */
   for (const auto &MW : ExtraMiddlewares) {
     Middlewares.push_back(MW);
   }
@@ -187,6 +259,11 @@ createStore(func::Maybe<FStoreState> PreloadedState =
       Middlewares);
 }
 
+/**
+ * Returns the process-wide singleton runtime store.
+ * User Story: As shared runtime access, I need a singleton store so Blueprint,
+ * CLI, and subsystem helpers all dispatch through the same state container.
+ */
 inline rtk::EnhancedStore<FStoreState> ConfigureStore() {
   static rtk::EnhancedStore<FStoreState> GlobalStore = createStore();
   return GlobalStore;

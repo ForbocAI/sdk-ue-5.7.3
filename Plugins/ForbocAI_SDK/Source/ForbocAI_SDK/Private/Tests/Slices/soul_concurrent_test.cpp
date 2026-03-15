@@ -6,9 +6,10 @@
 using namespace rtk;
 using namespace SoulSlice;
 
-// ---------------------------------------------------------------------------
-// Test: Concurrent export and import — export pending then import pending
-// ---------------------------------------------------------------------------
+/**
+ * Test: Concurrent export and import — export pending then import pending
+ * User Story: As a maintainer, I need this note so the surrounding code intent stays clear during maintenance and debugging.
+ */
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FSoulConcurrentExportImportTest,
                                  "ForbocAI.Slices.Soul.ConcurrentExportImport",
                                  EAutomationTestFlags_ApplicationContextMask |
@@ -17,21 +18,30 @@ bool FSoulConcurrentExportImportTest::RunTest(const FString &Parameters) {
   Slice<FSoulSliceState> SSlice = CreateSoulSlice();
   FSoulSliceState State;
 
-  // Start export
+  /**
+   * Start export
+   * User Story: As a maintainer, I need this step note so I can follow the scenario progression and reason about the expected state changes.
+   */
   State = SSlice.Reducer(State, Actions::RemoteExportSoulPending());
   TestEqual("ExportStatus exporting", State.ExportStatus,
             FString(TEXT("exporting")));
   TestEqual("ImportStatus idle", State.ImportStatus,
             FString(TEXT("idle")));
 
-  // Start import while export is still pending
+  /**
+   * Start import while export is still pending
+   * User Story: As a maintainer, I need this step note so I can follow the scenario progression and reason about the expected state changes.
+   */
   State = SSlice.Reducer(State, Actions::ImportSoulPending());
   TestEqual("ExportStatus still exporting", State.ExportStatus,
             FString(TEXT("exporting")));
   TestEqual("ImportStatus importing", State.ImportStatus,
             FString(TEXT("importing")));
 
-  // Complete export
+  /**
+   * Complete export
+   * User Story: As a maintainer, I need this step note so I can follow the scenario progression and reason about the expected state changes.
+   */
   FSoulExportResult ExportResult;
   ExportResult.TxId = TEXT("export_tx_concurrent");
   State = SSlice.Reducer(State, Actions::RemoteExportSoulSuccess(ExportResult));
@@ -43,7 +53,10 @@ bool FSoulConcurrentExportImportTest::RunTest(const FString &Parameters) {
   TestEqual("Export TxId", State.LastExport.TxId,
             FString(TEXT("export_tx_concurrent")));
 
-  // Complete import
+  /**
+   * Complete import
+   * User Story: As a maintainer, I need this step note so I can follow the scenario progression and reason about the expected state changes.
+   */
   FSoul ImportedSoul;
   ImportedSoul.Id = TEXT("import_soul_concurrent");
   ImportedSoul.Persona = TEXT("Concurrent Test Soul");
@@ -59,9 +72,10 @@ bool FSoulConcurrentExportImportTest::RunTest(const FString &Parameters) {
   return true;
 }
 
-// ---------------------------------------------------------------------------
-// Test: Export fails while import succeeds — independent error tracking
-// ---------------------------------------------------------------------------
+/**
+ * Test: Export fails while import succeeds — independent error tracking
+ * User Story: As a maintainer, I need this note so the surrounding code intent stays clear during maintenance and debugging.
+ */
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FSoulExportFailImportSucceedTest,
                                  "ForbocAI.Slices.Soul.ExportFailImportSucceed",
                                  EAutomationTestFlags_ApplicationContextMask |
@@ -70,7 +84,10 @@ bool FSoulExportFailImportSucceedTest::RunTest(const FString &Parameters) {
   Slice<FSoulSliceState> SSlice = CreateSoulSlice();
   FSoulSliceState State;
 
-  // Export fails
+  /**
+   * Export fails
+   * User Story: As a maintainer, I need this note so the surrounding code intent stays clear during maintenance and debugging.
+   */
   State = SSlice.Reducer(State, Actions::RemoteExportSoulPending());
   State = SSlice.Reducer(State,
                          Actions::RemoteExportSoulFailed(TEXT("Arweave down")));
@@ -78,13 +95,19 @@ bool FSoulExportFailImportSucceedTest::RunTest(const FString &Parameters) {
             FString(TEXT("failed")));
   TestEqual("Error set", State.Error, FString(TEXT("Arweave down")));
 
-  // Import starts — should clear the shared error
+  /**
+   * Import starts — should clear the shared error
+   * User Story: As a maintainer, I need this note so the surrounding code intent stays clear during maintenance and debugging.
+   */
   State = SSlice.Reducer(State, Actions::ImportSoulPending());
   TestTrue("Error cleared by import pending", State.Error.IsEmpty());
   TestEqual("ExportStatus still failed", State.ExportStatus,
             FString(TEXT("failed")));
 
-  // Import succeeds
+  /**
+   * Import succeeds
+   * User Story: As a maintainer, I need this note so the surrounding code intent stays clear during maintenance and debugging.
+   */
   FSoul Soul;
   Soul.Id = TEXT("import_after_fail");
   State = SSlice.Reducer(State, Actions::ImportSoulSuccess(Soul));
@@ -96,9 +119,10 @@ bool FSoulExportFailImportSucceedTest::RunTest(const FString &Parameters) {
   return true;
 }
 
-// ---------------------------------------------------------------------------
-// Test: Import fails while export succeeds — independent error tracking
-// ---------------------------------------------------------------------------
+/**
+ * Test: Import fails while export succeeds — independent error tracking
+ * User Story: As a maintainer, I need this note so the surrounding code intent stays clear during maintenance and debugging.
+ */
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FSoulImportFailExportSucceedTest,
                                  "ForbocAI.Slices.Soul.ImportFailExportSucceed",
                                  EAutomationTestFlags_ApplicationContextMask |
@@ -107,18 +131,27 @@ bool FSoulImportFailExportSucceedTest::RunTest(const FString &Parameters) {
   Slice<FSoulSliceState> SSlice = CreateSoulSlice();
   FSoulSliceState State;
 
-  // Import fails
+  /**
+   * Import fails
+   * User Story: As a maintainer, I need this note so the surrounding code intent stays clear during maintenance and debugging.
+   */
   State = SSlice.Reducer(State, Actions::ImportSoulPending());
   State = SSlice.Reducer(State,
                          Actions::ImportSoulFailed(TEXT("Invalid TxId")));
   TestEqual("ImportStatus failed", State.ImportStatus,
             FString(TEXT("failed")));
 
-  // Export starts — should clear the shared error
+  /**
+   * Export starts — should clear the shared error
+   * User Story: As a maintainer, I need this note so the surrounding code intent stays clear during maintenance and debugging.
+   */
   State = SSlice.Reducer(State, Actions::RemoteExportSoulPending());
   TestTrue("Error cleared by export pending", State.Error.IsEmpty());
 
-  // Export succeeds
+  /**
+   * Export succeeds
+   * User Story: As a maintainer, I need this note so the surrounding code intent stays clear during maintenance and debugging.
+   */
   FSoulExportResult ExportResult;
   ExportResult.TxId = TEXT("export_after_import_fail");
   State = SSlice.Reducer(State, Actions::RemoteExportSoulSuccess(ExportResult));
@@ -130,9 +163,10 @@ bool FSoulImportFailExportSucceedTest::RunTest(const FString &Parameters) {
   return true;
 }
 
-// ---------------------------------------------------------------------------
-// Test: Double export — second export overwrites first result
-// ---------------------------------------------------------------------------
+/**
+ * Test: Double export — second export overwrites first result
+ * User Story: As a maintainer, I need this note so the surrounding code intent stays clear during maintenance and debugging.
+ */
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FSoulDoubleExportTest,
                                  "ForbocAI.Slices.Soul.DoubleExport",
                                  EAutomationTestFlags_ApplicationContextMask |
@@ -141,7 +175,10 @@ bool FSoulDoubleExportTest::RunTest(const FString &Parameters) {
   Slice<FSoulSliceState> SSlice = CreateSoulSlice();
   FSoulSliceState State;
 
-  // First export
+  /**
+   * First export
+   * User Story: As a maintainer, I need this step note so I can follow the scenario progression and reason about the expected state changes.
+   */
   State = SSlice.Reducer(State, Actions::RemoteExportSoulPending());
   FSoulExportResult Result1;
   Result1.TxId = TEXT("tx_first");
@@ -149,11 +186,17 @@ bool FSoulDoubleExportTest::RunTest(const FString &Parameters) {
   TestEqual("First export TxId", State.LastExport.TxId,
             FString(TEXT("tx_first")));
 
-  // Second export
+  /**
+   * Second export
+   * User Story: As a maintainer, I need this step note so I can follow the scenario progression and reason about the expected state changes.
+   */
   State = SSlice.Reducer(State, Actions::RemoteExportSoulPending());
   TestEqual("Status back to exporting", State.ExportStatus,
             FString(TEXT("exporting")));
-  // bHasLastExport should still be true from first
+  /**
+   * bHasLastExport should still be true from first
+   * User Story: As a maintainer, I need this note so the surrounding code intent stays clear during maintenance and debugging.
+   */
   TestTrue("Still has export from first", State.bHasLastExport);
 
   FSoulExportResult Result2;
@@ -165,9 +208,10 @@ bool FSoulDoubleExportTest::RunTest(const FString &Parameters) {
   return true;
 }
 
-// ---------------------------------------------------------------------------
-// Test: Double import — second import overwrites first result
-// ---------------------------------------------------------------------------
+/**
+ * Test: Double import — second import overwrites first result
+ * User Story: As a maintainer, I need this note so the surrounding code intent stays clear during maintenance and debugging.
+ */
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FSoulDoubleImportTest,
                                  "ForbocAI.Slices.Soul.DoubleImport",
                                  EAutomationTestFlags_ApplicationContextMask |
@@ -176,7 +220,10 @@ bool FSoulDoubleImportTest::RunTest(const FString &Parameters) {
   Slice<FSoulSliceState> SSlice = CreateSoulSlice();
   FSoulSliceState State;
 
-  // First import
+  /**
+   * First import
+   * User Story: As a maintainer, I need this step note so I can follow the scenario progression and reason about the expected state changes.
+   */
   State = SSlice.Reducer(State, Actions::ImportSoulPending());
   FSoul Soul1;
   Soul1.Id = TEXT("soul_first");
@@ -185,7 +232,10 @@ bool FSoulDoubleImportTest::RunTest(const FString &Parameters) {
   TestEqual("First import id", State.LastImport.Id,
             FString(TEXT("soul_first")));
 
-  // Second import
+  /**
+   * Second import
+   * User Story: As a maintainer, I need this step note so I can follow the scenario progression and reason about the expected state changes.
+   */
   State = SSlice.Reducer(State, Actions::ImportSoulPending());
   FSoul Soul2;
   Soul2.Id = TEXT("soul_second");

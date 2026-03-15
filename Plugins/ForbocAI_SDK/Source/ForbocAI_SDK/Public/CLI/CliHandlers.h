@@ -6,6 +6,8 @@
 
 /**
  * Per-domain CLI command handlers.
+ * User Story: As CLI command routing, I need handlers grouped by domain so
+ * each command family can be resolved without one monolithic dispatcher.
  * Each handler returns Maybe<TestResult<void>>:
  *   - just(result) when the command belongs to that domain.
  *   - nothing() when the command is not for that domain.
@@ -19,52 +21,92 @@ namespace Handlers {
 using Result = func::TestResult<void>;
 using HandlerResult = func::Maybe<Result>;
 
-/** System: version, status, doctor, system_status */
+/**
+ * Handles system-scoped CLI commands such as version and doctor.
+ * User Story: As CLI users, I need system commands routed together so runtime
+ * health and version checks are dispatched through one handler.
+ */
 HandlerResult HandleSystem(rtk::EnhancedStore<FStoreState> &Store,
                           const FString &CommandKey,
                           const TArray<FString> &Args);
 
-/** NPC: npc_create, npc_list, npc_process, npc_active, npc_state, npc_update, npc_import, npc_chat */
+/**
+ * Handles NPC lifecycle and interaction CLI commands.
+ * User Story: As CLI users, I need NPC commands grouped under one handler so
+ * agent creation, updates, and chat share consistent routing.
+ */
 HandlerResult HandleNpc(rtk::EnhancedStore<FStoreState> &Store,
                        const FString &CommandKey,
                        const TArray<FString> &Args);
 
-/** Memory: memory_list, memory_recall, memory_store, memory_clear, memory_export */
+/**
+ * Handles memory-related CLI commands.
+ * User Story: As CLI users, I need memory commands routed together so store,
+ * recall, and clear operations share consistent parsing.
+ */
 HandlerResult HandleMemory(rtk::EnhancedStore<FStoreState> &Store,
                           const FString &CommandKey,
                           const TArray<FString> &Args);
 
-/** Cortex: cortex_init, cortex_init_remote, cortex_models, cortex_complete */
+/**
+ * Handles cortex initialization and completion CLI commands.
+ * User Story: As CLI users, I need cortex commands grouped so model setup and
+ * completion flows route through one handler.
+ */
 HandlerResult HandleCortex(rtk::EnhancedStore<FStoreState> &Store,
                           const FString &CommandKey,
                           const TArray<FString> &Args);
 
-/** Ghost: ghost_run, ghost_status, ghost_results, ghost_stop, ghost_history */
+/**
+ * Handles ghost QA CLI commands.
+ * User Story: As CLI users, I need ghost commands grouped so run control and
+ * history lookups share one command handler.
+ */
 HandlerResult HandleGhost(rtk::EnhancedStore<FStoreState> &Store,
                          const FString &CommandKey,
                          const TArray<FString> &Args);
 
-/** Bridge + Rules: bridge_validate, bridge_rules, bridge_preset, rules_* */
+/**
+ * Handles bridge validation and ruleset CLI commands.
+ * User Story: As CLI users, I need bridge commands grouped so validation and
+ * ruleset management share consistent dispatch logic.
+ */
 HandlerResult HandleBridge(rtk::EnhancedStore<FStoreState> &Store,
                           const FString &CommandKey,
                           const TArray<FString> &Args);
 
-/** Soul: soul_export, soul_import, soul_import_npc, soul_list, soul_verify */
+/**
+ * Handles soul import, export, and verification CLI commands.
+ * User Story: As CLI users, I need soul commands grouped so lifecycle actions
+ * on souls share one routing surface.
+ */
 HandlerResult HandleSoul(rtk::EnhancedStore<FStoreState> &Store,
                         const FString &CommandKey,
                         const TArray<FString> &Args);
 
-/** Config: config_set, config_get, config_list */
+/**
+ * Handles runtime configuration CLI commands.
+ * User Story: As CLI users, I need config commands grouped so reads and writes
+ * of SDK configuration use one handler.
+ */
 HandlerResult HandleConfig(rtk::EnhancedStore<FStoreState> &Store,
                           const FString &CommandKey,
                           const TArray<FString> &Args);
 
-/** Vector: vector_init */
+/**
+ * Handles vector-store setup CLI commands.
+ * User Story: As CLI users, I need vector initialization routed separately so
+ * local infrastructure setup has a focused handler.
+ */
 HandlerResult HandleVector(rtk::EnhancedStore<FStoreState> &Store,
                           const FString &CommandKey,
                           const TArray<FString> &Args);
 
-/** Setup: setup, setup_deps, setup_check, setup_verify, setup_build_llama */
+/**
+ * Handles dependency setup CLI commands.
+ * User Story: As CLI users, I need setup commands grouped so dependency checks
+ * and installation flows share one dispatch path.
+ */
 HandlerResult HandleSetup(rtk::EnhancedStore<FStoreState> &Store,
                          const FString &CommandKey,
                          const TArray<FString> &Args);

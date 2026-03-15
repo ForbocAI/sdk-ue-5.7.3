@@ -1,5 +1,8 @@
 #pragma once
-// SYSTEM_OVERRIDE denied unless npc state is coherent end to end
+/**
+ * SYSTEM_OVERRIDE denied unless npc state is coherent end to end
+ * User Story: As a maintainer, I need this note so the surrounding code intent stays clear during maintenance and debugging.
+ */
 
 #include "Core/rtk.hpp"
 #include "CoreMinimal.h"
@@ -12,6 +15,11 @@ namespace NPCSlice {
 using namespace rtk;
 using namespace func;
 
+/**
+ * Builds the NPC slice reducer and extra cases.
+ * User Story: As NPC runtime setup, I need one slice factory so NPC lifecycle
+ * actions update state through a single reducer contract.
+ */
 inline Slice<FNPCSliceState> CreateNPCSlice() {
   return SliceBuilder<FNPCSliceState>(TEXT("npc"), FNPCSliceState())
       .addExtraCase(
@@ -166,11 +174,21 @@ inline Slice<FNPCSliceState> CreateNPCSlice() {
       .build();
 }
 
+/**
+ * Selects a single NPC by id.
+ * User Story: As NPC lookups, I need direct access to one NPC so reducers,
+ * thunks, and UI code can target the correct entity.
+ */
 inline func::Maybe<FNPCInternalState> SelectNPCById(const FNPCSliceState &State,
                                                     const FString &Id) {
   return GetNPCAdapter().getSelectors().selectById(State.Entities, Id);
 }
 
+/**
+ * Selects every NPC currently held in slice state.
+ * User Story: As NPC inspection flows, I need the full entity list so tools
+ * and gameplay systems can review current NPC state.
+ */
 inline TArray<FNPCInternalState> SelectAllNPCs(const FNPCSliceState &State) {
   return GetNPCAdapter().getSelectors().selectAll(State.Entities);
 }
@@ -184,6 +202,11 @@ inline FString SelectActiveNpcId(const FNPCSliceState &State) {
   return State.ActiveNpcId;
 }
 
+/**
+ * Selects the currently active NPC when one is set.
+ * User Story: As NPC orchestration, I need the active NPC resolved so the
+ * current actor can be processed without manual id lookups.
+ */
 inline func::Maybe<FNPCInternalState>
 SelectActiveNPC(const FNPCSliceState &State) {
   if (State.ActiveNpcId.IsEmpty()) {

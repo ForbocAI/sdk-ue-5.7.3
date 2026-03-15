@@ -7,7 +7,11 @@
 #include "RuntimeConfig.h"
 
 namespace BridgeHelpers {
-/** Pure local validation. Implemented in BridgeModule.cpp. */
+/**
+ * Runs the pure local bridge validation path.
+ * User Story: As offline bridge validation, I need a local validator so rule
+ * checks can run without depending on the remote API.
+ */
 FValidationResult RunLocalBridgeValidation(const FAgentAction &Action,
                                           const TArray<FValidationRule> &Rules,
                                           const FBridgeRuleContext &Context);
@@ -15,11 +19,11 @@ FValidationResult RunLocalBridgeValidation(const FAgentAction &Action,
 
 namespace rtk {
 
-// ---------------------------------------------------------------------------
-// Bridge thunks (mirrors TS bridgeSlice.ts)
-// ---------------------------------------------------------------------------
-
-/** Local rule-based validation (no API). Dispatches slice actions; store-visible. */
+/**
+ * Builds the thunk that performs local rule-based bridge validation.
+ * User Story: As bridge validation flows, I need a local thunk so actions can
+ * be validated and reflected in slice state without remote calls.
+ */
 inline ThunkAction<FValidationResult, FStoreState>
 localValidateBridgeThunk(const FAgentAction &Action,
                          const TArray<FValidationRule> &Rules,
@@ -42,6 +46,11 @@ localValidateBridgeThunk(const FAgentAction &Action,
   };
 }
 
+/**
+ * Builds the thunk that validates a bridge action through the API.
+ * User Story: As remote bridge validation, I need a thunk that checks API
+ * prerequisites and stores the resulting validation outcome.
+ */
 inline ThunkAction<FValidationResult, FStoreState>
 validateBridgeThunk(const FAgentAction &Action,
                     const FBridgeValidationContext &Context,
@@ -72,6 +81,11 @@ validateBridgeThunk(const FAgentAction &Action,
   };
 }
 
+/**
+ * Builds the thunk that loads and activates one named bridge preset.
+ * User Story: As bridge preset selection, I need a thunk that fetches preset
+ * rules and stores them as active rules for the current runtime.
+ */
 inline ThunkAction<FDirectiveRuleSet, FStoreState>
 loadBridgePresetThunk(const FString &PresetName) {
   return [PresetName](std::function<AnyAction(const AnyAction &)> Dispatch,
@@ -96,6 +110,11 @@ loadBridgePresetThunk(const FString &PresetName) {
   };
 }
 
+/**
+ * Builds the thunk that fetches the available bridge rules.
+ * User Story: As bridge rule inspection, I need a thunk that loads rule
+ * metadata so tools can display server-provided validation rules.
+ */
 inline ThunkAction<TArray<FBridgeRule>, FStoreState> getBridgeRulesThunk() {
   return [](std::function<AnyAction(const AnyAction &)> Dispatch,
             std::function<FStoreState()> GetState)
@@ -109,6 +128,11 @@ inline ThunkAction<TArray<FBridgeRule>, FStoreState> getBridgeRulesThunk() {
   };
 }
 
+/**
+ * Builds the thunk that loads all registered bridge rulesets.
+ * User Story: As bridge ruleset management, I need a thunk that refreshes the
+ * ruleset catalog so the slice reflects current server state.
+ */
 inline ThunkAction<TArray<FDirectiveRuleSet>, FStoreState> listRulesetsThunk() {
   return [](std::function<AnyAction(const AnyAction &)> Dispatch,
             std::function<FStoreState()> GetState)
@@ -128,6 +152,11 @@ inline ThunkAction<TArray<FDirectiveRuleSet>, FStoreState> listRulesetsThunk() {
   };
 }
 
+/**
+ * Builds the thunk that loads available bridge preset ids.
+ * User Story: As preset pickers, I need a thunk that fetches preset ids so the
+ * UI can offer the current list of server-defined presets.
+ */
 inline ThunkAction<TArray<FString>, FStoreState> listRulePresetsThunk() {
   return [](std::function<AnyAction(const AnyAction &)> Dispatch,
             std::function<FStoreState()> GetState)
@@ -146,6 +175,11 @@ inline ThunkAction<TArray<FString>, FStoreState> listRulePresetsThunk() {
   };
 }
 
+/**
+ * Builds the thunk that registers or updates a bridge ruleset.
+ * User Story: As bridge ruleset editing, I need a thunk that persists a ruleset
+ * and refreshes local state with the saved server version.
+ */
 inline ThunkAction<FDirectiveRuleSet, FStoreState>
 registerRulesetThunk(const FDirectiveRuleSet &Ruleset) {
   return [Ruleset](std::function<AnyAction(const AnyAction &)> Dispatch,
@@ -177,6 +211,11 @@ registerRulesetThunk(const FDirectiveRuleSet &Ruleset) {
   };
 }
 
+/**
+ * Builds the thunk that deletes a bridge ruleset.
+ * User Story: As bridge ruleset maintenance, I need a thunk that removes a
+ * ruleset remotely and updates the local cache to match.
+ */
 inline ThunkAction<rtk::FEmptyPayload, FStoreState>
 deleteRulesetThunk(const FString &RulesetId) {
   return [RulesetId](std::function<AnyAction(const AnyAction &)> Dispatch,

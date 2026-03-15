@@ -8,7 +8,10 @@ public class ForbocAI_SDK : ModuleRules
 
 		PublicDependencyModuleNames.AddRange(new string[] { "Core", "CoreUObject", "Engine", "InputCore", "HTTP", "Json", "JsonUtilities" });
 
-		// --- NATIVE PARITY: llama.cpp & sqlite-vss ---
+		/**
+		 * --- NATIVE PARITY: llama.cpp & sqlite-vss ---
+		 * User Story: As a maintainer, I need this note so the surrounding code intent stays clear during maintenance and debugging.
+		 */
 		string ThirdPartyPath = System.IO.Path.Combine(ModuleDirectory, "../../ThirdParty");
 		string LlamaIncludePath = System.IO.Path.Combine(ThirdPartyPath, "llama.cpp/include");
 		string SqliteIncludePath = System.IO.Path.Combine(ThirdPartyPath, "sqlite-vss/include");
@@ -30,7 +33,10 @@ public class ForbocAI_SDK : ModuleRules
 		bool bHasSqlite3Header = bHasSqliteHeaders
 			&& System.IO.File.Exists(System.IO.Path.Combine(SqliteIncludePath, "sqlite3.h"));
 
-		// Auto-detect sqlite-vec amalgamation source files
+		/**
+		 * Auto-detect sqlite-vec amalgamation source files
+		 * User Story: As a maintainer, I need this note so the surrounding code intent stays clear during maintenance and debugging.
+		 */
 		string SqliteAmalgamationPath = System.IO.Path.Combine(ThirdPartyPath, "sqlite-vss/src");
 		bool bHasSqliteAmalgamation = System.IO.Directory.Exists(SqliteAmalgamationPath)
 			&& System.IO.File.Exists(System.IO.Path.Combine(SqliteAmalgamationPath, "sqlite3.c"));
@@ -40,7 +46,10 @@ public class ForbocAI_SDK : ModuleRules
 			PublicIncludePaths.Add(LlamaIncludePath);
 			PublicAdditionalLibraries.Add(LlamaLibraryPath);
 
-			// Link ggml dependency libraries (llama.cpp depends on these)
+			/**
+			 * Link ggml dependency libraries (llama.cpp depends on these)
+			 * User Story: As a maintainer, I need this note so the surrounding code intent stays clear during maintenance and debugging.
+			 */
 			string LlamaLibDir = System.IO.Path.GetDirectoryName(LlamaLibraryPath);
 			string[] GgmlLibs = { "libggml.a", "libggml-base.a", "libggml-cpu.a" };
 			foreach (string GgmlLib in GgmlLibs)
@@ -52,7 +61,10 @@ public class ForbocAI_SDK : ModuleRules
 				}
 			}
 
-			// Metal backend (macOS GPU acceleration)
+			/**
+			 * Metal backend (macOS GPU acceleration)
+			 * User Story: As a maintainer, I need this note so the surrounding code intent stays clear during maintenance and debugging.
+			 */
 			if (Target.Platform == UnrealTargetPlatform.Mac)
 			{
 				string MetalLib = System.IO.Path.Combine(LlamaLibDir, "libggml-metal.a");
@@ -76,21 +88,33 @@ public class ForbocAI_SDK : ModuleRules
 			PublicIncludePaths.Add(SqliteIncludePath);
 		}
 
-		// Compile sqlite3 amalgamation + sqlite-vec into the plugin when source is present
+		/**
+		 * Compile sqlite3 amalgamation + sqlite-vec into the plugin when source is present
+		 * User Story: As a maintainer, I need this note so the surrounding code intent stays clear during maintenance and debugging.
+		 */
 		if (bHasSqliteAmalgamation)
 		{
 			PrivateIncludePaths.Add(SqliteAmalgamationPath);
 
-			// The amalgamation compiles as C; UE treats .c files as C automatically
+			/**
+			 * The amalgamation compiles as C; UE treats .c files as C automatically
+			 * User Story: As a maintainer, I need this note so the surrounding code intent stays clear during maintenance and debugging.
+			 */
 			string Sqlite3Source = System.IO.Path.Combine(SqliteAmalgamationPath, "sqlite3.c");
 			string Vec0Source = System.IO.Path.Combine(SqliteAmalgamationPath, "vec0.c");
 
-			// Suppress warnings in third-party C code
+			/**
+			 * Suppress warnings in third-party C code
+			 * User Story: As a maintainer, I need this note so the surrounding code intent stays clear during maintenance and debugging.
+			 */
 			bEnableExceptions = true;
 		}
 
 		PublicDefinitions.Add("WITH_FORBOC_NATIVE=" + (bHasNativeLlama ? "1" : "0"));
-		// sqlite-vec auto-enabled when sqlite3.h header and amalgamation source are present
+		/**
+		 * sqlite-vec auto-enabled when sqlite3.h header and amalgamation source are present
+		 * User Story: As a maintainer, I need this note so the surrounding code intent stays clear during maintenance and debugging.
+		 */
 		bool bEnableSqliteVec = bHasSqlite3Header && bHasSqliteAmalgamation;
 		PublicDefinitions.Add("WITH_FORBOC_SQLITE_VEC=" + (bEnableSqliteVec ? "1" : "0"));
 	}

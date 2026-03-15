@@ -6,9 +6,10 @@
 using namespace rtk;
 using namespace GhostSlice;
 
-// ---------------------------------------------------------------------------
-// Test: Progress update for wrong session is a no-op
-// ---------------------------------------------------------------------------
+/**
+ * Test: Progress update for wrong session is a no-op
+ * User Story: As a maintainer, I need this note so the surrounding code intent stays clear during maintenance and debugging.
+ */
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FGhostProgressWrongSessionTest,
                                  "ForbocAI.Slices.Ghost.ProgressWrongSession",
                                  EAutomationTestFlags_ApplicationContextMask |
@@ -20,7 +21,10 @@ bool FGhostProgressWrongSessionTest::RunTest(const FString &Parameters) {
   State = GSlice.Reducer(
       State, Actions::GhostSessionStarted(TEXT("sess_active"), TEXT("running")));
 
-  // Progress for a different session
+  /**
+   * Progress for a different session
+   * User Story: As a maintainer, I need this note so the surrounding code intent stays clear during maintenance and debugging.
+   */
   State = GSlice.Reducer(
       State,
       Actions::GhostSessionProgress(TEXT("sess_wrong"), TEXT("running"), 0.75f));
@@ -32,9 +36,10 @@ bool FGhostProgressWrongSessionTest::RunTest(const FString &Parameters) {
   return true;
 }
 
-// ---------------------------------------------------------------------------
-// Test: Failed action for wrong session is a no-op
-// ---------------------------------------------------------------------------
+/**
+ * Test: Failed action for wrong session is a no-op
+ * User Story: As a maintainer, I need this step note so I can follow the scenario progression and reason about the expected state changes.
+ */
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FGhostFailedWrongSessionTest,
                                  "ForbocAI.Slices.Ghost.FailedWrongSession",
                                  EAutomationTestFlags_ApplicationContextMask |
@@ -56,9 +61,10 @@ bool FGhostFailedWrongSessionTest::RunTest(const FString &Parameters) {
   return true;
 }
 
-// ---------------------------------------------------------------------------
-// Test: Completed with zero test results
-// ---------------------------------------------------------------------------
+/**
+ * Test: Completed with zero test results
+ * User Story: As a maintainer, I need this note so the surrounding code intent stays clear during maintenance and debugging.
+ */
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FGhostCompletedZeroResultsTest,
                                  "ForbocAI.Slices.Ghost.CompletedZeroResults",
                                  EAutomationTestFlags_ApplicationContextMask |
@@ -71,7 +77,10 @@ bool FGhostCompletedZeroResultsTest::RunTest(const FString &Parameters) {
       State, Actions::GhostSessionStarted(TEXT("empty_sess"), TEXT("running")));
 
   FGhostTestReport EmptyReport;
-  // No results added
+  /**
+   * No results added
+   * User Story: As a maintainer, I need this note so the surrounding code intent stays clear during maintenance and debugging.
+   */
 
   State = GSlice.Reducer(State, Actions::GhostSessionCompleted(EmptyReport));
 
@@ -83,9 +92,10 @@ bool FGhostCompletedZeroResultsTest::RunTest(const FString &Parameters) {
   return true;
 }
 
-// ---------------------------------------------------------------------------
-// Test: Session restart (start after complete) resets state
-// ---------------------------------------------------------------------------
+/**
+ * Test: Session restart (start after complete) resets state
+ * User Story: As a maintainer, I need this note so the surrounding code intent stays clear during maintenance and debugging.
+ */
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FGhostSessionRestartTest,
                                  "ForbocAI.Slices.Ghost.SessionRestart",
                                  EAutomationTestFlags_ApplicationContextMask |
@@ -94,7 +104,10 @@ bool FGhostSessionRestartTest::RunTest(const FString &Parameters) {
   Slice<FGhostSliceState> GSlice = CreateGhostSlice();
   FGhostSliceState State;
 
-  // Complete a session
+  /**
+   * Complete a session
+   * User Story: As a maintainer, I need this step note so I can follow the scenario progression and reason about the expected state changes.
+   */
   State = GSlice.Reducer(
       State, Actions::GhostSessionStarted(TEXT("sess_1"), TEXT("running")));
   FGhostTestReport Report;
@@ -105,7 +118,10 @@ bool FGhostSessionRestartTest::RunTest(const FString &Parameters) {
   State = GSlice.Reducer(State, Actions::GhostSessionCompleted(Report));
   TestEqual("Status completed", State.Status, FString(TEXT("completed")));
 
-  // Start a new session
+  /**
+   * Start a new session
+   * User Story: As a maintainer, I need this step note so I can follow the scenario progression and reason about the expected state changes.
+   */
   State = GSlice.Reducer(
       State, Actions::GhostSessionStarted(TEXT("sess_2"), TEXT("running")));
 
@@ -118,9 +134,10 @@ bool FGhostSessionRestartTest::RunTest(const FString &Parameters) {
   return true;
 }
 
-// ---------------------------------------------------------------------------
-// Test: History replacement is atomic
-// ---------------------------------------------------------------------------
+/**
+ * Test: History replacement is atomic
+ * User Story: As a maintainer, I need this note so the surrounding code intent stays clear during maintenance and debugging.
+ */
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FGhostHistoryReplacementTest,
                                  "ForbocAI.Slices.Ghost.HistoryReplacement",
                                  EAutomationTestFlags_ApplicationContextMask |
@@ -129,7 +146,10 @@ bool FGhostHistoryReplacementTest::RunTest(const FString &Parameters) {
   Slice<FGhostSliceState> GSlice = CreateGhostSlice();
   FGhostSliceState State;
 
-  // First history load
+  /**
+   * First history load
+   * User Story: As a maintainer, I need this step note so I can follow the scenario progression and reason about the expected state changes.
+   */
   TArray<FGhostHistoryEntry> History1;
   FGhostHistoryEntry Entry1;
   Entry1.SessionId = TEXT("old");
@@ -137,7 +157,10 @@ bool FGhostHistoryReplacementTest::RunTest(const FString &Parameters) {
   State = GSlice.Reducer(State, Actions::GhostHistoryLoaded(History1));
   TestEqual("First history", State.History.Num(), 1);
 
-  // Second history load replaces
+  /**
+   * Second history load replaces
+   * User Story: As a maintainer, I need this step note so I can follow the scenario progression and reason about the expected state changes.
+   */
   TArray<FGhostHistoryEntry> History2;
   FGhostHistoryEntry Entry2a;
   Entry2a.SessionId = TEXT("new_a");

@@ -19,30 +19,41 @@
 namespace rtk {
 namespace detail {
 
-// ---------------------------------------------------------------------------
-// Native handle singletons
-// ---------------------------------------------------------------------------
-
+/**
+ * Returns the singleton handle backing the local inference cortex.
+ * User Story: As node-cortex thunks, I need a shared inference handle so model
+ * initialization and inference reuse the same native runtime.
+ */
 inline Native::Llama::Context &NodeCortexHandle() {
   static Native::Llama::Context Handle = nullptr;
   return Handle;
 }
 
-/** Embedding model (all-MiniLM-L6-v2). Separate from inference model. */
+/**
+ * Returns the singleton handle backing the local embedding model.
+ * User Story: As embedding thunks, I need a dedicated embedding handle so
+ * vector generation does not conflict with the inference runtime.
+ */
 inline Native::Llama::Context &NodeEmbeddingHandle() {
   static Native::Llama::Context Handle = nullptr;
   return Handle;
 }
 
+/**
+ * Returns the singleton handle backing the local sqlite memory database.
+ * User Story: As node-memory thunks, I need a shared database handle so local
+ * memory operations reuse one opened connection.
+ */
 inline Native::Sqlite::DB &NodeMemoryHandle() {
   static Native::Sqlite::DB Handle = nullptr;
   return Handle;
 }
 
-// ---------------------------------------------------------------------------
-// Async helpers
-// ---------------------------------------------------------------------------
-
+/**
+ * Wraps an already available value in a resolved AsyncResult.
+ * User Story: As thunk authors, I need synchronous values adapted into
+ * AsyncResult so local helpers can plug into the thunk pipeline uniformly.
+ */
 template <typename T>
 inline func::AsyncResult<T> ResolveAsync(const T &Value) {
   return func::AsyncResult<T>::create(
@@ -50,6 +61,11 @@ inline func::AsyncResult<T> ResolveAsync(const T &Value) {
               std::function<void(std::string)> Reject) { Resolve(Value); });
 }
 
+/**
+ * Wraps a UE string error in a rejected AsyncResult.
+ * User Story: As thunk authors, I need UE-string failures adapted into
+ * AsyncResult so error handling stays consistent with async thunks.
+ */
 template <typename T>
 inline func::AsyncResult<T> RejectAsync(const FString &Error) {
   const std::string Utf8Error = TCHAR_TO_UTF8(*Error);
@@ -60,30 +76,47 @@ inline func::AsyncResult<T> RejectAsync(const FString &Error) {
       });
 }
 
-// ---------------------------------------------------------------------------
-// JSON helpers
-// ---------------------------------------------------------------------------
-
+/**
+ * Normalizes empty JSON payloads to an empty object literal.
+ * User Story: As serializer helpers, I need empty payloads normalized so
+ * outbound JSON contracts never receive blank strings unexpectedly.
+ */
 inline FString SafeJson(const FString &Json) {
   return Json.IsEmpty() ? TEXT("{}") : Json;
 }
 
+/**
+ * Extracts the state JSON payload and normalizes empty values.
+ * User Story: As protocol serializers, I need state payloads normalized so
+ * downstream requests always receive valid JSON text.
+ */
 inline FString SafeStateJson(const FAgentState &State) {
   return SafeJson(State.JsonData);
 }
 
+/**
+ * Reports whether the state carries a non-empty JSON payload.
+ * User Story: As request builders, I need to detect meaningful state payloads
+ * so I only serialize optional state when there is real data to send.
+ */
 inline bool HasStatePayload(const FAgentState &State) {
   return !State.JsonData.IsEmpty() && State.JsonData != TEXT("{}");
 }
 
+/**
+ * Serializes a JSON object pointer into a string payload.
+ * User Story: As thunk serializers, I need a shared object-to-string helper so
+ * JSON payload generation stays consistent across instructions.
+ */
 inline FString JsonObjectToString(const TSharedPtr<FJsonObject> &Object) {
   return JsonInterop::StringifyObject(Object);
 }
 
-// ---------------------------------------------------------------------------
-// Protocol serializers
-// ---------------------------------------------------------------------------
-
+/**
+ * Serializes an identify-actor result payload for protocol tooling.
+ * User Story: As protocol execution, I need actor-identification results
+ * wrapped in a stable JSON envelope so later instructions can consume them.
+ */
 inline FString SerializeIdentifyActorResult(const FNPCActorInfo &Actor) {
   const TSharedPtr<FJsonObject> ActorObject = MakeShared<FJsonObject>();
   ActorObject->SetStringField(TEXT("npcId"), Actor.NpcId);
@@ -96,6 +129,11 @@ inline FString SerializeIdentifyActorResult(const FNPCActorInfo &Actor) {
   return JsonObjectToString(Root);
 }
 
+/**
+ * Serializes generated output into an execute-inference result payload.
+ * User Story: As protocol execution, I need inference output wrapped in a
+ * stable JSON envelope so later instructions can consume it consistently.
+ */
 inline FString SerializeInferenceResult(const FString &GeneratedOutput) {
   const TSharedPtr<FJsonObject> Root = MakeShared<FJsonObject>();
   Root->SetStringField(TEXT("type"), TEXT("ExecuteInferenceResult"));
@@ -103,6 +141,11 @@ inline FString SerializeInferenceResult(const FString &GeneratedOutput) {
   return JsonObjectToString(Root);
 }
 
+/**
+ * Serializes recalled memories into a query-vector result payload.
+ * User Story: As protocol execution, I need recalled memories wrapped in a
+ * stable JSON envelope so follow-up instructions can read them consistently.
+ */
 inline FString SerializeQueryVectorResult(const TArray<FMemoryItem> &Memories) {
   TArray<TSharedPtr<FJsonValue>> MemoryValues;
   for (int32 Index = 0; Index < Memories.Num(); ++Index) {
@@ -121,32 +164,58 @@ inline FString SerializeQueryVectorResult(const TArray<FMemoryItem> &Memories) {
   return JsonObjectToString(Root);
 }
 
-// ---------------------------------------------------------------------------
-// Node memory helpers
-// ---------------------------------------------------------------------------
-
+/**
+ * Returns the project-local infrastructure root used by native runtimes.
+ * User Story: As local runtime setup, I need one canonical infrastructure root
+ * so models and vector assets resolve from the same place.
+ */
 inline FString GetLocalInfrastructureDir() {
   return FPaths::ProjectDir() + TEXT("local_infrastructure/");
 }
 
+/**
+ * Returns the default sqlite database path for node-backed memory.
+ * User Story: As node-memory setup, I need a canonical database location so
+ * local memory storage initializes predictably.
+ */
 inline FString DefaultNodeMemoryPath() {
   return GetLocalInfrastructureDir() +
          TEXT("vectors/forbocai_vectors.db");
 }
 
+/**
+ * Returns the default embedding model path used for local vectorization.
+ * User Story: As embedding setup, I need a canonical model path so vector
+ * generation can boot without repeated path wiring.
+ */
 inline FString DefaultEmbeddingModelPath() {
   return GetLocalInfrastructureDir() + TEXT("models/all-MiniLM-L6-v2-Q4_K_M.gguf");
 }
 
+/**
+ * Returns the mutable storage holding the active node-memory database path.
+ * User Story: As node-memory setup, I need one mutable path slot so config and
+ * initialization code share the active database target.
+ */
 inline FString &NodeMemoryPathStorage() {
   static FString Path = DefaultNodeMemoryPath();
   return Path;
 }
 
+/**
+ * Returns the current node-memory database handle.
+ * User Story: As node-memory helpers, I need one place to read the active
+ * database handle so storage and recall use the same connection.
+ */
 inline Native::Sqlite::DB EnsureNodeMemoryDatabase() {
   return NodeMemoryHandle();
 }
 
+/**
+ * Builds a persisted memory item from a memory-store instruction.
+ * User Story: As node-memory store thunks, I need instructions converted into
+ * persisted memory items so local storage uses a complete record shape.
+ */
 inline FMemoryItem MakeMemoryItem(const FMemoryStoreInstruction &Instruction) {
   FMemoryItem Item;
   Item.Id = FGuid::NewGuid().ToString();
@@ -158,10 +227,11 @@ inline FMemoryItem MakeMemoryItem(const FMemoryStoreInstruction &Instruction) {
   return Item;
 }
 
-// ---------------------------------------------------------------------------
-// Response builder
-// ---------------------------------------------------------------------------
-
+/**
+ * Converts a protocol instruction into the public agent response shape.
+ * User Story: As protocol callers, I need typed instructions converted into
+ * agent responses so gameplay code can consume dialogue and actions directly.
+ */
 inline FAgentResponse BuildAgentResponse(const FNPCInstruction &Instruction) {
   FAgentResponse Response;
   Response.Dialogue = Instruction.Dialogue;
@@ -172,12 +242,10 @@ inline FAgentResponse BuildAgentResponse(const FNPCInstruction &Instruction) {
   return Response;
 }
 
-// ---------------------------------------------------------------------------
-// Arweave helpers
-// ---------------------------------------------------------------------------
-
 /**
  * Upload a signed soul payload to Arweave.
+ * User Story: As soul export flows, I need uploads handled with consistent
+ * retry and result semantics so remote persistence behaves predictably.
  *
  * Matches TS SDK handler_ArweaveUpload behaviour:
  *  - 3 attempts max (configurable via MaxRetries)
@@ -208,7 +276,10 @@ UploadSignedSoul(const FArweaveUploadInstruction &Instruction,
           return;
         }
 
-        // Shared mutable attempt counter, accessed from the async task.
+        /**
+         * Shared mutable attempt counter, accessed from the async task.
+         * User Story: As a maintainer, I need this note so the surrounding code intent stays clear during maintenance and debugging.
+         */
         struct FRetryState {
           int32 Attempt = 0;
           int32 MaxRetries = 3;
@@ -227,7 +298,10 @@ UploadSignedSoul(const FArweaveUploadInstruction &Instruction,
         State->Resolve = Resolve;
         State->Reject = Reject;
 
-        // Forward-declared so the lambda can reference itself for retries.
+        /**
+         * Forward-declared so the lambda can reference itself for retries.
+         * User Story: As a maintainer, I need this note so the surrounding code intent stays clear during maintenance and debugging.
+         */
         TSharedPtr<TFunction<void()>> TryOnce = MakeShared<TFunction<void()>>();
         *TryOnce = [State, TryOnce]() {
           State->Attempt += 1;
@@ -254,7 +328,10 @@ UploadSignedSoul(const FArweaveUploadInstruction &Instruction,
           Request->OnProcessRequestComplete().BindLambda(
               [State, TryOnce](FHttpRequestPtr Req, FHttpResponsePtr Res,
                                bool bWasSuccessful) {
-                // --- Network-level failure (timeout, DNS, connection reset) ---
+                /**
+                 * --- Network-level failure (timeout, DNS, connection reset) ---
+                 * User Story: As a maintainer, I need this note so the surrounding code intent stays clear during maintenance and debugging.
+                 */
                 if (!bWasSuccessful || !Res.IsValid()) {
                   if (State->Attempt < State->MaxRetries) {
                     const float BackoffSec =
@@ -269,8 +346,11 @@ UploadSignedSoul(const FArweaveUploadInstruction &Instruction,
                               });
                     return;
                   }
-                  // All retries exhausted — resolve with error (not reject,
-                  // matching TS SDK).
+                  /**
+                   * All retries exhausted — resolve with error (not reject,
+                   * matching TS SDK).
+                   * User Story: As a maintainer, I need this note so the surrounding code intent stays clear during maintenance and debugging.
+                   */
                   FArweaveUploadResult Result;
                   Result.StatusCode = 0;
                   Result.bSuccess = false;
@@ -282,7 +362,10 @@ UploadSignedSoul(const FArweaveUploadInstruction &Instruction,
                   return;
                 }
 
-                // --- Got an HTTP response ---
+                /**
+                 * --- Got an HTTP response ---
+                 * User Story: As a maintainer, I need this note so the surrounding code intent stays clear during maintenance and debugging.
+                 */
                 FArweaveUploadResult Result;
                 Result.ResponseJson = Res->GetContentAsString();
                 Result.StatusCode = Res->GetResponseCode();
@@ -295,7 +378,10 @@ UploadSignedSoul(const FArweaveUploadInstruction &Instruction,
                         : FString::Printf(TEXT("upload_failed_status_%d"),
                                           Result.StatusCode);
 
-                // Non-2xx: retry if attempts remain.
+                /**
+                 * Non-2xx: retry if attempts remain.
+                 * User Story: As a maintainer, I need this note so the surrounding code intent stays clear during maintenance and debugging.
+                 */
                 if (!Result.bSuccess &&
                     State->Attempt < State->MaxRetries) {
                   const float BackoffSec =
@@ -311,10 +397,16 @@ UploadSignedSoul(const FArweaveUploadInstruction &Instruction,
                   return;
                 }
 
-                // --- Derive txId ---
-                // 1. UE-only enhancement: check x-id response header.
+                /**
+                 * --- Derive txId ---
+                 * 1. UE-only enhancement: check x-id response header.
+                 * User Story: As a maintainer, I need this note so the surrounding code intent stays clear during maintenance and debugging.
+                 */
                 Result.TxId = Res->GetHeader(TEXT("x-id"));
-                // 2. Response JSON ".id" field (matches TS SDK).
+                /**
+                 * 2. Response JSON ".id" field (matches TS SDK).
+                 * User Story: As a maintainer, I need this note so the surrounding code intent stays clear during maintenance and debugging.
+                 */
                 if (Result.TxId.IsEmpty()) {
                   TSharedPtr<FJsonObject> ResponseObject;
                   if (JsonInterop::ParseJsonObject(Result.ResponseJson,
@@ -324,7 +416,10 @@ UploadSignedSoul(const FArweaveUploadInstruction &Instruction,
                         ResponseObject->GetStringField(TEXT("id"));
                   }
                 }
-                // 3. Generated fallback (matches TS SDK).
+                /**
+                 * 3. Generated fallback (matches TS SDK).
+                 * User Story: As a maintainer, I need this note so the surrounding code intent stays clear during maintenance and debugging.
+                 */
                 if (Result.TxId.IsEmpty()) {
                   Result.TxId =
                       LexToString(GetTypeHash(Result.ResponseJson));
@@ -340,13 +435,18 @@ UploadSignedSoul(const FArweaveUploadInstruction &Instruction,
           Request->ProcessRequest();
         };
 
-        // Fire the first attempt.
+        /**
+         * Fire the first attempt.
+         * User Story: As a maintainer, I need this note so the surrounding code intent stays clear during maintenance and debugging.
+         */
         (*TryOnce)();
       });
 }
 
 /**
  * Download a soul payload from Arweave.
+ * User Story: As soul import flows, I need download results normalized so
+ * callers can validate and import remote payloads consistently.
  *
  * Matches TS SDK handler_ArweaveDownload behaviour:
  *  - 60-second HTTP timeout

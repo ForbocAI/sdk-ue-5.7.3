@@ -275,6 +275,11 @@ struct FSoulVerifyResult {
 
 namespace TypeFactory {
 
+/**
+ * Builds a soul value from its core fields.
+ * User Story: As soul construction, I need a factory that assembles soul
+ * records consistently before validation, export, or storage.
+ */
 inline FSoul Soul(const FString &Id, const FString &Version,
                   const FString &Name, const FString &Persona,
                   const FAgentState &State, const TArray<FMemoryItem> &Memories,
@@ -290,6 +295,11 @@ inline FSoul Soul(const FString &Id, const FString &Version,
   return Value;
 }
 
+/**
+ * Builds the phase-one soul export request.
+ * User Story: As soul export orchestration, I need a request factory so NPC
+ * metadata is packaged consistently for the server handshake.
+ */
 inline FSoulExportPhase1Request
 SoulExportPhase1Request(const FString &NpcIdRef, const FString &Persona,
                         const FAgentState &NpcState) {
@@ -300,6 +310,11 @@ SoulExportPhase1Request(const FString &NpcIdRef, const FString &Persona,
   return Value;
 }
 
+/**
+ * Builds the soul export confirmation request.
+ * User Story: As soul export completion, I need a factory that bundles upload
+ * evidence and signatures before confirming the export remotely.
+ */
 inline FSoulExportConfirmRequest
 SoulExportConfirmRequest(const FArweaveUploadResult &UploadResult,
                          const FString &SignedPayload,
@@ -311,6 +326,11 @@ SoulExportConfirmRequest(const FArweaveUploadResult &UploadResult,
   return Value;
 }
 
+/**
+ * Builds the phase-one soul import request.
+ * User Story: As soul import orchestration, I need a request factory so the
+ * transaction id is packaged consistently for the server lookup.
+ */
 inline FSoulImportPhase1Request
 SoulImportPhase1Request(const FString &TxIdRef) {
   FSoulImportPhase1Request Value;
@@ -318,6 +338,11 @@ SoulImportPhase1Request(const FString &TxIdRef) {
   return Value;
 }
 
+/**
+ * Builds the soul import confirmation request.
+ * User Story: As soul import completion, I need a factory that carries the
+ * downloaded payload metadata into the confirmation step.
+ */
 inline FSoulImportConfirmRequest
 SoulImportConfirmRequest(const FString &TxId,
                          const FArweaveDownloadResult &DownloadResult) {
@@ -327,6 +352,11 @@ SoulImportConfirmRequest(const FString &TxId,
   return Value;
 }
 
+/**
+ * Builds the soul export result payload.
+ * User Story: As soul export consumers, I need a normalized result object so
+ * later flows can reuse the transaction id, URL, and exported soul.
+ */
 inline FSoulExportResult SoulExportResult(const FString &TxId,
                                           const FString &Url,
                                           const FSoul &SoulValue) {
@@ -337,6 +367,11 @@ inline FSoulExportResult SoulExportResult(const FString &TxId,
   return Value;
 }
 
+/**
+ * Builds the soul verification result payload.
+ * User Story: As soul verification flows, I need a consistent result type so
+ * verification status and failure reasons can be passed downstream.
+ */
 inline FSoulVerifyResult SoulVerifyResult(bool bValid,
                                           const FString &Reason = TEXT("")) {
   FSoulVerifyResult Value;

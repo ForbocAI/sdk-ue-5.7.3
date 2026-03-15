@@ -18,13 +18,28 @@ struct FProtocolRuntime {
       const FString &, const FCortexConfig &)>
       CompleteInference;
 
+  /**
+   * Returns whether local memory store and recall handlers are configured.
+   * User Story: As protocol orchestration, I need to know whether memory
+   * support exists before executing instructions that depend on it.
+   */
   bool HasMemory() const {
     return static_cast<bool>(StoreMemory) && static_cast<bool>(RecallMemory);
   }
 
+  /**
+   * Returns whether a local cortex completion handler is configured.
+   * User Story: As protocol orchestration, I need to know whether local
+   * inference is available before executing inference instructions.
+   */
   bool HasCortex() const { return static_cast<bool>(CompleteInference); }
 };
 
+/**
+ * Builds the default local protocol runtime backed by node memory and cortex.
+ * User Story: As local protocol execution, I need a ready-made runtime so the
+ * protocol loop can call local memory and inference services consistently.
+ */
 inline FProtocolRuntime LocalProtocolRuntime() {
   FProtocolRuntime Runtime;
   Runtime.StoreMemory = [](const FMemoryItem &Item) {
@@ -230,9 +245,10 @@ PersistMemoryInstructions(const TArray<FMemoryStoreInstruction> &Instructions,
 
 } // namespace detail
 
-// ---------------------------------------------------------------------------
-// Protocol thunks
-// ---------------------------------------------------------------------------
+/**
+ * Protocol thunks
+ * User Story: As a maintainer, I need this section note so related declarations and logic stay easy to locate.
+ */
 
 inline ThunkAction<FAgentResponse, FStoreState>
 processNPC(const FString &NpcId, const FString &Input = TEXT(""),

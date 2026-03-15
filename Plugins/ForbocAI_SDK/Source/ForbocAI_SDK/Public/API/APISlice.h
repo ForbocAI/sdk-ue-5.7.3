@@ -1,5 +1,8 @@
 #pragma once
-// uplink traffic enters here; keep the contract hard-edged
+/**
+ * uplink traffic enters here; keep the contract hard-edged
+ * User Story: As a maintainer, I need this note so the surrounding code intent stays clear during maintenance and debugging.
+ */
 
 #include "../Core/AsyncHttp.h"
 #include "../Core/JsonInterop.h"

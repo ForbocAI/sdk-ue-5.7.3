@@ -10,9 +10,10 @@
 #include "RuntimeStore.h"
 #include "Serialization/JsonSerializer.h"
 
-// ==========================================================
-// Ghost Module Implementation — Strict FP (Reduced)
-// ==========================================================
+/**
+ * Ghost Module Implementation — Strict FP (Reduced)
+ * User Story: As a maintainer, I need this section note so related declarations and logic stay easy to locate.
+ */
 
 FGhost GhostOps::Create(const FGhostConfig &Config) {
   FGhost Ghost;
@@ -21,7 +22,10 @@ FGhost GhostOps::Create(const FGhostConfig &Config) {
   return Ghost;
 }
 
-// Single test — G.6: dispatch runLocalGhostTestThunk
+/**
+ * Single test — G.6: dispatch runLocalGhostTestThunk
+ * User Story: As a maintainer, I need this implementation note so I can understand which milestone behavior the surrounding code is preserving.
+ */
 GhostTypes::GhostTestRunResult GhostOps::RunTest(const FGhost &Ghost,
                                                  const FString &Scenario) {
   if (!Ghost.bInitialized) {
@@ -33,7 +37,10 @@ GhostTypes::GhostTestRunResult GhostOps::RunTest(const FGhost &Ghost,
   return Store.dispatch(rtk::runLocalGhostTestThunk(Ghost.Config.Agent, Scenario));
 }
 
-// All tests implementation (Async)
+/**
+ * All tests implementation (Async)
+ * User Story: As a maintainer, I need this note so the surrounding code intent stays clear during maintenance and debugging.
+ */
 GhostTypes::GhostTestRunAllResult GhostOps::RunAllTests(const FGhost &Ghost) {
   return GhostTypes::AsyncResult<FGhostTestReport>::create(
       [Ghost](std::function<void(FGhostTestReport)> resolve,
@@ -58,25 +65,37 @@ GhostTypes::GhostTestRunAllResult GhostOps::RunAllTests(const FGhost &Ghost) {
       });
 }
 
-// Configuration validation implementation
+/**
+ * Configuration validation implementation
+ * User Story: As a maintainer, I need this section note so related declarations and logic stay easy to locate.
+ */
 GhostTypes::GhostValidationResult
 GhostOps::ValidateConfig(const FGhostConfig &Config) {
   return GhostInternal::ValidateTestConfig(Config);
 }
 
-// Summary generation implementation
+/**
+ * Summary generation implementation
+ * User Story: As a maintainer, I need this note so the surrounding code intent stays clear during maintenance and debugging.
+ */
 GhostTypes::Either<FString, FString>
 GhostOps::GenerateSummary(const FGhostTestReport &Report) {
   return GhostInternal::GenerateTestSummary(Report);
 }
 
-// JSON export implementation
+/**
+ * JSON export implementation
+ * User Story: As a maintainer, I need this note so the surrounding code intent stays clear during maintenance and debugging.
+ */
 GhostTypes::Either<FString, FString>
 GhostOps::ExportToJson(const FGhostTestReport &Report) {
   return GhostInternal::ExportResultsToJson(Report);
 }
 
-// CSV export implementation
+/**
+ * CSV export implementation
+ * User Story: As a maintainer, I need this note so the surrounding code intent stays clear during maintenance and debugging.
+ */
 GhostTypes::Either<FString, FString>
 GhostOps::ExportToCsv(const FGhostTestReport &Report) {
   return GhostInternal::ExportResultsToCsv(Report);

@@ -11,9 +11,10 @@
 
 using namespace rtk;
 
-// ---------------------------------------------------------------------------
-// Test: Ops::CreateNpc creates NPC and updates store
-// ---------------------------------------------------------------------------
+/**
+ * Test: Ops::CreateNpc creates NPC and updates store
+ * User Story: As a maintainer, I need this note so the surrounding code intent stays clear during maintenance and debugging.
+ */
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FOpsCreateNpcTest,
                                  "ForbocAI.Integration.Ops.CreateNpc",
                                  EAutomationTestFlags_ApplicationContextMask |
@@ -38,9 +39,10 @@ bool FOpsCreateNpcTest::RunTest(const FString &Parameters) {
   return true;
 }
 
-// ---------------------------------------------------------------------------
-// Test: Ops::GetActiveNpc returns nothing on empty store
-// ---------------------------------------------------------------------------
+/**
+ * Test: Ops::GetActiveNpc returns nothing on empty store
+ * User Story: As a maintainer, I need this note so the surrounding code intent stays clear during maintenance and debugging.
+ */
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FOpsGetActiveEmptyTest,
                                  "ForbocAI.Integration.Ops.GetActiveEmpty",
                                  EAutomationTestFlags_ApplicationContextMask |
@@ -54,9 +56,10 @@ bool FOpsGetActiveEmptyTest::RunTest(const FString &Parameters) {
   return true;
 }
 
-// ---------------------------------------------------------------------------
-// Test: Ops::ListNpcs returns all created NPCs
-// ---------------------------------------------------------------------------
+/**
+ * Test: Ops::ListNpcs returns all created NPCs
+ * User Story: As a maintainer, I need this note so the surrounding code intent stays clear during maintenance and debugging.
+ */
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FOpsListNpcsTest,
                                  "ForbocAI.Integration.Ops.ListNpcs",
                                  EAutomationTestFlags_ApplicationContextMask |
@@ -77,9 +80,10 @@ bool FOpsListNpcsTest::RunTest(const FString &Parameters) {
   return true;
 }
 
-// ---------------------------------------------------------------------------
-// Test: Ops::ConfigGet / ConfigSet
-// ---------------------------------------------------------------------------
+/**
+ * Test: Ops::ConfigGet / ConfigSet
+ * User Story: As a maintainer, I need this note so the surrounding code intent stays clear during maintenance and debugging.
+ */
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FOpsConfigTest,
                                  "ForbocAI.Integration.Ops.Config",
                                  EAutomationTestFlags_ApplicationContextMask |
@@ -133,9 +137,10 @@ bool FOpsConfigTest::RunTest(const FString &Parameters) {
   return true;
 }
 
-// ---------------------------------------------------------------------------
-// Test: Ops::CreateNpc then remove via store dispatch
-// ---------------------------------------------------------------------------
+/**
+ * Test: Ops::CreateNpc then remove via store dispatch
+ * User Story: As a maintainer, I need this note so the surrounding code intent stays clear during maintenance and debugging.
+ */
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(
     FOpsCreateAndRemoveTest,
     "ForbocAI.Integration.Ops.CreateAndRemove",

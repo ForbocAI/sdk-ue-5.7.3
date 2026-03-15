@@ -9,9 +9,10 @@
 
 namespace rtk {
 
-// ---------------------------------------------------------------------------
-// Soul thunks (mirrors TS soulSlice.ts)
-// ---------------------------------------------------------------------------
+/**
+ * Soul thunks (mirrors TS soulSlice.ts)
+ * User Story: As a maintainer, I need this section note so related declarations and logic stay easy to locate.
+ */
 
 inline ThunkAction<FSoulExportResult, FStoreState>
 exportSoulThunk(const FString &NpcId) {
@@ -169,9 +170,10 @@ importSoulThunk(const FString &TxId) {
   };
 }
 
-// ---------------------------------------------------------------------------
-// Soul convenience thunks
-// ---------------------------------------------------------------------------
+/**
+ * Soul convenience thunks
+ * User Story: As a maintainer, I need this section note so related declarations and logic stay easy to locate.
+ */
 
 inline ThunkAction<FSoul, FStoreState>
 localExportSoulThunk(const FString &NpcId = TEXT("")) {
@@ -195,6 +197,7 @@ localExportSoulThunk(const FString &NpcId = TEXT("")) {
  * Imports a Soul from a local JSON representation (no network).
  * Sets NPC info from the soul data and dispatches ImportSoulSuccess.
  * Mirrors TS localImportSoulThunk in soulSlice.ts.
+ * User Story: As an SDK integrator, I need this type or module note so I can understand the role of the surrounding API surface quickly.
  */
 inline ThunkAction<FSoul, FStoreState>
 localImportSoulThunk(const FSoul &Soul) {

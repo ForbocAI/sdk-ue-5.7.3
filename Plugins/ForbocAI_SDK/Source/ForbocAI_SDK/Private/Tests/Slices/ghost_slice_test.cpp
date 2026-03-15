@@ -6,9 +6,10 @@
 using namespace rtk;
 using namespace GhostSlice;
 
-// ---------------------------------------------------------------------------
-// Test: GhostSessionStarted sets session and status
-// ---------------------------------------------------------------------------
+/**
+ * Test: GhostSessionStarted sets session and status
+ * User Story: As a maintainer, I need this note so the surrounding code intent stays clear during maintenance and debugging.
+ */
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FGhostSliceSessionStartedTest,
                                  "ForbocAI.Slices.Ghost.SessionStarted",
                                  EAutomationTestFlags_ApplicationContextMask |
@@ -32,9 +33,10 @@ bool FGhostSliceSessionStartedTest::RunTest(const FString &Parameters) {
   return true;
 }
 
-// ---------------------------------------------------------------------------
-// Test: GhostProgress updates progress
-// ---------------------------------------------------------------------------
+/**
+ * Test: GhostProgress updates progress
+ * User Story: As a maintainer, I need this note so the surrounding code intent stays clear during maintenance and debugging.
+ */
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FGhostSliceProgressTest,
                                  "ForbocAI.Slices.Ghost.Progress",
                                  EAutomationTestFlags_ApplicationContextMask |
@@ -57,9 +59,10 @@ bool FGhostSliceProgressTest::RunTest(const FString &Parameters) {
   return true;
 }
 
-// ---------------------------------------------------------------------------
-// Test: GhostSessionCompleted sets results
-// ---------------------------------------------------------------------------
+/**
+ * Test: GhostSessionCompleted sets results
+ * User Story: As a maintainer, I need this note so the surrounding code intent stays clear during maintenance and debugging.
+ */
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FGhostSliceCompletedTest,
                                  "ForbocAI.Slices.Ghost.SessionCompleted",
                                  EAutomationTestFlags_ApplicationContextMask |
@@ -88,9 +91,10 @@ bool FGhostSliceCompletedTest::RunTest(const FString &Parameters) {
   return true;
 }
 
-// ---------------------------------------------------------------------------
-// Test: GhostSessionFailed sets error
-// ---------------------------------------------------------------------------
+/**
+ * Test: GhostSessionFailed sets error
+ * User Story: As a maintainer, I need this note so the surrounding code intent stays clear during maintenance and debugging.
+ */
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FGhostSliceFailedTest,
                                  "ForbocAI.Slices.Ghost.SessionFailed",
                                  EAutomationTestFlags_ApplicationContextMask |
@@ -114,9 +118,10 @@ bool FGhostSliceFailedTest::RunTest(const FString &Parameters) {
   return true;
 }
 
-// ---------------------------------------------------------------------------
-// Test: GhostHistoryLoaded populates history
-// ---------------------------------------------------------------------------
+/**
+ * Test: GhostHistoryLoaded populates history
+ * User Story: As a maintainer, I need this note so the surrounding code intent stays clear during maintenance and debugging.
+ */
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FGhostSliceHistoryTest,
                                  "ForbocAI.Slices.Ghost.HistoryLoaded",
                                  EAutomationTestFlags_ApplicationContextMask |

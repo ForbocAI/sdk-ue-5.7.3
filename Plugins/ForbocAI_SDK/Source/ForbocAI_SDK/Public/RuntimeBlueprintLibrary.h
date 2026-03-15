@@ -8,6 +8,7 @@
 /**
  * Blueprint-callable wrappers around Ops.
  * Exposes the core ForbocAI operations to Blueprints.
+ * User Story: As a Blueprint integrator, I need this API note so I can call the SDK surface correctly from Unreal gameplay code.
  */
 UCLASS()
 class FORBOCAI_SDK_API UForbocAIBlueprintLibrary
@@ -15,12 +16,18 @@ class FORBOCAI_SDK_API UForbocAIBlueprintLibrary
   GENERATED_BODY()
 
 public:
-  // ---- System ----
+  /**
+   * ---- System ----
+   * User Story: As a maintainer, I need this note so the surrounding code intent stays clear during maintenance and debugging.
+   */
 
   UFUNCTION(BlueprintCallable, Category = "ForbocAI|System")
   static FString CheckApiStatus();
 
-  // ---- NPC ----
+  /**
+   * ---- NPC ----
+   * User Story: As a maintainer, I need this note so the surrounding code intent stays clear during maintenance and debugging.
+   */
 
   UFUNCTION(BlueprintCallable, Category = "ForbocAI|NPC")
   static FString CreateNpc(const FString &Persona);
@@ -34,6 +41,7 @@ public:
    * @param NpcId  The NPC to chat with.
    * @param Message  The player's message.
    * @return The NPC's dialogue response.
+   * User Story: As an SDK integrator, I need this type or module note so I can understand the role of the surrounding API surface quickly.
    */
   UFUNCTION(BlueprintCallable, Category = "ForbocAI|NPC",
             meta = (DisplayName = "Chat With NPC"))
@@ -42,7 +50,10 @@ public:
   UFUNCTION(BlueprintCallable, Category = "ForbocAI|NPC")
   static bool HasActiveNpc();
 
-  // ---- Memory ----
+  /**
+   * ---- Memory ----
+   * User Story: As a maintainer, I need this note so the surrounding code intent stays clear during maintenance and debugging.
+   */
 
   UFUNCTION(BlueprintCallable, Category = "ForbocAI|Memory")
   static void MemoryStore(const FString &NpcId, const FString &Observation);
@@ -50,7 +61,10 @@ public:
   UFUNCTION(BlueprintCallable, Category = "ForbocAI|Memory")
   static void MemoryClear(const FString &NpcId);
 
-  // ---- Ghost ----
+  /**
+   * ---- Ghost ----
+   * User Story: As a maintainer, I need this note so the surrounding code intent stays clear during maintenance and debugging.
+   */
 
   UFUNCTION(BlueprintCallable, Category = "ForbocAI|Ghost")
   static FString GhostRun(const FString &TestSuite, int32 Duration = 300);
@@ -58,7 +72,10 @@ public:
   UFUNCTION(BlueprintCallable, Category = "ForbocAI|Ghost")
   static FString GhostStop(const FString &SessionId);
 
-  // ---- Soul ----
+  /**
+   * ---- Soul ----
+   * User Story: As a maintainer, I need this note so the surrounding code intent stays clear during maintenance and debugging.
+   */
 
   UFUNCTION(BlueprintCallable, Category = "ForbocAI|Soul")
   static FString ExportSoul(const FString &NpcId);
@@ -69,12 +86,18 @@ public:
   UFUNCTION(BlueprintCallable, Category = "ForbocAI|Soul")
   static bool VerifySoul(const FString &TxId);
 
-  // ---- Bridge ----
+  /**
+   * ---- Bridge ----
+   * User Story: As a maintainer, I need this note so the surrounding code intent stays clear during maintenance and debugging.
+   */
 
   UFUNCTION(BlueprintCallable, Category = "ForbocAI|Bridge")
   static bool ValidateBridgeAction(const FString &ActionJson);
 
-  // ---- Config ----
+  /**
+   * ---- Config ----
+   * User Story: As a maintainer, I need this note so the surrounding code intent stays clear during maintenance and debugging.
+   */
 
   UFUNCTION(BlueprintCallable, Category = "ForbocAI|Config")
   static void ConfigSet(const FString &Key, const FString &Value);

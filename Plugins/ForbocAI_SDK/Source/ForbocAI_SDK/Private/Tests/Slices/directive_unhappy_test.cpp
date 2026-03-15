@@ -7,9 +7,10 @@
 using namespace rtk;
 using namespace DirectiveSlice;
 
-// ---------------------------------------------------------------------------
-// Test: RunFailed on a non-existent directive is a no-op
-// ---------------------------------------------------------------------------
+/**
+ * Test: RunFailed on a non-existent directive is a no-op
+ * User Story: As a maintainer, I need this note so the surrounding code intent stays clear during maintenance and debugging.
+ */
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FDirectiveFailNonExistentTest,
                                  "ForbocAI.Slices.Directive.FailNonExistent",
                                  EAutomationTestFlags_ApplicationContextMask |
@@ -28,9 +29,10 @@ bool FDirectiveFailNonExistentTest::RunTest(const FString &Parameters) {
   return true;
 }
 
-// ---------------------------------------------------------------------------
-// Test: VerdictValidated on a non-existent directive is a no-op
-// ---------------------------------------------------------------------------
+/**
+ * Test: VerdictValidated on a non-existent directive is a no-op
+ * User Story: As a maintainer, I need this note so the surrounding code intent stays clear during maintenance and debugging.
+ */
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FDirectiveVerdictNonExistentTest,
                                  "ForbocAI.Slices.Directive.VerdictNonExistent",
                                  EAutomationTestFlags_ApplicationContextMask |
@@ -52,9 +54,10 @@ bool FDirectiveVerdictNonExistentTest::RunTest(const FString &Parameters) {
   return true;
 }
 
-// ---------------------------------------------------------------------------
-// Test: DirectiveReceived on a non-existent directive is a no-op
-// ---------------------------------------------------------------------------
+/**
+ * Test: DirectiveReceived on a non-existent directive is a no-op
+ * User Story: As a maintainer, I need this note so the surrounding code intent stays clear during maintenance and debugging.
+ */
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FDirectiveReceivedNonExistentTest,
                                  "ForbocAI.Slices.Directive.ReceivedNonExistent",
                                  EAutomationTestFlags_ApplicationContextMask |
@@ -73,9 +76,10 @@ bool FDirectiveReceivedNonExistentTest::RunTest(const FString &Parameters) {
   return true;
 }
 
-// ---------------------------------------------------------------------------
-// Test: Duplicate DirectiveRunStarted with same ID overwrites
-// ---------------------------------------------------------------------------
+/**
+ * Test: Duplicate DirectiveRunStarted with same ID overwrites
+ * User Story: As a maintainer, I need this note so the surrounding code intent stays clear during maintenance and debugging.
+ */
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FDirectiveDuplicateStartTest,
                                  "ForbocAI.Slices.Directive.DuplicateStart",
                                  EAutomationTestFlags_ApplicationContextMask |
@@ -105,9 +109,10 @@ bool FDirectiveDuplicateStartTest::RunTest(const FString &Parameters) {
   return true;
 }
 
-// ---------------------------------------------------------------------------
-// Test: Failed directive then re-started with same ID resets state
-// ---------------------------------------------------------------------------
+/**
+ * Test: Failed directive then re-started with same ID resets state
+ * User Story: As a maintainer, I need this step note so I can follow the scenario progression and reason about the expected state changes.
+ */
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FDirectiveFailThenRestartTest,
                                  "ForbocAI.Slices.Directive.FailThenRestart",
                                  EAutomationTestFlags_ApplicationContextMask |
@@ -131,7 +136,10 @@ bool FDirectiveFailThenRestartTest::RunTest(const FString &Parameters) {
               static_cast<int32>(EDirectiveStatus::Failed));
   }
 
-  // Re-start same ID
+  /**
+   * Re-start same ID
+   * User Story: As a maintainer, I need this note so the surrounding code intent stays clear during maintenance and debugging.
+   */
   State = DirSlice.Reducer(
       State,
       Actions::DirectiveRunStarted(TEXT("r1"), TEXT("npc_a"), TEXT("Try 2")));
@@ -150,9 +158,10 @@ bool FDirectiveFailThenRestartTest::RunTest(const FString &Parameters) {
   return true;
 }
 
-// ---------------------------------------------------------------------------
-// Test: ClearDirectivesForNpc with no matching NPCs is a no-op
-// ---------------------------------------------------------------------------
+/**
+ * Test: ClearDirectivesForNpc with no matching NPCs is a no-op
+ * User Story: As a maintainer, I need this note so the surrounding code intent stays clear during maintenance and debugging.
+ */
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FDirectiveClearNoMatchTest,
                                  "ForbocAI.Slices.Directive.ClearNoMatch",
                                  EAutomationTestFlags_ApplicationContextMask |
@@ -174,9 +183,10 @@ bool FDirectiveClearNoMatchTest::RunTest(const FString &Parameters) {
   return true;
 }
 
-// ---------------------------------------------------------------------------
-// Test: VerdictValidated with invalid verdict sets bVerdictValid false
-// ---------------------------------------------------------------------------
+/**
+ * Test: VerdictValidated with invalid verdict sets bVerdictValid false
+ * User Story: As a maintainer, I need this note so the surrounding code intent stays clear during maintenance and debugging.
+ */
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FDirectiveInvalidVerdictTest,
                                  "ForbocAI.Slices.Directive.InvalidVerdict",
                                  EAutomationTestFlags_ApplicationContextMask |

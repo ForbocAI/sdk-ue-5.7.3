@@ -6,9 +6,10 @@
 using namespace rtk;
 using namespace SoulSlice;
 
-// ---------------------------------------------------------------------------
-// Test: SoulExport Pending / Success / Failed lifecycle
-// ---------------------------------------------------------------------------
+/**
+ * Test: SoulExport Pending / Success / Failed lifecycle
+ * User Story: As a maintainer, I need this step note so I can follow the scenario progression and reason about the expected state changes.
+ */
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FSoulSliceExportTest,
                                  "ForbocAI.Slices.Soul.ExportLifecycle",
                                  EAutomationTestFlags_ApplicationContextMask |
@@ -17,18 +18,27 @@ bool FSoulSliceExportTest::RunTest(const FString &Parameters) {
   Slice<FSoulSliceState> SSlice = CreateSoulSlice();
   FSoulSliceState State;
 
-  // Initial
+  /**
+   * Initial
+   * User Story: As a maintainer, I need this step note so I can follow the scenario progression and reason about the expected state changes.
+   */
   TestEqual("Initial ExportStatus", State.ExportStatus,
             FString(TEXT("idle")));
   TestFalse("No last export", State.bHasLastExport);
 
-  // Pending
+  /**
+   * Pending
+   * User Story: As a maintainer, I need this step note so I can follow the scenario progression and reason about the expected state changes.
+   */
   State = SSlice.Reducer(State, SoulSlice::Actions::RemoteExportSoulPending());
   TestEqual("ExportStatus exporting", State.ExportStatus,
             FString(TEXT("exporting")));
   TestTrue("Error cleared", State.Error.IsEmpty());
 
-  // Success
+  /**
+   * Success
+   * User Story: As a maintainer, I need this step note so I can follow the scenario progression and reason about the expected state changes.
+   */
   FSoulExportResult ExportResult;
   ExportResult.TxId = TEXT("arweave_tx_abc");
   State = SSlice.Reducer(State, SoulSlice::Actions::RemoteExportSoulSuccess(ExportResult));
@@ -41,9 +51,10 @@ bool FSoulSliceExportTest::RunTest(const FString &Parameters) {
   return true;
 }
 
-// ---------------------------------------------------------------------------
-// Test: SoulExport Failed
-// ---------------------------------------------------------------------------
+/**
+ * Test: SoulExport Failed
+ * User Story: As a maintainer, I need this step note so I can follow the scenario progression and reason about the expected state changes.
+ */
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FSoulSliceExportFailTest,
                                  "ForbocAI.Slices.Soul.ExportFailed",
                                  EAutomationTestFlags_ApplicationContextMask |
@@ -63,9 +74,10 @@ bool FSoulSliceExportFailTest::RunTest(const FString &Parameters) {
   return true;
 }
 
-// ---------------------------------------------------------------------------
-// Test: SoulImport Pending / Success / Failed lifecycle
-// ---------------------------------------------------------------------------
+/**
+ * Test: SoulImport Pending / Success / Failed lifecycle
+ * User Story: As a maintainer, I need this step note so I can follow the scenario progression and reason about the expected state changes.
+ */
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FSoulSliceImportTest,
                                  "ForbocAI.Slices.Soul.ImportLifecycle",
                                  EAutomationTestFlags_ApplicationContextMask |
@@ -74,16 +86,25 @@ bool FSoulSliceImportTest::RunTest(const FString &Parameters) {
   Slice<FSoulSliceState> SSlice = CreateSoulSlice();
   FSoulSliceState State;
 
-  // Initial
+  /**
+   * Initial
+   * User Story: As a maintainer, I need this step note so I can follow the scenario progression and reason about the expected state changes.
+   */
   TestEqual("Initial ImportStatus", State.ImportStatus,
             FString(TEXT("idle")));
 
-  // Pending
+  /**
+   * Pending
+   * User Story: As a maintainer, I need this step note so I can follow the scenario progression and reason about the expected state changes.
+   */
   State = SSlice.Reducer(State, SoulSlice::Actions::ImportSoulPending());
   TestEqual("ImportStatus importing", State.ImportStatus,
             FString(TEXT("importing")));
 
-  // Success
+  /**
+   * Success
+   * User Story: As a maintainer, I need this step note so I can follow the scenario progression and reason about the expected state changes.
+   */
   FSoul Soul;
   Soul.Id = TEXT("npc_soul");
   Soul.Persona = TEXT("Wise sage");
@@ -97,9 +118,10 @@ bool FSoulSliceImportTest::RunTest(const FString &Parameters) {
   return true;
 }
 
-// ---------------------------------------------------------------------------
-// Test: SoulImport Failed
-// ---------------------------------------------------------------------------
+/**
+ * Test: SoulImport Failed
+ * User Story: As a maintainer, I need this step note so I can follow the scenario progression and reason about the expected state changes.
+ */
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FSoulSliceImportFailTest,
                                  "ForbocAI.Slices.Soul.ImportFailed",
                                  EAutomationTestFlags_ApplicationContextMask |
@@ -119,9 +141,10 @@ bool FSoulSliceImportFailTest::RunTest(const FString &Parameters) {
   return true;
 }
 
-// ---------------------------------------------------------------------------
-// Test: SetSoulList and ClearSoulState
-// ---------------------------------------------------------------------------
+/**
+ * Test: SetSoulList and ClearSoulState
+ * User Story: As a maintainer, I need this note so the surrounding code intent stays clear during maintenance and debugging.
+ */
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FSoulSliceListAndClearTest,
                                  "ForbocAI.Slices.Soul.ListAndClear",
                                  EAutomationTestFlags_ApplicationContextMask |
@@ -140,7 +163,10 @@ bool FSoulSliceListAndClearTest::RunTest(const FString &Parameters) {
   TestEqual("Soul txId", State.AvailableSouls[0].TxId,
             FString(TEXT("tx_list_1")));
 
-  // Clear resets everything
+  /**
+   * Clear resets everything
+   * User Story: As a maintainer, I need this step note so I can follow the scenario progression and reason about the expected state changes.
+   */
   State = SSlice.Reducer(State, SoulSlice::Actions::ClearSoulState());
   TestEqual("ExportStatus reset", State.ExportStatus, FString(TEXT("idle")));
   TestEqual("ImportStatus reset", State.ImportStatus, FString(TEXT("idle")));

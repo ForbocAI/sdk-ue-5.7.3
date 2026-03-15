@@ -6,9 +6,10 @@
 using namespace rtk;
 using namespace SoulSlice;
 
-// ---------------------------------------------------------------------------
-// Test: Import failure followed by successful retry recovers state
-// ---------------------------------------------------------------------------
+/**
+ * Test: Import failure followed by successful retry recovers state
+ * User Story: As a maintainer, I need this note so the surrounding code intent stays clear during maintenance and debugging.
+ */
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FSoulImportRecoveryTest,
                                  "ForbocAI.Slices.Soul.ImportFailureRecovery",
                                  EAutomationTestFlags_ApplicationContextMask |
@@ -17,7 +18,10 @@ bool FSoulImportRecoveryTest::RunTest(const FString &Parameters) {
   Slice<FSoulSliceState> SSlice = CreateSoulSlice();
   FSoulSliceState State;
 
-  // First attempt: fails
+  /**
+   * First attempt: fails
+   * User Story: As a maintainer, I need this step note so I can follow the scenario progression and reason about the expected state changes.
+   */
   State = SSlice.Reducer(State, Actions::ImportSoulPending());
   State = SSlice.Reducer(State,
                          Actions::ImportSoulFailed(TEXT("Network timeout")));
@@ -25,7 +29,10 @@ bool FSoulImportRecoveryTest::RunTest(const FString &Parameters) {
             FString(TEXT("failed")));
   TestEqual("Error set", State.Error, FString(TEXT("Network timeout")));
 
-  // Second attempt: succeeds
+  /**
+   * Second attempt: succeeds
+   * User Story: As a maintainer, I need this step note so I can follow the scenario progression and reason about the expected state changes.
+   */
   State = SSlice.Reducer(State, Actions::ImportSoulPending());
   TestEqual("ImportStatus importing again", State.ImportStatus,
             FString(TEXT("importing")));
@@ -44,9 +51,10 @@ bool FSoulImportRecoveryTest::RunTest(const FString &Parameters) {
   return true;
 }
 
-// ---------------------------------------------------------------------------
-// Test: Export failure followed by successful retry recovers state
-// ---------------------------------------------------------------------------
+/**
+ * Test: Export failure followed by successful retry recovers state
+ * User Story: As a maintainer, I need this note so the surrounding code intent stays clear during maintenance and debugging.
+ */
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FSoulExportRecoveryTest,
                                  "ForbocAI.Slices.Soul.ExportFailureRecovery",
                                  EAutomationTestFlags_ApplicationContextMask |
@@ -55,13 +63,19 @@ bool FSoulExportRecoveryTest::RunTest(const FString &Parameters) {
   Slice<FSoulSliceState> SSlice = CreateSoulSlice();
   FSoulSliceState State;
 
-  // First: fail
+  /**
+   * First: fail
+   * User Story: As a maintainer, I need this step note so I can follow the scenario progression and reason about the expected state changes.
+   */
   State = SSlice.Reducer(State, Actions::RemoteExportSoulPending());
   State = SSlice.Reducer(State,
                          Actions::RemoteExportSoulFailed(TEXT("Upload error")));
   TestEqual("Export failed", State.ExportStatus, FString(TEXT("failed")));
 
-  // Second: succeed
+  /**
+   * Second: succeed
+   * User Story: As a maintainer, I need this step note so I can follow the scenario progression and reason about the expected state changes.
+   */
   State = SSlice.Reducer(State, Actions::RemoteExportSoulPending());
   TestEqual("Re-exporting", State.ExportStatus, FString(TEXT("exporting")));
 
@@ -74,9 +88,10 @@ bool FSoulExportRecoveryTest::RunTest(const FString &Parameters) {
   return true;
 }
 
-// ---------------------------------------------------------------------------
-// Test: Empty soul list is handled correctly
-// ---------------------------------------------------------------------------
+/**
+ * Test: Empty soul list is handled correctly
+ * User Story: As a maintainer, I need this note so the surrounding code intent stays clear during maintenance and debugging.
+ */
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FSoulEmptyListTest,
                                  "ForbocAI.Slices.Soul.EmptyList",
                                  EAutomationTestFlags_ApplicationContextMask |
@@ -85,12 +100,18 @@ bool FSoulEmptyListTest::RunTest(const FString &Parameters) {
   Slice<FSoulSliceState> SSlice = CreateSoulSlice();
   FSoulSliceState State;
 
-  // Set empty list
+  /**
+   * Set empty list
+   * User Story: As a maintainer, I need this note so the surrounding code intent stays clear during maintenance and debugging.
+   */
   TArray<FSoulListItem> EmptyList;
   State = SSlice.Reducer(State, Actions::SetSoulList(EmptyList));
   TestEqual("Empty soul list", State.AvailableSouls.Num(), 0);
 
-  // Replace non-empty with empty
+  /**
+   * Replace non-empty with empty
+   * User Story: As a maintainer, I need this note so the surrounding code intent stays clear during maintenance and debugging.
+   */
   TArray<FSoulListItem> NonEmpty;
   FSoulListItem Item;
   Item.TxId = TEXT("tx_1");
@@ -104,9 +125,10 @@ bool FSoulEmptyListTest::RunTest(const FString &Parameters) {
   return true;
 }
 
-// ---------------------------------------------------------------------------
-// Test: Soul list replacement is atomic (not additive)
-// ---------------------------------------------------------------------------
+/**
+ * Test: Soul list replacement is atomic (not additive)
+ * User Story: As a maintainer, I need this note so the surrounding code intent stays clear during maintenance and debugging.
+ */
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FSoulListReplacementTest,
                                  "ForbocAI.Slices.Soul.ListReplacement",
                                  EAutomationTestFlags_ApplicationContextMask |
@@ -137,9 +159,10 @@ bool FSoulListReplacementTest::RunTest(const FString &Parameters) {
   return true;
 }
 
-// ---------------------------------------------------------------------------
-// Test: ClearSoulState does not affect soul list set afterward
-// ---------------------------------------------------------------------------
+/**
+ * Test: ClearSoulState does not affect soul list set afterward
+ * User Story: As a maintainer, I need this note so the surrounding code intent stays clear during maintenance and debugging.
+ */
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FSoulClearThenSetTest,
                                  "ForbocAI.Slices.Soul.ClearThenSet",
                                  EAutomationTestFlags_ApplicationContextMask |
@@ -148,20 +171,29 @@ bool FSoulClearThenSetTest::RunTest(const FString &Parameters) {
   Slice<FSoulSliceState> SSlice = CreateSoulSlice();
   FSoulSliceState State;
 
-  // Export and import something
+  /**
+   * Export and import something
+   * User Story: As a maintainer, I need this note so the surrounding code intent stays clear during maintenance and debugging.
+   */
   State = SSlice.Reducer(State, Actions::RemoteExportSoulPending());
   FSoulExportResult Result;
   Result.TxId = TEXT("export_tx");
   State = SSlice.Reducer(State, Actions::RemoteExportSoulSuccess(Result));
   TestTrue("Has export", State.bHasLastExport);
 
-  // Clear
+  /**
+   * Clear
+   * User Story: As a maintainer, I need this step note so I can follow the scenario progression and reason about the expected state changes.
+   */
   State = SSlice.Reducer(State, Actions::ClearSoulState());
   TestFalse("Export cleared", State.bHasLastExport);
   TestFalse("Import cleared", State.bHasLastImport);
   TestEqual("ExportStatus idle", State.ExportStatus, FString(TEXT("idle")));
 
-  // Set new list after clear
+  /**
+   * Set new list after clear
+   * User Story: As a maintainer, I need this note so the surrounding code intent stays clear during maintenance and debugging.
+   */
   TArray<FSoulListItem> NewList;
   FSoulListItem NewItem;
   NewItem.TxId = TEXT("post_clear");

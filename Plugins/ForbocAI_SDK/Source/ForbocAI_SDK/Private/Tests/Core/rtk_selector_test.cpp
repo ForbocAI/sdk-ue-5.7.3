@@ -31,16 +31,25 @@ bool FRtkSelectorTest::RunTest(const FString &Parameters) {
 
   FTestState State1{10, 20};
 
-  // First call computes
+  /**
+   * First call computes
+   * User Story: As a maintainer, I need this step note so I can follow the scenario progression and reason about the expected state changes.
+   */
   TestEqual("Initial computation", ComplexSelector(State1), 30);
   TestEqual("Computations count = 1", Computations, 1);
 
-  // Second call with same state (by value equality) hits cache
+  /**
+   * Second call with same state (by value equality) hits cache
+   * User Story: As a maintainer, I need this step note so I can follow the scenario progression and reason about the expected state changes.
+   */
   FTestState State2{10, 20};
   TestEqual("Cache hit computation", ComplexSelector(State2), 30);
   TestEqual("Computations count still = 1", Computations, 1);
 
-  // Third call with new state computes
+  /**
+   * Third call with new state computes
+   * User Story: As a maintainer, I need this step note so I can follow the scenario progression and reason about the expected state changes.
+   */
   FTestState State3{10, 25};
   TestEqual("New state computation", ComplexSelector(State3), 35);
   TestEqual("Computations count = 2", Computations, 2);

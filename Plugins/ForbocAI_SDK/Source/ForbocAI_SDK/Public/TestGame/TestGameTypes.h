@@ -1,14 +1,18 @@
 #pragma once
-// Test-game type contracts — mirrors TS test-game/src/types.ts
+/**
+ * Test-game type contracts — mirrors TS test-game/src/types.ts
+ * User Story: As a maintainer, I need this section note so related declarations and logic stay easy to locate.
+ */
 
 #include "CoreMinimal.h"
 #include "Core/rtk.hpp"
 
 namespace TestGame {
 
-// -------------------------------------------------------------------------
-// Spatial
-// -------------------------------------------------------------------------
+/**
+ * Spatial
+ * User Story: As a maintainer, I need this note so the surrounding code intent stays clear during maintenance and debugging.
+ */
 
 struct FPosition {
   int32 X;
@@ -20,9 +24,10 @@ struct FPosition {
   }
 };
 
-// -------------------------------------------------------------------------
-// Entity types
-// -------------------------------------------------------------------------
+/**
+ * Entity types
+ * User Story: As a maintainer, I need this section note so related declarations and logic stay easy to locate.
+ */
 
 struct FGameNPC {
   FString Id;
@@ -51,9 +56,10 @@ struct FPlayerState {
   }
 };
 
-// -------------------------------------------------------------------------
-// Command groups (17 required for 100% coverage)
-// -------------------------------------------------------------------------
+/**
+ * Command groups (17 required for 100% coverage)
+ * User Story: As a maintainer, I need this note so the surrounding code intent stays clear during maintenance and debugging.
+ */
 
 enum class ECommandGroup : uint8 {
   Status,
@@ -89,9 +95,10 @@ static const TArray<ECommandGroup> &RequiredGroups() {
   return Groups;
 }
 
-// -------------------------------------------------------------------------
-// Command + scenario types
-// -------------------------------------------------------------------------
+/**
+ * Command + scenario types
+ * User Story: As a maintainer, I need this section note so related declarations and logic stay easy to locate.
+ */
 
 struct FCommandSpec {
   ECommandGroup Group;
@@ -109,9 +116,10 @@ struct FScenarioStep {
   TArray<FCommandSpec> Commands;
 };
 
-// -------------------------------------------------------------------------
-// Transcript + result types
-// -------------------------------------------------------------------------
+/**
+ * Transcript + result types
+ * User Story: As a maintainer, I need this section note so related declarations and logic stay easy to locate.
+ */
 
 enum class ETranscriptStatus : uint8 { Ok, Error };
 
@@ -133,9 +141,10 @@ struct FGameRunResult {
   FString Summary;
 };
 
-// -------------------------------------------------------------------------
-// Mechanics types
-// -------------------------------------------------------------------------
+/**
+ * Mechanics types
+ * User Story: As a maintainer, I need this section note so related declarations and logic stay easy to locate.
+ */
 
 struct FGridState {
   int32 Width;
@@ -178,9 +187,10 @@ struct FBridgeRulesState {
         ActivePreset(TEXT("default")) {}
 };
 
-// -------------------------------------------------------------------------
-// Store-domain types
-// -------------------------------------------------------------------------
+/**
+ * Store-domain types
+ * User Story: As a maintainer, I need this section note so related declarations and logic stay easy to locate.
+ */
 
 struct FMemoryRecord {
   FString Id;
@@ -203,9 +213,10 @@ struct FSoulTrackingState {
   TArray<FString> ImportedSoulTxIds;
 };
 
-// -------------------------------------------------------------------------
-// Terminal-domain types
-// -------------------------------------------------------------------------
+/**
+ * Terminal-domain types
+ * User Story: As a maintainer, I need this section note so related declarations and logic stay easy to locate.
+ */
 
 enum class EPlayMode : uint8 { Manual, Autoplay };
 
@@ -221,17 +232,19 @@ struct FTranscriptState {
   TArray<FTranscriptEntry> Entries;
 };
 
-// -------------------------------------------------------------------------
-// Autoplay-domain types
-// -------------------------------------------------------------------------
+/**
+ * Autoplay-domain types
+ * User Story: As a maintainer, I need this section note so related declarations and logic stay easy to locate.
+ */
 
 struct FHarnessState {
   TMap<ECommandGroup, bool> Covered;
 };
 
-// -------------------------------------------------------------------------
-// Validation helpers
-// -------------------------------------------------------------------------
+/**
+ * Validation helpers
+ * User Story: As a maintainer, I need this section note so related declarations and logic stay easy to locate.
+ */
 
 struct FJumpResult {
   bool bValid;
@@ -243,6 +256,11 @@ struct FMoveResult {
   bool bCapped;
 };
 
+/**
+ * Returns whether a grid position is traversable.
+ * User Story: As test-game movement validation, I need passability checks so
+ * AI movement can reject blocked or out-of-bounds tiles.
+ */
 inline bool IsPassable(const FGridState &Grid, const FPosition &Pos) {
   if (Pos.X < 0 || Pos.Y < 0 || Pos.X >= Grid.Width || Pos.Y >= Grid.Height) {
     return false;
@@ -253,6 +271,11 @@ inline bool IsPassable(const FGridState &Grid, const FPosition &Pos) {
   return true;
 }
 
+/**
+ * Validates whether a requested jump force is allowed.
+ * User Story: As test-game bridge validation, I need jump checks so excessive
+ * jump force is rejected before actions are applied.
+ */
 inline FJumpResult ValidateJump(const FBridgeRulesState &Rules, int32 Force) {
   FJumpResult R;
   R.bValid = Force <= Rules.MaxJumpForce;
@@ -263,6 +286,11 @@ inline FJumpResult ValidateJump(const FBridgeRulesState &Rules, int32 Force) {
   return R;
 }
 
+/**
+ * Caps requested movement distance to the configured rules.
+ * User Story: As test-game movement rules, I need move distance capped so
+ * actions respect the configured maximum move allowance.
+ */
 inline FMoveResult CapMoveDistance(const FBridgeRulesState &Rules,
                                    int32 Requested) {
   FMoveResult R;

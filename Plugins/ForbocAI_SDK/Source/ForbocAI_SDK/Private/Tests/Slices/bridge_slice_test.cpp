@@ -6,9 +6,10 @@
 using namespace rtk;
 using namespace BridgeSlice;
 
-// ---------------------------------------------------------------------------
-// Test: BridgeValidationPending / Success / Failure lifecycle
-// ---------------------------------------------------------------------------
+/**
+ * Test: BridgeValidationPending / Success / Failure lifecycle
+ * User Story: As a maintainer, I need this step note so I can follow the scenario progression and reason about the expected state changes.
+ */
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(
     FBridgeSliceValidationLifecycleTest,
     "ForbocAI.Slices.Bridge.ValidationLifecycle",
@@ -18,16 +19,25 @@ bool FBridgeSliceValidationLifecycleTest::RunTest(const FString &Parameters) {
   Slice<FBridgeSliceState> BSlice = CreateBridgeSlice();
   FBridgeSliceState State;
 
-  // Initial
+  /**
+   * Initial
+   * User Story: As a maintainer, I need this step note so I can follow the scenario progression and reason about the expected state changes.
+   */
   TestEqual("Initial status idle", State.Status, FString(TEXT("idle")));
   TestFalse("No validation yet", State.bHasLastValidation);
 
-  // Pending
+  /**
+   * Pending
+   * User Story: As a maintainer, I need this step note so I can follow the scenario progression and reason about the expected state changes.
+   */
   State = BSlice.Reducer(State, BridgeSlice::Actions::BridgeValidationPending());
   TestEqual("Status validating", State.Status, FString(TEXT("validating")));
   TestTrue("Error cleared", State.Error.IsEmpty());
 
-  // Success
+  /**
+   * Success
+   * User Story: As a maintainer, I need this step note so I can follow the scenario progression and reason about the expected state changes.
+   */
   FValidationResult Result;
   Result.bValid = true;
   State = BSlice.Reducer(State, BridgeSlice::Actions::BridgeValidationSuccess(Result));
@@ -38,9 +48,10 @@ bool FBridgeSliceValidationLifecycleTest::RunTest(const FString &Parameters) {
   return true;
 }
 
-// ---------------------------------------------------------------------------
-// Test: BridgeValidationFailure sets error state
-// ---------------------------------------------------------------------------
+/**
+ * Test: BridgeValidationFailure sets error state
+ * User Story: As a maintainer, I need this note so the surrounding code intent stays clear during maintenance and debugging.
+ */
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FBridgeSliceValidationFailTest,
                                  "ForbocAI.Slices.Bridge.ValidationFailure",
                                  EAutomationTestFlags_ApplicationContextMask |
@@ -60,9 +71,10 @@ bool FBridgeSliceValidationFailTest::RunTest(const FString &Parameters) {
   return true;
 }
 
-// ---------------------------------------------------------------------------
-// Test: AddActivePreset and SetActivePresets
-// ---------------------------------------------------------------------------
+/**
+ * Test: AddActivePreset and SetActivePresets
+ * User Story: As a maintainer, I need this note so the surrounding code intent stays clear during maintenance and debugging.
+ */
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FBridgeSlicePresetsTest,
                                  "ForbocAI.Slices.Bridge.Presets",
                                  EAutomationTestFlags_ApplicationContextMask |
@@ -71,7 +83,10 @@ bool FBridgeSlicePresetsTest::RunTest(const FString &Parameters) {
   Slice<FBridgeSliceState> BSlice = CreateBridgeSlice();
   FBridgeSliceState State;
 
-  // Add preset
+  /**
+   * Add preset
+   * User Story: As a maintainer, I need this step note so I can follow the scenario progression and reason about the expected state changes.
+   */
   FDirectiveRuleSet FirstPreset;
   FirstPreset.Id = TEXT("rpg_default");
   State = BSlice.Reducer(State, BridgeSlice::Actions::AddActivePreset(FirstPreset));
@@ -79,17 +94,26 @@ bool FBridgeSlicePresetsTest::RunTest(const FString &Parameters) {
   TestEqual("Preset is rpg_default", State.ActivePresets[0].Id,
             FString(TEXT("rpg_default")));
 
-  // Duplicate add should not duplicate
+  /**
+   * Duplicate add should not duplicate
+   * User Story: As a maintainer, I need this note so the surrounding code intent stays clear during maintenance and debugging.
+   */
   State = BSlice.Reducer(State, BridgeSlice::Actions::AddActivePreset(FirstPreset));
   TestEqual("Still one preset (no dupe)", State.ActivePresets.Num(), 1);
 
-  // Add another
+  /**
+   * Add another
+   * User Story: As a maintainer, I need this step note so I can follow the scenario progression and reason about the expected state changes.
+   */
   FDirectiveRuleSet SecondPreset;
   SecondPreset.Id = TEXT("combat");
   State = BSlice.Reducer(State, BridgeSlice::Actions::AddActivePreset(SecondPreset));
   TestEqual("Two presets", State.ActivePresets.Num(), 2);
 
-  // SetActivePresets replaces all
+  /**
+   * SetActivePresets replaces all
+   * User Story: As a maintainer, I need this note so the surrounding code intent stays clear during maintenance and debugging.
+   */
   TArray<FDirectiveRuleSet> NewPresets;
   FDirectiveRuleSet StealthPreset;
   StealthPreset.Id = TEXT("stealth");
@@ -102,9 +126,10 @@ bool FBridgeSlicePresetsTest::RunTest(const FString &Parameters) {
   return true;
 }
 
-// ---------------------------------------------------------------------------
-// Test: SetAvailableRulesets
-// ---------------------------------------------------------------------------
+/**
+ * Test: SetAvailableRulesets
+ * User Story: As a maintainer, I need this note so the surrounding code intent stays clear during maintenance and debugging.
+ */
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FBridgeSliceRulesetsTest,
                                  "ForbocAI.Slices.Bridge.Rulesets",
                                  EAutomationTestFlags_ApplicationContextMask |
@@ -139,7 +164,10 @@ bool FBridgeSliceRulesetsTest::RunTest(const FString &Parameters) {
   Result.Reason = TEXT("unsafe");
   State = BSlice.Reducer(State, BridgeSlice::Actions::BridgeValidationSuccess(Result));
 
-  // Clear only resets validation fields.
+  /**
+   * Clear only resets validation fields.
+   * User Story: As a maintainer, I need this step note so I can follow the scenario progression and reason about the expected state changes.
+   */
   State = BSlice.Reducer(State, BridgeSlice::Actions::ClearBridgeValidation());
   TestEqual("Status reset", State.Status, FString(TEXT("idle")));
   TestFalse("No last validation", State.bHasLastValidation);

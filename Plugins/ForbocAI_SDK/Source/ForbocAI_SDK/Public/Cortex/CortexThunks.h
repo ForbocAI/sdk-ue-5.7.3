@@ -1,5 +1,8 @@
 #pragma once
-// asynchronous moves, zero hidden side quests
+/**
+ * asynchronous moves, zero hidden side quests
+ * User Story: As a maintainer, I need this note so the surrounding code intent stays clear during maintenance and debugging.
+ */
 
 #include "Core/ThunkDetail.h"
 #include "Cortex/CortexSlice.h"
@@ -8,7 +11,10 @@
 
 namespace rtk {
 
-// Forward declarations for cross-thunk references
+/**
+ * Forward declarations for cross-thunk references
+ * User Story: As a maintainer, I need this section note so related declarations and logic stay easy to locate.
+ */
 inline ThunkAction<FCortexResponse, FStoreState>
 completeNodeCortexThunk(const FString &Prompt,
                         const FCortexConfig &Config = FCortexConfig());
@@ -16,11 +22,6 @@ completeNodeCortexThunk(const FString &Prompt,
 inline ThunkAction<FCortexResponse, FStoreState>
 completeRemoteThunk(const FString &CortexId, const FString &Prompt,
                     const FCortexConfig &Config);
-
-// ---------------------------------------------------------------------------
-// Node cortex thunks (mirrors TS nodeCortexSlice.ts)
-// NEURAL_LINK_ESTABLISHED for local cortex calls
-// ---------------------------------------------------------------------------
 
 /**
  * User Story: As model bootstrap logic, I need reliable file download with
@@ -38,7 +39,10 @@ initNodeCortexThunk(const FString &ModelPath) {
         [ModelPath, Dispatch](std::function<void(FCortexStatus)> Resolve,
                               std::function<void(std::string)> Reject) {
 #if WITH_FORBOC_NATIVE
-          // Map known model ids to Hugging Face GGUF URLs, mirroring TS SDK.
+          /**
+           * Map known model ids to Hugging Face GGUF URLs, mirroring TS SDK.
+           * User Story: As a maintainer, I need this note so the surrounding code intent stays clear during maintenance and debugging.
+           */
           const FString DefaultModelId = TEXT("smollm2-135m");
           const FString SmolUrl =
               TEXT("https://huggingface.co/bartowski/SmolLM2-135M-Instruct-"
@@ -102,18 +106,30 @@ initNodeCortexThunk(const FString &ModelPath) {
                   });
           };
 
-          // If we know a URL and the file is missing, download first.
+          /**
+           * If we know a URL and the file is missing, download first.
+           * User Story: As a maintainer, I need this note so the surrounding code intent stays clear during maintenance and debugging.
+           */
           if (!Url.IsEmpty() && !FPaths::FileExists(LocalPath)) {
-            // G2: Dispatch download start
+            /**
+             * G2: Dispatch download start
+             * User Story: As a maintainer, I need this step note so I can follow the scenario progression and reason about the expected state changes.
+             */
             Dispatch(CortexSlice::Actions::SetDownloadState(true, 0.0f));
             Native::File::DownloadBinary(Url, LocalPath)
                 .then([LoadOnWorker, Dispatch](const FString &) mutable {
-                  // G2: Dispatch download complete
+                  /**
+                   * G2: Dispatch download complete
+                   * User Story: As a maintainer, I need this step note so I can follow the scenario progression and reason about the expected state changes.
+                   */
                   Dispatch(CortexSlice::Actions::SetDownloadState(false, 100.0f));
                   LoadOnWorker();
                 })
                 .catch_([Dispatch, Reject](std::string Error) mutable {
-                  // G2: Clear download state on failure
+                  /**
+                   * G2: Clear download state on failure
+                   * User Story: As a maintainer, I need this step note so I can follow the scenario progression and reason about the expected state changes.
+                   */
                   Dispatch(CortexSlice::Actions::SetDownloadState(false, 0.0f));
                   const FString Msg = Error.empty()
                                           ? TEXT("Model download failed")
@@ -123,9 +139,15 @@ initNodeCortexThunk(const FString &ModelPath) {
                 })
                 .execute();
           } else {
-            // Either local path already exists, or user passed a custom path.
+            /**
+             * Either local path already exists, or user passed a custom path.
+             * User Story: As a maintainer, I need this note so the surrounding code intent stays clear during maintenance and debugging.
+             */
             if (!FPaths::FileExists(LocalPath) && Url.IsEmpty()) {
-              // Custom path without URL: use directly.
+              /**
+               * Custom path without URL: use directly.
+               * User Story: As a maintainer, I need this note so the surrounding code intent stays clear during maintenance and debugging.
+               */
               LoadOnWorker();
             } else {
               LoadOnWorker();
@@ -206,10 +228,11 @@ generateNodeEmbeddingThunk(const FString &Text) {
   };
 }
 
-// ---------------------------------------------------------------------------
-// G7: Streaming node cortex thunk (mirrors TS stream.ts)
-// Token-by-token callback, dispatches StreamToken per token on game thread
-// ---------------------------------------------------------------------------
+/**
+ * G7: Streaming node cortex thunk (mirrors TS stream.ts)
+ * Token-by-token callback, dispatches StreamToken per token on game thread
+ * User Story: As a maintainer, I need this section note so related declarations and logic stay easy to locate.
+ */
 
 using FOnTokenCallback = std::function<void(const FString &Token)>;
 
@@ -244,7 +267,10 @@ streamNodeCortexThunk(const FString &Prompt, const FCortexConfig &Config,
                   FString FullText = Native::Llama::InferStream(
                       Handle, Prompt, Config,
                       [&Dispatch, &OnToken](const FString &Token) {
-                        // Forward each token to game thread
+                        /**
+                         * Forward each token to game thread
+                         * User Story: As a maintainer, I need this note so the surrounding code intent stays clear during maintenance and debugging.
+                         */
                         AsyncTask(ENamedThreads::GameThread,
                                   [Dispatch, OnToken, Token]() {
                                     Dispatch(CortexSlice::Actions::
@@ -274,9 +300,10 @@ streamNodeCortexThunk(const FString &Prompt, const FCortexConfig &Config,
   };
 }
 
-// ---------------------------------------------------------------------------
-// Remote cortex thunks (mirrors TS cortexSlice.ts)
-// ---------------------------------------------------------------------------
+/**
+ * Remote cortex thunks (mirrors TS cortexSlice.ts)
+ * User Story: As a maintainer, I need this section note so related declarations and logic stay easy to locate.
+ */
 
 inline ThunkAction<TArray<FCortexModelInfo>, FStoreState>
 listCortexModelsThunk() {

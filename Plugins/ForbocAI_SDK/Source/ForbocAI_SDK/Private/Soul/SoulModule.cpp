@@ -9,9 +9,10 @@
 #include "Soul/SoulSlice.h"
 #include "Soul/SoulThunks.h"
 
-// ==========================================
-// SOUL OPERATIONS — Pure free functions
-// ==========================================
+/**
+ * SOUL OPERATIONS — Pure free functions
+ * User Story: As a maintainer, I need this section note so related declarations and logic stay easy to locate.
+ */
 
 SoulTypes::SoulCreationResult
 SoulOps::FromAgent(const FAgentState &State,
@@ -53,7 +54,10 @@ SoulTypes::SoulDeserializationResult SoulOps::Deserialize(const FString &Json) {
 }
 
 SoulTypes::SoulValidationResult SoulOps::Validate(const FSoul &Soul) {
-  // Use the functional validation pipeline from helpers
+  /**
+   * Use the functional validation pipeline from helpers
+   * User Story: As a maintainer, I need this section note so related declarations and logic stay easy to locate.
+   */
   auto result = SoulHelpers::soulValidationPipeline().run(Soul);
 
   if (result.isLeft) {

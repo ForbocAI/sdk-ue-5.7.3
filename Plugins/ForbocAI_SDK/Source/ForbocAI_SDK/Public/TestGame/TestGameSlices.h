@@ -1,6 +1,9 @@
 #pragma once
-// Test-game slice definitions — mirrors TS test-game feature slices
-// 13 slices across 5 domains: entities, mechanics, store, terminal, autoplay
+/**
+ * Test-game slice definitions — mirrors TS test-game feature slices
+ * 13 slices across 5 domains: entities, mechanics, store, terminal, autoplay
+ * User Story: As a maintainer, I need this note so the surrounding code intent stays clear during maintenance and debugging.
+ */
 
 #include "CoreMinimal.h"
 #include "Core/rtk.hpp"
@@ -8,12 +11,11 @@
 
 namespace TestGame {
 
-// =========================================================================
-// Domain 1: Entities
-// =========================================================================
-
-// --- NPC Entity Adapter ---
-
+/**
+ * Returns the entity adapter used for test-game NPC state.
+ * User Story: As test-game entity reducers, I need one shared adapter so NPC
+ * CRUD actions update and query a consistent normalized state shape.
+ */
 inline rtk::EntityAdapterOps<FGameNPC> &GetNPCAdapter() {
   static rtk::EntityAdapterOps<FGameNPC> Adapter =
       rtk::createEntityAdapter<FGameNPC>(
@@ -31,6 +33,11 @@ struct FNPCsSliceState {
 
 namespace NPCsActions {
 
+/**
+ * Returns the cached action creator for upserting NPCs.
+ * User Story: As scenario setup and runtime updates, I need one action creator
+ * so NPC records can be inserted or replaced consistently.
+ */
 inline rtk::ActionCreator<FGameNPC> UpsertNPCActionCreator() {
   static auto C = rtk::createAction<FGameNPC>(TEXT("testgame/npcs/upsertNPC"));
   return C;
@@ -41,6 +48,11 @@ struct FMoveNPCPayload {
   FPosition Position;
 };
 
+/**
+ * Returns the cached action creator for moving NPCs.
+ * User Story: As verdict-driven movement, I need a reusable action creator so
+ * NPC position updates follow one contract.
+ */
 inline rtk::ActionCreator<FMoveNPCPayload> MoveNPCActionCreator() {
   static auto C =
       rtk::createAction<FMoveNPCPayload>(TEXT("testgame/npcs/moveNPC"));
@@ -54,6 +66,11 @@ struct FPatchNPCPayload {
   FPatchNPCPayload() : Suspicion(0), bHasSuspicion(false) {}
 };
 
+/**
+ * Returns the cached action creator for patching NPC state.
+ * User Story: As scenario state tweaks, I need a reusable patch action creator
+ * so targeted NPC fields can change without replacing the whole entity.
+ */
 inline rtk::ActionCreator<FPatchNPCPayload> PatchNPCActionCreator() {
   static auto C =
       rtk::createAction<FPatchNPCPayload>(TEXT("testgame/npcs/patchNPC"));
@@ -68,6 +85,11 @@ struct FApplyVerdictPayload {
   FApplyVerdictPayload() : SuspicionDelta(0) {}
 };
 
+/**
+ * Returns the cached action creator for applying parsed verdicts.
+ * User Story: As CLI output replay, I need a reusable verdict action creator
+ * so parsed actions can update NPC state through the store.
+ */
 inline rtk::ActionCreator<FApplyVerdictPayload>
 ApplyNpcVerdictActionCreator() {
   static auto C = rtk::createAction<FApplyVerdictPayload>(
@@ -75,21 +97,46 @@ ApplyNpcVerdictActionCreator() {
   return C;
 }
 
+/**
+ * Creates an action that inserts or updates one NPC entity.
+ * User Story: As scenario orchestration, I need NPC upserts so the test world
+ * can seed and refresh actors during a run.
+ */
 inline rtk::AnyAction UpsertNPC(const FGameNPC &N) {
   return UpsertNPCActionCreator()(N);
 }
+/**
+ * Creates an action that moves one NPC to a new position.
+ * User Story: As verdict replay, I need movement actions so NPC positions can
+ * track the last parsed command outcome.
+ */
 inline rtk::AnyAction MoveNPC(const FMoveNPCPayload &P) {
   return MoveNPCActionCreator()(P);
 }
+/**
+ * Creates an action that patches selected NPC fields.
+ * User Story: As scenario setup, I need targeted NPC patches so suspicion and
+ * similar values can change without rewriting the whole record.
+ */
 inline rtk::AnyAction PatchNPC(const FPatchNPCPayload &P) {
   return PatchNPCActionCreator()(P);
 }
+/**
+ * Creates an action that applies a parsed verdict to an NPC.
+ * User Story: As CLI transcript replay, I need verdict actions so parsed
+ * output can drive NPC movement and suspicion changes.
+ */
 inline rtk::AnyAction ApplyNpcVerdict(const FApplyVerdictPayload &P) {
   return ApplyNpcVerdictActionCreator()(P);
 }
 
 } // namespace NPCsActions
 
+/**
+ * Builds the NPC slice for the test game.
+ * User Story: As test-game store setup, I need an NPC slice factory so entity
+ * actions update normalized NPC state predictably.
+ */
 inline rtk::Slice<FNPCsSliceState> CreateNPCsSlice() {
   return rtk::SliceBuilder<FNPCsSliceState>(TEXT("testgame/npcs"),
                                             FNPCsSliceState())
@@ -155,28 +202,51 @@ inline rtk::Slice<FNPCsSliceState> CreateNPCsSlice() {
       .build();
 }
 
-// --- Player Slice ---
-
+/**
+ * Returns the cached action creator for player position updates.
+ * User Story: As player movement state, I need a reusable action creator so
+ * the player position can be updated through the store.
+ */
 inline rtk::ActionCreator<FPosition> SetPositionActionCreator() {
   static auto C =
       rtk::createAction<FPosition>(TEXT("testgame/player/setPosition"));
   return C;
 }
 
+/**
+ * Returns the cached action creator for player visibility changes.
+ * User Story: As stealth state updates, I need a reusable action creator so
+ * hidden status can be toggled consistently.
+ */
 inline rtk::ActionCreator<bool> SetHiddenActionCreator() {
   static auto C = rtk::createAction<bool>(TEXT("testgame/player/setHidden"));
   return C;
 }
 
 namespace PlayerActions {
+/**
+ * Creates an action that moves the player.
+ * User Story: As test-game player control, I need position actions so the
+ * player avatar can be relocated by scenarios and commands.
+ */
 inline rtk::AnyAction SetPosition(const FPosition &P) {
   return SetPositionActionCreator()(P);
 }
+/**
+ * Creates an action that updates player visibility.
+ * User Story: As stealth scenarios, I need hidden-state actions so the player
+ * can be shown or concealed in the game state.
+ */
 inline rtk::AnyAction SetHidden(bool H) {
   return SetHiddenActionCreator()(H);
 }
 } // namespace PlayerActions
 
+/**
+ * Builds the player slice for the test game.
+ * User Story: As test-game store setup, I need a player slice factory so
+ * movement and hidden-state actions update one canonical player state.
+ */
 inline rtk::Slice<FPlayerState> CreatePlayerSlice() {
   return rtk::SliceBuilder<FPlayerState>(TEXT("testgame/player"),
                                          FPlayerState())
@@ -197,11 +267,10 @@ inline rtk::Slice<FPlayerState> CreatePlayerSlice() {
       .build();
 }
 
-// =========================================================================
-// Domain 2: Mechanics
-// =========================================================================
-
-// --- Grid Slice ---
+/**
+ * --- Grid Slice ---
+ * User Story: As a maintainer, I need this note so the surrounding code intent stays clear during maintenance and debugging.
+ */
 
 struct FSetGridSizePayload {
   int32 Width;
@@ -210,27 +279,52 @@ struct FSetGridSizePayload {
 
 namespace GridActions {
 
+/**
+ * Returns the cached action creator for grid size changes.
+ * User Story: As grid setup, I need a reusable action creator so scenarios can
+ * resize the map through the store.
+ */
 inline rtk::ActionCreator<FSetGridSizePayload> SetGridSizeActionCreator() {
   static auto C =
       rtk::createAction<FSetGridSizePayload>(TEXT("testgame/grid/setGridSize"));
   return C;
 }
 
+/**
+ * Returns the cached action creator for blocked-cell updates.
+ * User Story: As map obstacle setup, I need a reusable action creator so
+ * blocked tiles can be replaced consistently.
+ */
 inline rtk::ActionCreator<TArray<FPosition>> SetBlockedActionCreator() {
   static auto C = rtk::createAction<TArray<FPosition>>(
       TEXT("testgame/grid/setBlocked"));
   return C;
 }
 
+/**
+ * Creates an action that updates the grid dimensions.
+ * User Story: As map initialization, I need grid-size actions so scenarios can
+ * define the playable area before commands run.
+ */
 inline rtk::AnyAction SetGridSize(const FSetGridSizePayload &P) {
   return SetGridSizeActionCreator()(P);
 }
+/**
+ * Creates an action that replaces the blocked tile set.
+ * User Story: As obstacle initialization, I need blocked-cell actions so map
+ * hazards and walls can be configured per scenario.
+ */
 inline rtk::AnyAction SetBlocked(const TArray<FPosition> &B) {
   return SetBlockedActionCreator()(B);
 }
 
 } // namespace GridActions
 
+/**
+ * Builds the grid slice for the test game.
+ * User Story: As test-game store setup, I need a grid slice factory so map
+ * dimensions and blocked tiles are managed by one reducer.
+ */
 inline rtk::Slice<FGridState> CreateGridSlice() {
   return rtk::SliceBuilder<FGridState>(TEXT("testgame/grid"), FGridState())
       .addExtraCase(
@@ -253,31 +347,59 @@ inline rtk::Slice<FGridState> CreateGridSlice() {
       .build();
 }
 
-// --- Stealth Slice ---
+/**
+ * --- Stealth Slice ---
+ * User Story: As a maintainer, I need this note so the surrounding code intent stays clear during maintenance and debugging.
+ */
 
 namespace StealthActions {
 
+/**
+ * Returns the cached action creator for door visibility state.
+ * User Story: As stealth scenario setup, I need a reusable action creator so
+ * door-open state can be toggled consistently.
+ */
 inline rtk::ActionCreator<bool> SetDoorOpenActionCreator() {
   static auto C =
       rtk::createAction<bool>(TEXT("testgame/stealth/setDoorOpen"));
   return C;
 }
 
+/**
+ * Returns the cached action creator for alert-level deltas.
+ * User Story: As stealth escalation, I need a reusable action creator so alert
+ * adjustments are applied through one reducer path.
+ */
 inline rtk::ActionCreator<int32> BumpAlertActionCreator() {
   static auto C =
       rtk::createAction<int32>(TEXT("testgame/stealth/bumpAlert"));
   return C;
 }
 
+/**
+ * Creates an action that toggles whether the door is open.
+ * User Story: As stealth state setup, I need door actions so scenarios can
+ * reflect whether an entry point is compromised.
+ */
 inline rtk::AnyAction SetDoorOpen(bool V) {
   return SetDoorOpenActionCreator()(V);
 }
+/**
+ * Creates an action that adjusts the alert level.
+ * User Story: As stealth escalation, I need alert actions so suspicious events
+ * can raise or lower the current alert score.
+ */
 inline rtk::AnyAction BumpAlert(int32 Delta) {
   return BumpAlertActionCreator()(Delta);
 }
 
 } // namespace StealthActions
 
+/**
+ * Builds the stealth slice for the test game.
+ * User Story: As test-game store setup, I need a stealth slice factory so door
+ * and alert changes flow through one state reducer.
+ */
 inline rtk::Slice<FStealthState> CreateStealthSlice() {
   return rtk::SliceBuilder<FStealthState>(TEXT("testgame/stealth"),
                                           FStealthState())
@@ -300,40 +422,78 @@ inline rtk::Slice<FStealthState> CreateStealthSlice() {
       .build();
 }
 
-// --- Social Slice ---
+/**
+ * --- Social Slice ---
+ * User Story: As a maintainer, I need this note so the surrounding code intent stays clear during maintenance and debugging.
+ */
 
 namespace SocialActions {
 
+/**
+ * Returns the cached action creator for active dialogue text.
+ * User Story: As social encounter setup, I need a reusable action creator so
+ * dialogue prompts can be injected into state consistently.
+ */
 inline rtk::ActionCreator<FString> SetDialogueActionCreator() {
   static auto C =
       rtk::createAction<FString>(TEXT("testgame/social/setDialogue"));
   return C;
 }
 
+/**
+ * Returns the cached action creator for trade-offer updates.
+ * User Story: As social trading flows, I need a reusable action creator so the
+ * current offer can be stored with one contract.
+ */
 inline rtk::ActionCreator<FTradeOffer> SetTradeOfferActionCreator() {
   static auto C =
       rtk::createAction<FTradeOffer>(TEXT("testgame/social/setTradeOffer"));
   return C;
 }
 
+/**
+ * Returns the cached action creator for clearing social state.
+ * User Story: As social cleanup, I need a reusable clear action creator so
+ * dialogue and trade state reset together.
+ */
 inline rtk::EmptyActionCreator ClearSocialStateActionCreator() {
   static auto C =
       rtk::createAction(TEXT("testgame/social/clearSocialState"));
   return C;
 }
 
+/**
+ * Creates an action that sets the active dialogue line.
+ * User Story: As social encounter setup, I need dialogue actions so the UI can
+ * render the current NPC line.
+ */
 inline rtk::AnyAction SetDialogue(const FString &D) {
   return SetDialogueActionCreator()(D);
 }
+/**
+ * Creates an action that stores the active trade offer.
+ * User Story: As trading interactions, I need trade-offer actions so the UI
+ * can present the current merchant offer.
+ */
 inline rtk::AnyAction SetTradeOffer(const FTradeOffer &T) {
   return SetTradeOfferActionCreator()(T);
 }
+/**
+ * Creates an action that clears social state.
+ * User Story: As scenario resets, I need social state cleared so the next
+ * interaction starts without leftover dialogue or trade data.
+ */
 inline rtk::AnyAction ClearSocialState() {
   return ClearSocialStateActionCreator()();
 }
 
 } // namespace SocialActions
 
+/**
+ * Builds the social slice for the test game.
+ * User Story: As test-game store setup, I need a social slice factory so
+ * dialogue and trade actions update one canonical social state.
+ */
 inline rtk::Slice<FSocialState> CreateSocialSlice() {
   return rtk::SliceBuilder<FSocialState>(TEXT("testgame/social"),
                                          FSocialState())
@@ -359,31 +519,59 @@ inline rtk::Slice<FSocialState> CreateSocialSlice() {
       .build();
 }
 
-// --- Bridge Slice (game-specific, not SDK BridgeSlice) ---
+/**
+ * --- Bridge Slice (game-specific, not SDK BridgeSlice) ---
+ * User Story: As a maintainer, I need this note so the surrounding code intent stays clear during maintenance and debugging.
+ */
 
 namespace GameBridgeActions {
 
+/**
+ * Returns the cached action creator for bridge-rule updates.
+ * User Story: As game-specific bridge rules, I need a reusable action creator
+ * so the current bridge rules can be swapped consistently.
+ */
 inline rtk::ActionCreator<FBridgeRulesState> SetBridgeRulesActionCreator() {
   static auto C = rtk::createAction<FBridgeRulesState>(
       TEXT("testgame/bridge/setBridgeRules"));
   return C;
 }
 
+/**
+ * Returns the cached action creator for bridge preset selection.
+ * User Story: As bridge-preset setup, I need a reusable action creator so the
+ * chosen preset name can drive local rule defaults.
+ */
 inline rtk::ActionCreator<FString> LoadBridgePresetActionCreator() {
   static auto C =
       rtk::createAction<FString>(TEXT("testgame/bridge/loadBridgePreset"));
   return C;
 }
 
+/**
+ * Creates an action that replaces the active bridge rules.
+ * User Story: As bridge-rule setup, I need set-rule actions so scenarios can
+ * apply a complete local ruleset in one dispatch.
+ */
 inline rtk::AnyAction SetBridgeRules(const FBridgeRulesState &R) {
   return SetBridgeRulesActionCreator()(R);
 }
+/**
+ * Creates an action that loads a named bridge preset.
+ * User Story: As preset switching, I need preset actions so local rules can
+ * follow the currently selected bridge profile.
+ */
 inline rtk::AnyAction LoadBridgePreset(const FString &P) {
   return LoadBridgePresetActionCreator()(P);
 }
 
 } // namespace GameBridgeActions
 
+/**
+ * Builds the game-specific bridge slice.
+ * User Story: As test-game store setup, I need a bridge slice factory so local
+ * bridge presets and rules are reduced in one place.
+ */
 inline rtk::Slice<FBridgeRulesState> CreateGameBridgeSlice() {
   return rtk::SliceBuilder<FBridgeRulesState>(TEXT("testgame/bridge"),
                                               FBridgeRulesState())
@@ -410,12 +598,11 @@ inline rtk::Slice<FBridgeRulesState> CreateGameBridgeSlice() {
       .build();
 }
 
-// =========================================================================
-// Domain 3: Store (game-side memory, inventory, soul tracking)
-// =========================================================================
-
-// --- Memory Slice (game-specific) ---
-
+/**
+ * Returns the entity adapter used for game-side memory records.
+ * User Story: As test-game memory reducers, I need one shared adapter so local
+ * memory records use a consistent normalized state structure.
+ */
 inline rtk::EntityAdapterOps<FMemoryRecord> &GetGameMemoryAdapter() {
   static rtk::EntityAdapterOps<FMemoryRecord> Adapter =
       rtk::createEntityAdapter<FMemoryRecord>(
@@ -434,27 +621,52 @@ struct FGameMemorySliceState {
 
 namespace GameMemoryActions {
 
+/**
+ * Returns the cached action creator for storing game memory records.
+ * User Story: As game-side memory capture, I need a reusable action creator so
+ * observations can be persisted into the local memory slice.
+ */
 inline rtk::ActionCreator<FMemoryRecord> StoreMemoryActionCreator() {
   static auto C =
       rtk::createAction<FMemoryRecord>(TEXT("testgame/memory/storeMemory"));
   return C;
 }
 
+/**
+ * Returns the cached action creator for clearing one NPC's memories.
+ * User Story: As soul import and cleanup flows, I need a reusable action
+ * creator so one NPC's local memories can be purged consistently.
+ */
 inline rtk::ActionCreator<FString> ClearMemoryForNpcActionCreator() {
   static auto C =
       rtk::createAction<FString>(TEXT("testgame/memory/clearMemoryForNpc"));
   return C;
 }
 
+/**
+ * Creates an action that stores one game memory record.
+ * User Story: As scenario initialization, I need memory-store actions so
+ * NPC-specific observations can be seeded into local state.
+ */
 inline rtk::AnyAction StoreMemory(const FMemoryRecord &R) {
   return StoreMemoryActionCreator()(R);
 }
+/**
+ * Creates an action that clears local memories for one NPC.
+ * User Story: As cleanup flows, I need clear-memory actions so stale local
+ * memories are removed when a scenario resets or imports a soul.
+ */
 inline rtk::AnyAction ClearMemoryForNpc(const FString &NpcId) {
   return ClearMemoryForNpcActionCreator()(NpcId);
 }
 
 } // namespace GameMemoryActions
 
+/**
+ * Builds the game-specific memory slice.
+ * User Story: As test-game store setup, I need a memory slice factory so local
+ * memory records can be stored and cleared through one reducer.
+ */
 inline rtk::Slice<FGameMemorySliceState> CreateGameMemorySlice() {
   return rtk::SliceBuilder<FGameMemorySliceState>(TEXT("testgame/memory"),
                                                   FGameMemorySliceState())
@@ -487,7 +699,10 @@ inline rtk::Slice<FGameMemorySliceState> CreateGameMemorySlice() {
       .build();
 }
 
-// --- Inventory Slice ---
+/**
+ * --- Inventory Slice ---
+ * User Story: As a maintainer, I need this note so the surrounding code intent stays clear during maintenance and debugging.
+ */
 
 struct FSetOwnerInventoryPayload {
   FString OwnerId;
@@ -496,6 +711,11 @@ struct FSetOwnerInventoryPayload {
 
 namespace InventoryActions {
 
+/**
+ * Returns the cached action creator for owner-inventory replacement.
+ * User Story: As inventory synchronization, I need a reusable action creator
+ * so each owner's item list can be updated through one contract.
+ */
 inline rtk::ActionCreator<FSetOwnerInventoryPayload>
 SetOwnerInventoryActionCreator() {
   static auto C = rtk::createAction<FSetOwnerInventoryPayload>(
@@ -503,12 +723,22 @@ SetOwnerInventoryActionCreator() {
   return C;
 }
 
+/**
+ * Creates an action that replaces one owner's inventory.
+ * User Story: As inventory state setup, I need owner-inventory actions so test
+ * scenarios can assign item lists to specific actors.
+ */
 inline rtk::AnyAction SetOwnerInventory(const FSetOwnerInventoryPayload &P) {
   return SetOwnerInventoryActionCreator()(P);
 }
 
 } // namespace InventoryActions
 
+/**
+ * Builds the inventory slice for the test game.
+ * User Story: As test-game store setup, I need an inventory slice factory so
+ * owner item lists are reduced in one place.
+ */
 inline rtk::Slice<FInventoryState> CreateInventorySlice() {
   return rtk::SliceBuilder<FInventoryState>(TEXT("testgame/inventory"),
                                             FInventoryState())
@@ -524,7 +754,10 @@ inline rtk::Slice<FInventoryState> CreateInventorySlice() {
       .build();
 }
 
-// --- Soul Tracking Slice ---
+/**
+ * --- Soul Tracking Slice ---
+ * User Story: As a maintainer, I need this note so the surrounding code intent stays clear during maintenance and debugging.
+ */
 
 struct FMarkSoulExportedPayload {
   FString NpcId;
@@ -533,6 +766,11 @@ struct FMarkSoulExportedPayload {
 
 namespace GameSoulActions {
 
+/**
+ * Returns the cached action creator for soul export tracking.
+ * User Story: As soul-tracking state, I need a reusable action creator so NPC
+ * export records can be captured with one contract.
+ */
 inline rtk::ActionCreator<FMarkSoulExportedPayload>
 MarkSoulExportedActionCreator() {
   static auto C = rtk::createAction<FMarkSoulExportedPayload>(
@@ -540,21 +778,41 @@ MarkSoulExportedActionCreator() {
   return C;
 }
 
+/**
+ * Returns the cached action creator for soul import tracking.
+ * User Story: As soul-tracking state, I need a reusable action creator so
+ * imported soul transaction ids can be recorded consistently.
+ */
 inline rtk::ActionCreator<FString> MarkSoulImportedActionCreator() {
   static auto C =
       rtk::createAction<FString>(TEXT("testgame/soul/markSoulImported"));
   return C;
 }
 
+/**
+ * Creates an action that records a soul export for one NPC.
+ * User Story: As persistence tracking, I need export actions so the test game
+ * remembers which NPC soul was exported to which transaction id.
+ */
 inline rtk::AnyAction MarkSoulExported(const FMarkSoulExportedPayload &P) {
   return MarkSoulExportedActionCreator()(P);
 }
+/**
+ * Creates an action that records an imported soul transaction id.
+ * User Story: As persistence tracking, I need import actions so the game state
+ * can remember which souls were brought back in.
+ */
 inline rtk::AnyAction MarkSoulImported(const FString &TxId) {
   return MarkSoulImportedActionCreator()(TxId);
 }
 
 } // namespace GameSoulActions
 
+/**
+ * Builds the game-specific soul tracking slice.
+ * User Story: As test-game store setup, I need a soul slice factory so export
+ * and import tracking live in one reducer.
+ */
 inline rtk::Slice<FSoulTrackingState> CreateGameSoulSlice() {
   return rtk::SliceBuilder<FSoulTrackingState>(TEXT("testgame/soul"),
                                                FSoulTrackingState())
@@ -577,35 +835,59 @@ inline rtk::Slice<FSoulTrackingState> CreateGameSoulSlice() {
       .build();
 }
 
-// =========================================================================
-// Domain 4: Terminal
-// =========================================================================
-
-// --- UI Slice ---
+/**
+ * --- UI Slice ---
+ * User Story: As a maintainer, I need this note so the surrounding code intent stays clear during maintenance and debugging.
+ */
 
 namespace UIActions {
 
+/**
+ * Returns the cached action creator for play-mode changes.
+ * User Story: As terminal mode control, I need a reusable action creator so
+ * manual and autoplay mode changes use one contract.
+ */
 inline rtk::ActionCreator<EPlayMode> SetModeActionCreator() {
   static auto C =
       rtk::createAction<EPlayMode>(TEXT("testgame/ui/setMode"));
   return C;
 }
 
+/**
+ * Returns the cached action creator for UI messages.
+ * User Story: As terminal feedback, I need a reusable action creator so
+ * informational messages can be appended to the UI state consistently.
+ */
 inline rtk::ActionCreator<FString> AddMessageActionCreator() {
   static auto C =
       rtk::createAction<FString>(TEXT("testgame/ui/addMessage"));
   return C;
 }
 
+/**
+ * Creates an action that sets the play mode.
+ * User Story: As test-game control flows, I need mode actions so the UI can
+ * switch between manual and autoplay execution.
+ */
 inline rtk::AnyAction SetMode(EPlayMode M) {
   return SetModeActionCreator()(M);
 }
+/**
+ * Creates an action that appends a UI message.
+ * User Story: As user feedback, I need message actions so the terminal can
+ * surface warnings and status updates during a run.
+ */
 inline rtk::AnyAction AddMessage(const FString &Msg) {
   return AddMessageActionCreator()(Msg);
 }
 
 } // namespace UIActions
 
+/**
+ * Builds the UI slice for the test game.
+ * User Story: As test-game store setup, I need a UI slice factory so mode and
+ * message updates flow through one reducer.
+ */
 inline rtk::Slice<FUIState> CreateUISlice() {
   return rtk::SliceBuilder<FUIState>(TEXT("testgame/ui"), FUIState())
       .addExtraCase(UIActions::SetModeActionCreator(),
@@ -625,7 +907,10 @@ inline rtk::Slice<FUIState> CreateUISlice() {
       .build();
 }
 
-// --- Transcript Slice ---
+/**
+ * --- Transcript Slice ---
+ * User Story: As a maintainer, I need this note so the surrounding code intent stays clear during maintenance and debugging.
+ */
 
 namespace TranscriptActions {
 
@@ -638,6 +923,11 @@ struct FRecordTranscriptPayload {
   FString Output;
 };
 
+/**
+ * Returns the cached action creator for transcript entries.
+ * User Story: As transcript capture, I need a reusable action creator so each
+ * executed command can be stored with its outcome.
+ */
 inline rtk::ActionCreator<FRecordTranscriptPayload>
 RecordTranscriptActionCreator() {
   static auto C = rtk::createAction<FRecordTranscriptPayload>(
@@ -645,21 +935,41 @@ RecordTranscriptActionCreator() {
   return C;
 }
 
+/**
+ * Returns the cached action creator for transcript resets.
+ * User Story: As transcript cleanup, I need a reusable clear action creator so
+ * a new run can start with an empty transcript.
+ */
 inline rtk::EmptyActionCreator ResetTranscriptActionCreator() {
   static auto C =
       rtk::createAction(TEXT("testgame/transcript/resetTranscript"));
   return C;
 }
 
+/**
+ * Creates an action that records one transcript entry.
+ * User Story: As command auditing, I need transcript actions so every command
+ * and output pair is captured in the store.
+ */
 inline rtk::AnyAction RecordTranscript(const FRecordTranscriptPayload &P) {
   return RecordTranscriptActionCreator()(P);
 }
+/**
+ * Creates an action that clears transcript history.
+ * User Story: As run resets, I need transcript reset actions so old command
+ * history does not leak into the next session.
+ */
 inline rtk::AnyAction ResetTranscript() {
   return ResetTranscriptActionCreator()();
 }
 
 } // namespace TranscriptActions
 
+/**
+ * Builds the transcript slice for the test game.
+ * User Story: As test-game store setup, I need a transcript slice factory so
+ * command history is recorded through one reducer.
+ */
 inline rtk::Slice<FTranscriptState> CreateTranscriptSlice() {
   return rtk::SliceBuilder<FTranscriptState>(TEXT("testgame/transcript"),
                                              FTranscriptState())
@@ -692,35 +1002,59 @@ inline rtk::Slice<FTranscriptState> CreateTranscriptSlice() {
       .build();
 }
 
-// =========================================================================
-// Domain 5: Autoplay
-// =========================================================================
-
-// --- Harness Slice ---
+/**
+ * --- Harness Slice ---
+ * User Story: As a maintainer, I need this note so the surrounding code intent stays clear during maintenance and debugging.
+ */
 
 namespace HarnessActions {
 
+/**
+ * Returns the cached action creator for coverage marks.
+ * User Story: As CLI coverage tracking, I need a reusable action creator so
+ * covered command groups are recorded consistently.
+ */
 inline rtk::ActionCreator<ECommandGroup> MarkCoveredActionCreator() {
   static auto C =
       rtk::createAction<ECommandGroup>(TEXT("testgame/harness/markCovered"));
   return C;
 }
 
+/**
+ * Returns the cached action creator for coverage resets.
+ * User Story: As coverage cleanup, I need a reusable reset action creator so
+ * a new run starts with empty harness coverage.
+ */
 inline rtk::EmptyActionCreator ResetCoverageActionCreator() {
   static auto C =
       rtk::createAction(TEXT("testgame/harness/resetCoverage"));
   return C;
 }
 
+/**
+ * Creates an action that marks one command group as covered.
+ * User Story: As coverage bookkeeping, I need mark-covered actions so the test
+ * harness can prove which CLI groups were exercised.
+ */
 inline rtk::AnyAction MarkCovered(ECommandGroup G) {
   return MarkCoveredActionCreator()(G);
 }
+/**
+ * Creates an action that resets CLI coverage.
+ * User Story: As harness resets, I need coverage reset actions so a new run
+ * measures coverage from a clean baseline.
+ */
 inline rtk::AnyAction ResetCoverage() {
   return ResetCoverageActionCreator()();
 }
 
 } // namespace HarnessActions
 
+/**
+ * Builds the harness slice for the test game.
+ * User Story: As test-game store setup, I need a harness slice factory so CLI
+ * coverage updates are reduced in one place.
+ */
 inline rtk::Slice<FHarnessState> CreateHarnessSlice() {
   return rtk::SliceBuilder<FHarnessState>(TEXT("testgame/harness"),
                                           FHarnessState())
@@ -740,7 +1074,10 @@ inline rtk::Slice<FHarnessState> CreateHarnessSlice() {
       .build();
 }
 
-// --- Scenario Slice (read-only static data) ---
+/**
+ * --- Scenario Slice (read-only static data) ---
+ * User Story: As a maintainer, I need this section note so related declarations and logic stay easy to locate.
+ */
 
 struct FScenarioSliceState {
   TArray<FScenarioStep> Steps;
@@ -749,9 +1086,18 @@ struct FScenarioSliceState {
   }
 };
 
-// Forward declaration — scenarios defined in TestGameScenarios.h
+/**
+ * Returns the default scenario step list for the test game.
+ * User Story: As scenario slice bootstrapping, I need the canonical step list
+ * so store initialization can seed the default scenario sequence.
+ */
 TArray<FScenarioStep> GetDefaultScenarioSteps();
 
+/**
+ * Builds the read-only scenario slice for the test game.
+ * User Story: As scenario bootstrapping, I need a slice factory that loads the
+ * default scenario list into store state once.
+ */
 inline rtk::Slice<FScenarioSliceState> CreateScenarioSlice() {
   FScenarioSliceState Initial;
   Initial.Steps = GetDefaultScenarioSteps();
@@ -760,10 +1106,11 @@ inline rtk::Slice<FScenarioSliceState> CreateScenarioSlice() {
       .build();
 }
 
-// =========================================================================
-// Selector: missing coverage groups
-// =========================================================================
-
+/**
+ * Returns the command groups that have not been covered yet.
+ * User Story: As harness reporting, I need the missing group list so the final
+ * run result can explain which CLI areas were not exercised.
+ */
 inline TArray<ECommandGroup>
 SelectMissingGroups(const TMap<ECommandGroup, bool> &Covered) {
   TArray<ECommandGroup> Missing;

@@ -10,9 +10,10 @@
 #include "Serialization/JsonSerializer.h"
 #include "Bridge/BridgeThunks.h"
 
-// ==========================================
-// PURE VALIDATION FUNCTIONS
-// ==========================================
+/**
+ * PURE VALIDATION FUNCTIONS
+ * User Story: As a maintainer, I need this section note so related declarations and logic stay easy to locate.
+ */
 
 namespace BridgeRules {
 
@@ -41,9 +42,10 @@ BridgeTypes::ValidationPipeline<FAgentAction, FString>
 bridgeValidationPipeline();
 }
 
-// ==========================================
-// LOCAL VALIDATION — Pure, used by thunk
-// ==========================================
+/**
+ * LOCAL VALIDATION — Pure, used by thunk
+ * User Story: As a maintainer, I need this section note so related declarations and logic stay easy to locate.
+ */
 
 namespace BridgeHelpers {
 
@@ -72,13 +74,17 @@ FValidationResult RunLocalBridgeValidation(const FAgentAction &Action,
 
 } // namespace BridgeHelpers
 
-// ==========================================
-// BRIDGE OPERATIONS — Free functions
-// ==========================================
+/**
+ * BRIDGE OPERATIONS — Free functions
+ * User Story: As a maintainer, I need this section note so related declarations and logic stay easy to locate.
+ */
 
 TArray<FValidationRule> BridgeOps::CreateDefaultRules() {
-  // Game-Agnostic: No default rules are enforced by the protocol.
-  // Games must explicitly register rules or use presets.
+  /**
+   * Game-Agnostic: No default rules are enforced by the protocol.
+   * Games must explicitly register rules or use presets.
+   * User Story: As a maintainer, I need this note so the surrounding code intent stays clear during maintenance and debugging.
+   */
   return TArray<FValidationRule>();
 }
 
@@ -105,8 +111,12 @@ TArray<FValidationRule> BridgeOps::CreateRPGRules() {
 }
 
 BridgeTypes::AsyncResult<FDirectiveRuleSet>
-BridgeOps::RegisterRule(const FValidationRule &Rule, const FString & /*ApiUrl*/) {
-  // Dispatch through the store — no direct HTTP calls.
+BridgeOps::RegisterRule(const FValidationRule &Rule, const FString &ApiUrl) {
+  /**
+   * Dispatch through the store — no direct HTTP calls.
+   * User Story: As a maintainer, I need this step note so I can follow the scenario progression and reason about the expected state changes.
+   */
+  static_cast<void>(ApiUrl);
   auto Store = ConfigureStore();
   FDirectiveRuleSet Ruleset;
   Ruleset.Id = Rule.Id;
@@ -119,9 +129,15 @@ BridgeOps::RegisterRule(const FValidationRule &Rule, const FString & /*ApiUrl*/)
   return Store.dispatch(rtk::registerRulesetThunk(Ruleset));
 }
 
-// Functional helper implementations
+/**
+ * Functional helper implementations
+ * User Story: As a maintainer, I need this note so the surrounding code intent stays clear during maintenance and debugging.
+ */
 namespace BridgeHelpers {
-// Implementation of lazy HTTP request creation
+/**
+ * Implementation of lazy HTTP request creation
+ * User Story: As a maintainer, I need this note so the surrounding code intent stays clear during maintenance and debugging.
+ */
 BridgeTypes::Lazy<TSharedRef<IHttpRequest, ESPMode::ThreadSafe>>
 createLazyHttpRequest(const FString &url) {
   return func::lazy([url]() -> TSharedRef<IHttpRequest, ESPMode::ThreadSafe> {
@@ -132,7 +148,10 @@ createLazyHttpRequest(const FString &url) {
   });
 }
 
-// Implementation of bridge validation pipeline
+/**
+ * Implementation of bridge validation pipeline
+ * User Story: As a maintainer, I need this section note so related declarations and logic stay easy to locate.
+ */
 BridgeTypes::ValidationPipeline<FAgentAction, FString>
 bridgeValidationPipeline() {
   return func::validationPipeline<FAgentAction, FString>()
@@ -156,13 +175,19 @@ bridgeValidationPipeline() {
       });
 }
 
-// Implementation of bridge processing pipeline
+/**
+ * Implementation of bridge processing pipeline
+ * User Story: As a maintainer, I need this section note so related declarations and logic stay easy to locate.
+ */
 BridgeTypes::Pipeline<FAgentAction>
 bridgeProcessingPipeline(const FAgentAction &action) {
   return func::pipe(action);
 }
 
-// Implementation of curried bridge validation
+/**
+ * Implementation of curried bridge validation
+ * User Story: As a maintainer, I need this section note so related declarations and logic stay easy to locate.
+ */
 inline auto curriedBridgeValidation()
     -> decltype(func::curry<2>(std::function<BridgeTypes::ValidationResult(
         FAgentAction, FBridgeRuleContext)>())) {
@@ -181,7 +206,10 @@ inline auto curriedBridgeValidation()
   return func::curry<2>(Creator);
 }
 
-// Implementation of rule registration pipeline
+/**
+ * Implementation of rule registration pipeline
+ * User Story: As a maintainer, I need this section note so related declarations and logic stay easy to locate.
+ */
 BridgeTypes::Pipeline<FValidationRule>
 ruleRegistrationPipeline(const FValidationRule &rule) {
   return func::pipe(rule);

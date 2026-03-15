@@ -7,9 +7,10 @@
 using namespace rtk;
 using namespace DirectiveSlice;
 
-// ---------------------------------------------------------------------------
-// Test: Rapid sequential failures on different directives
-// ---------------------------------------------------------------------------
+/**
+ * Test: Rapid sequential failures on different directives
+ * User Story: As a maintainer, I need this note so the surrounding code intent stays clear during maintenance and debugging.
+ */
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FDirectiveRapidFailuresTest,
                                  "ForbocAI.Slices.Directive.RapidSequentialFailures",
                                  EAutomationTestFlags_ApplicationContextMask |
@@ -18,7 +19,10 @@ bool FDirectiveRapidFailuresTest::RunTest(const FString &Parameters) {
   Slice<FDirectiveSliceState> DirSlice = CreateDirectiveSlice();
   FDirectiveSliceState State;
 
-  // Start 5 directives
+  /**
+   * Start 5 directives
+   * User Story: As a maintainer, I need this step note so I can follow the scenario progression and reason about the expected state changes.
+   */
   for (int32 i = 0; i < 5; ++i) {
     const FString Id = FString::Printf(TEXT("rapid_%d"), i);
     State = DirSlice.Reducer(
@@ -27,7 +31,10 @@ bool FDirectiveRapidFailuresTest::RunTest(const FString &Parameters) {
   }
   TestEqual("Five directives", SelectAllDirectives(State).Num(), 5);
 
-  // Fail them all in rapid succession
+  /**
+   * Fail them all in rapid succession
+   * User Story: As a maintainer, I need this note so the surrounding code intent stays clear during maintenance and debugging.
+   */
   for (int32 i = 0; i < 5; ++i) {
     const FString Id = FString::Printf(TEXT("rapid_%d"), i);
     const FString Error =
@@ -35,7 +42,10 @@ bool FDirectiveRapidFailuresTest::RunTest(const FString &Parameters) {
     State = DirSlice.Reducer(State, Actions::DirectiveRunFailed(Id, Error));
   }
 
-  // Verify each has its own error and status
+  /**
+   * Verify each has its own error and status
+   * User Story: As a maintainer, I need this note so the surrounding code intent stays clear during maintenance and debugging.
+   */
   for (int32 i = 0; i < 5; ++i) {
     const FString Id = FString::Printf(TEXT("rapid_%d"), i);
     auto Run = SelectDirectiveById(State, Id);
@@ -54,9 +64,10 @@ bool FDirectiveRapidFailuresTest::RunTest(const FString &Parameters) {
   return true;
 }
 
-// ---------------------------------------------------------------------------
-// Test: ContextComposed on already-failed directive is a no-op
-// ---------------------------------------------------------------------------
+/**
+ * Test: ContextComposed on already-failed directive is a no-op
+ * User Story: As a maintainer, I need this note so the surrounding code intent stays clear during maintenance and debugging.
+ */
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FDirectiveContextAfterFailTest,
                                  "ForbocAI.Slices.Directive.ContextAfterFail",
                                  EAutomationTestFlags_ApplicationContextMask |
@@ -71,7 +82,10 @@ bool FDirectiveContextAfterFailTest::RunTest(const FString &Parameters) {
   State = DirSlice.Reducer(
       State, Actions::DirectiveRunFailed(TEXT("cf"), TEXT("API timeout")));
 
-  // Try to compose context on a failed directive
+  /**
+   * Try to compose context on a failed directive
+   * User Story: As a maintainer, I need this note so the surrounding code intent stays clear during maintenance and debugging.
+   */
   FCortexConfig Constraints;
   Constraints.MaxTokens = 256;
   State = DirSlice.Reducer(
@@ -81,10 +95,13 @@ bool FDirectiveContextAfterFailTest::RunTest(const FString &Parameters) {
   auto Run = SelectDirectiveById(State, TEXT("cf"));
   TestTrue("Run exists", Run.hasValue);
   if (Run.hasValue) {
-    // The reducer still applies the update (entity adapter updateOne works on
-    // any existing entity regardless of status). This test documents that
-    // behavior — the thunk layer is responsible for not dispatching
-    // ContextComposed after failure.
+    /**
+     * The reducer still applies the update (entity adapter updateOne works on
+     * any existing entity regardless of status). This test documents that
+     * behavior — the thunk layer is responsible for not dispatching
+     * ContextComposed after failure.
+     * User Story: As a maintainer, I need this section note so related declarations and logic stay easy to locate.
+     */
     TestEqual("Status still Failed",
               static_cast<int32>(Run.value.Status),
               static_cast<int32>(EDirectiveStatus::Failed));
@@ -93,9 +110,10 @@ bool FDirectiveContextAfterFailTest::RunTest(const FString &Parameters) {
   return true;
 }
 
-// ---------------------------------------------------------------------------
-// Test: ClearDirectivesForNpc clears ActiveDirectiveId when active is removed
-// ---------------------------------------------------------------------------
+/**
+ * Test: ClearDirectivesForNpc clears ActiveDirectiveId when active is removed
+ * User Story: As a maintainer, I need this note so the surrounding code intent stays clear during maintenance and debugging.
+ */
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FDirectiveClearActiveLostTest,
                                  "ForbocAI.Slices.Directive.ClearActiveLost",
                                  EAutomationTestFlags_ApplicationContextMask |
@@ -111,11 +129,17 @@ bool FDirectiveClearActiveLostTest::RunTest(const FString &Parameters) {
       State,
       Actions::DirectiveRunStarted(TEXT("remove"), TEXT("npc_b"), TEXT("obs2")));
 
-  // Active is the last started
+  /**
+   * Active is the last started
+   * User Story: As a maintainer, I need this note so the surrounding code intent stays clear during maintenance and debugging.
+   */
   TestEqual("Active is remove", State.ActiveDirectiveId,
             FString(TEXT("remove")));
 
-  // Clear npc_b directives — should clear ActiveDirectiveId
+  /**
+   * Clear npc_b directives — should clear ActiveDirectiveId
+   * User Story: As a maintainer, I need this step note so I can follow the scenario progression and reason about the expected state changes.
+   */
   State = DirSlice.Reducer(State,
                            Actions::ClearDirectivesForNpc(TEXT("npc_b")));
 
@@ -126,9 +150,10 @@ bool FDirectiveClearActiveLostTest::RunTest(const FString &Parameters) {
   return true;
 }
 
-// ---------------------------------------------------------------------------
-// Test: ClearDirectivesForNpc preserves ActiveDirectiveId when active is kept
-// ---------------------------------------------------------------------------
+/**
+ * Test: ClearDirectivesForNpc preserves ActiveDirectiveId when active is kept
+ * User Story: As a maintainer, I need this note so the surrounding code intent stays clear during maintenance and debugging.
+ */
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FDirectiveClearActivePreservedTest,
                                  "ForbocAI.Slices.Directive.ClearActivePreserved",
                                  EAutomationTestFlags_ApplicationContextMask |
@@ -147,7 +172,10 @@ bool FDirectiveClearActivePreservedTest::RunTest(const FString &Parameters) {
   TestEqual("Active is active", State.ActiveDirectiveId,
             FString(TEXT("active")));
 
-  // Clear npc_x — active should stay
+  /**
+   * Clear npc_x — active should stay
+   * User Story: As a maintainer, I need this step note so I can follow the scenario progression and reason about the expected state changes.
+   */
   State = DirSlice.Reducer(State,
                            Actions::ClearDirectivesForNpc(TEXT("npc_x")));
 
@@ -158,9 +186,10 @@ bool FDirectiveClearActivePreservedTest::RunTest(const FString &Parameters) {
   return true;
 }
 
-// ---------------------------------------------------------------------------
-// Test: Verdict with no action (dialogue only)
-// ---------------------------------------------------------------------------
+/**
+ * Test: Verdict with no action (dialogue only)
+ * User Story: As a maintainer, I need this note so the surrounding code intent stays clear during maintenance and debugging.
+ */
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FDirectiveVerdictDialogueOnlyTest,
                                  "ForbocAI.Slices.Directive.VerdictDialogueOnly",
                                  EAutomationTestFlags_ApplicationContextMask |
@@ -196,9 +225,10 @@ bool FDirectiveVerdictDialogueOnlyTest::RunTest(const FString &Parameters) {
   return true;
 }
 
-// ---------------------------------------------------------------------------
-// Test: SelectActiveDirective returns nothing when no active
-// ---------------------------------------------------------------------------
+/**
+ * Test: SelectActiveDirective returns nothing when no active
+ * User Story: As a maintainer, I need this note so the surrounding code intent stays clear during maintenance and debugging.
+ */
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FDirectiveSelectActiveEmptyTest,
                                  "ForbocAI.Slices.Directive.SelectActiveEmpty",
                                  EAutomationTestFlags_ApplicationContextMask |

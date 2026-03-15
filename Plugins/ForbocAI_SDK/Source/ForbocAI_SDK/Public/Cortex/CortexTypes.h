@@ -7,12 +7,14 @@
 
 /**
  * Cortex Engine Type
+ * User Story: As an SDK integrator, I need this type or module note so I can understand the role of the surrounding API surface quickly.
  */
 UENUM(BlueprintType)
 enum class ECortexEngine : uint8 { Mock, Remote, NodeLlamaCpp, WebLlm };
 
 /**
  * Cortex Init Request
+ * User Story: As an SDK integrator, I need this type or module note so I can understand the role of the surrounding API surface quickly.
  */
 USTRUCT(BlueprintType)
 struct FCortexInitRequest {
@@ -29,6 +31,7 @@ struct FCortexInitRequest {
 
 /**
  * Cortex Init Response
+ * User Story: As an SDK integrator, I need this type or module note so I can understand the role of the surrounding API surface quickly.
  */
 USTRUCT(BlueprintType)
 struct FCortexInitResponse {
@@ -48,6 +51,7 @@ struct FCortexInitResponse {
 
 /**
  * Cortex Complete Request
+ * User Story: As an SDK integrator, I need this type or module note so I can understand the role of the surrounding API surface quickly.
  */
 USTRUCT(BlueprintType)
 struct FCortexCompleteRequest {
@@ -65,7 +69,10 @@ struct FCortexCompleteRequest {
   UPROPERTY(BlueprintReadOnly, Category = "Cortex")
   TArray<FString> Stop;
 
-  // JSON-encoded schema payload used for remote completion requests.
+  /**
+   * JSON-encoded schema payload used for remote completion requests.
+   * User Story: As a maintainer, I need this note so the surrounding code intent stays clear during maintenance and debugging.
+   */
   UPROPERTY(BlueprintReadOnly, Category = "Cortex")
   FString JsonSchemaJson;
 
@@ -74,6 +81,7 @@ struct FCortexCompleteRequest {
 
 /**
  * Cortex Model Info
+ * User Story: As a maintainer, I need this note so the surrounding API intent stays clear during maintenance and integration.
  */
 USTRUCT(BlueprintType)
 struct FCortexModelInfo {
@@ -93,6 +101,7 @@ struct FCortexModelInfo {
 
 /**
  * Cortex Status — Engine state metadata.
+ * User Story: As an SDK integrator, I need this type or module note so I can understand the role of the surrounding API surface quickly.
  */
 USTRUCT(BlueprintType)
 struct FCortexStatus {
@@ -122,6 +131,7 @@ struct FCortexStatus {
 
 /**
  * Cortex Configuration — Immutable data.
+ * User Story: As an SDK integrator, I need this type or module note so I can understand the role of the surrounding API surface quickly.
  */
 USTRUCT(BlueprintType)
 struct FCortexConfig {
@@ -148,15 +158,21 @@ struct FCortexConfig {
   UPROPERTY(BlueprintReadOnly, Category = "Cortex")
   TArray<FString> Stop;
 
-  // JSON-encoded schema payload used when a caller needs schema-constrained
-  // output (remote API path).
+  /**
+   * JSON-encoded schema payload used when a caller needs schema-constrained
+   * output (remote API path).
+   * User Story: As a maintainer, I need this note so the surrounding code intent stays clear during maintenance and debugging.
+   */
   UPROPERTY(BlueprintReadOnly, Category = "Cortex")
   FString JsonSchemaJson;
 
-  // G11: GBNF grammar string for constrained sampling (local llama.cpp path).
-  // When non-empty, llama.cpp uses grammar-constrained token selection.
-  // Either provide GbnfGrammar directly, or JsonSchemaJson which is
-  // converted to GBNF by the SDK before inference.
+  /**
+   * G11: GBNF grammar string for constrained sampling (local llama.cpp path).
+   * When non-empty, llama.cpp uses grammar-constrained token selection.
+   * Either provide GbnfGrammar directly, or JsonSchemaJson which is
+   * converted to GBNF by the SDK before inference.
+   * User Story: As a maintainer, I need this implementation note so I can understand which milestone behavior the surrounding code is preserving.
+   */
   UPROPERTY(BlueprintReadOnly, Category = "Cortex")
   FString GbnfGrammar;
 
@@ -167,6 +183,7 @@ struct FCortexConfig {
 
 /**
  * Cortex Engine Handle — Opaque handle to the inference engine.
+ * User Story: As an SDK integrator, I need this type or module note so I can understand the role of the surrounding API surface quickly.
  */
 struct FCortex {
   FCortexConfig Config;

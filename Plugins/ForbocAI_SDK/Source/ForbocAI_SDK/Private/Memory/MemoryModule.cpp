@@ -9,13 +9,15 @@
 #include "Serialization/JsonSerializer.h"
 #include "Memory/MemoryThunks.h"
 
-// ==========================================================
-// Memory Module Implementation — Full Embedding-Based Memory
-// ==========================================================
-
-// Factory function implementation
+/**
+ * Factory function implementation
+ * User Story: As a maintainer, I need this section note so related declarations and logic stay easy to locate.
+ */
 FMemoryStore MemoryFactory::CreateStore(const FMemoryConfig &Config) {
-  // Use functional validation
+  /**
+   * Use functional validation
+   * User Story: As a maintainer, I need this section note so related declarations and logic stay easy to locate.
+   */
   auto validationResult =
       MemoryHelpers::memoryConfigValidationPipeline().run(Config);
   if (validationResult.isLeft) {
@@ -29,7 +31,10 @@ FMemoryStore MemoryFactory::CreateStore(const FMemoryConfig &Config) {
   return Store;
 }
 
-// Initialization implementation
+/**
+ * Initialization implementation
+ * User Story: As a maintainer, I need this note so the surrounding code intent stays clear during maintenance and debugging.
+ */
 MemoryTypes::MemoryStoreInitializationResult
 MemoryOps::Initialize(FMemoryStore &Store) {
   try {
@@ -37,23 +42,35 @@ MemoryOps::Initialize(FMemoryStore &Store) {
       return MemoryTypes::make_right(FString(), true);
     }
 
-    // Validate configuration
+    /**
+     * Validate configuration
+     * User Story: As a maintainer, I need this note so the surrounding code intent stays clear during maintenance and debugging.
+     */
     auto configValidation = MemoryInternal::ValidateConfig(Store.Config);
     if (configValidation.isLeft) {
       return configValidation;
     }
 
-    // Get database path
+    /**
+     * Get database path
+     * User Story: As a maintainer, I need this note so the surrounding code intent stays clear during maintenance and debugging.
+     */
     const FString DatabasePath = MemoryInternal::GetDatabasePath(Store.Config);
 
-    // Open database connection
+    /**
+     * Open database connection
+     * User Story: As a maintainer, I need this note so the surrounding code intent stays clear during maintenance and debugging.
+     */
     auto openResult = MemoryInternal::SQLiteVSS::OpenDatabase(DatabasePath);
     if (openResult.isLeft) {
       return openResult;
     }
     Store.DatabaseHandle = openResult.right;
 
-    // Create tables
+    /**
+     * Create tables
+     * User Story: As a maintainer, I need this step note so I can follow the scenario progression and reason about the expected state changes.
+     */
     auto tableResult =
         MemoryInternal::SQLiteVSS::CreateTables(Store.DatabaseHandle);
     if (tableResult.isLeft) {
@@ -69,7 +86,10 @@ MemoryOps::Initialize(FMemoryStore &Store) {
   }
 }
 
-// Store implementation
+/**
+ * Store implementation
+ * User Story: As a maintainer, I need this note so the surrounding code intent stays clear during maintenance and debugging.
+ */
 TFuture<MemoryTypes::MemoryStoreAddResult>
 MemoryOps::Store(const FMemoryStore &Store, const FString &Text,
                  const FString &Type, float Importance) {
@@ -92,14 +112,20 @@ MemoryOps::Store(const FMemoryStore &Store, const FString &Text,
 
   auto RuntimeStore = ConfigureStore();
 
-  // Dispatch the store thunk
+  /**
+   * Dispatch the store thunk
+   * User Story: As a maintainer, I need this step note so I can follow the scenario progression and reason about the expected state changes.
+   */
   auto ThunkResult = rtk::nodeMemoryStoreThunk(Item)(
       [RuntimeStore](const rtk::AnyAction &a) {
         return RuntimeStore.dispatch(a);
       },
       [RuntimeStore]() { return RuntimeStore.getState(); });
 
-  // Chain result back to the promise
+  /**
+   * Chain result back to the promise
+   * User Story: As a maintainer, I need this note so the surrounding code intent stays clear during maintenance and debugging.
+   */
   ThunkResult
       .then([Promise, Store](FMemoryItem SavedItem) {
         FMemoryStore NewStore = Store;
@@ -115,13 +141,19 @@ MemoryOps::Store(const FMemoryStore &Store, const FString &Text,
   return Promise->GetFuture();
 }
 
-// Add implementation
+/**
+ * Add implementation
+ * User Story: As a maintainer, I need this step note so I can follow the scenario progression and reason about the expected state changes.
+ */
 TFuture<MemoryTypes::MemoryStoreAddResult>
 MemoryOps::Add(const FMemoryStore &Store, const FMemoryItem &Item) {
   return MemoryOps::Store(Store, Item.Text, Item.Type, Item.Importance);
 }
 
-// Recall implementation
+/**
+ * Recall implementation
+ * User Story: As a maintainer, I need this note so the surrounding code intent stays clear during maintenance and debugging.
+ */
 TFuture<MemoryTypes::MemoryStoreRecallResult>
 MemoryOps::Recall(const FMemoryStore &Store, const FString &Query,
                   int32 Limit) {
@@ -141,14 +173,20 @@ MemoryOps::Recall(const FMemoryStore &Store, const FString &Query,
   RecallRequest.Limit = Limit < 0 ? Store.Config.MaxRecallResults : Limit;
   RecallRequest.Threshold = 0.0f;
 
-  // Dispatch the recall thunk
+  /**
+   * Dispatch the recall thunk
+   * User Story: As a maintainer, I need this step note so I can follow the scenario progression and reason about the expected state changes.
+   */
   auto ThunkResult = rtk::nodeMemoryRecallThunk(RecallRequest)(
       [RuntimeStore](const rtk::AnyAction &a) {
         return RuntimeStore.dispatch(a);
       },
       [RuntimeStore]() { return RuntimeStore.getState(); });
 
-  // Chain result back to the promise
+  /**
+   * Chain result back to the promise
+   * User Story: As a maintainer, I need this note so the surrounding code intent stays clear during maintenance and debugging.
+   */
   ThunkResult
       .then([Promise](TArray<FMemoryItem> Results) {
         Promise->SetValue(MemoryTypes::make_right(FString(), Results));
@@ -162,7 +200,10 @@ MemoryOps::Recall(const FMemoryStore &Store, const FString &Query,
   return Promise->GetFuture();
 }
 
-// Embedding generation implementation
+/**
+ * Embedding generation implementation
+ * User Story: As a maintainer, I need this note so the surrounding code intent stays clear during maintenance and debugging.
+ */
 TFuture<MemoryTypes::MemoryStoreEmbeddingResult>
 MemoryOps::GenerateEmbedding(const FMemoryStore &Store, const FString &Text) {
   if (!Store.bInitialized) {
@@ -184,12 +225,18 @@ MemoryOps::GenerateEmbedding(const FMemoryStore &Store, const FString &Text) {
                });
 }
 
-// Statistics implementation
+/**
+ * Statistics implementation
+ * User Story: As a maintainer, I need this note so the surrounding code intent stays clear during maintenance and debugging.
+ */
 FString MemoryOps::GetStatistics(const FMemoryStore &Store) {
   return MemoryInternal::GetMemoryStatistics(Store);
 }
 
-// Cleanup implementation
+/**
+ * Cleanup implementation
+ * User Story: As a maintainer, I need this note so the surrounding code intent stays clear during maintenance and debugging.
+ */
 void MemoryOps::Cleanup(FMemoryStore &Store) {
   if (Store.bInitialized && Store.DatabaseHandle != nullptr) {
     MemoryInternal::SQLiteVSS::CloseDatabase(Store.DatabaseHandle);

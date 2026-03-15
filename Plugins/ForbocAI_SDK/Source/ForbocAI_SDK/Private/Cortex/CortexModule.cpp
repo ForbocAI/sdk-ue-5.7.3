@@ -10,10 +10,11 @@
 
 #include "NativeEngine.h"
 
-// ==========================================
-// Cortex Operations — Thin facade over cortex thunks
-// G.5: Model init/inference routed through Cortex Slice + Thunks
-// ==========================================
+/**
+ * Cortex Operations — Thin facade over cortex thunks
+ * G.5: Model init/inference routed through Cortex Slice + Thunks
+ * User Story: As a maintainer, I need this section note so related declarations and logic stay easy to locate.
+ */
 
 FCortex CortexOps::Create(const FCortexConfig &Config) {
   FCortex cortex;
@@ -110,6 +111,9 @@ FString CortexOps::GetStatus(const FCortex &Cortex) {
 
 void CortexOps::Shutdown(FCortex &Cortex) {
   (void)Cortex;
-  // Shutdown is handled by initNodeCortexThunk (frees previous handle before
-  // loading new model). No explicit shutdown thunk; NodeCortexHandle persists.
+  /**
+   * Shutdown is handled by initNodeCortexThunk (frees previous handle before
+   * loading new model). No explicit shutdown thunk; NodeCortexHandle persists.
+   * User Story: As a maintainer, I need this section note so related declarations and logic stay easy to locate.
+   */
 }

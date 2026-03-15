@@ -5,9 +5,10 @@
 
 using namespace rtk;
 
-// ---------------------------------------------------------------------------
-// Test: StoreReducer processes NPC creation across all slices
-// ---------------------------------------------------------------------------
+/**
+ * Test: StoreReducer processes NPC creation across all slices
+ * User Story: As a maintainer, I need this note so the surrounding code intent stays clear during maintenance and debugging.
+ */
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FStoreNPCCreationTest,
                                  "ForbocAI.Integration.Store.NPCCreation",
                                  EAutomationTestFlags_ApplicationContextMask |
@@ -26,7 +27,10 @@ bool FStoreNPCCreationTest::RunTest(const FString &Parameters) {
   TestTrue("NPC in entities",
            NPCSlice::SelectNPCById(State.NPCs, TEXT("int_npc_1")).hasValue);
 
-  // Other slices remain at initial state
+  /**
+   * Other slices remain at initial state
+   * User Story: As a maintainer, I need this note so the surrounding code intent stays clear during maintenance and debugging.
+   */
   TestEqual("Memory idle", State.Memory.StorageStatus,
             FString(TEXT("idle")));
   TestEqual("Ghost idle", State.Ghost.Status, FString(TEXT("idle")));
@@ -39,9 +43,10 @@ bool FStoreNPCCreationTest::RunTest(const FString &Parameters) {
   return true;
 }
 
-// ---------------------------------------------------------------------------
-// Test: NPC removal middleware cascades clears
-// ---------------------------------------------------------------------------
+/**
+ * Test: NPC removal middleware cascades clears
+ * User Story: As a maintainer, I need this note so the surrounding code intent stays clear during maintenance and debugging.
+ */
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(
     FStoreRemovalCascadeTest,
     "ForbocAI.Integration.Store.RemovalCascade",
@@ -50,7 +55,10 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(
 bool FStoreRemovalCascadeTest::RunTest(const FString &Parameters) {
   EnhancedStore<FStoreState> Store = createStore();
 
-  // Create NPC
+  /**
+   * Create NPC
+   * User Story: As a maintainer, I need this step note so I can follow the scenario progression and reason about the expected state changes.
+   */
   FNPCInternalState Info;
   Info.Id = TEXT("cascade_npc");
   Info.Persona = TEXT("Cascade test");
@@ -59,7 +67,10 @@ bool FStoreRemovalCascadeTest::RunTest(const FString &Parameters) {
   TestEqual("NPC active before removal", Store.getState().NPCs.ActiveNpcId,
             FString(TEXT("cascade_npc")));
 
-  // Add some memory
+  /**
+   * Add some memory
+   * User Story: As a maintainer, I need this step note so I can follow the scenario progression and reason about the expected state changes.
+   */
   FMemoryItem MemItem;
   MemItem.Id = TEXT("cascade_mem");
   MemItem.Text = TEXT("Important memory");
@@ -70,7 +81,10 @@ bool FStoreRemovalCascadeTest::RunTest(const FString &Parameters) {
                                   .Num(),
             1);
 
-  // Add bridge validation
+  /**
+   * Add bridge validation
+   * User Story: As a maintainer, I need this step note so I can follow the scenario progression and reason about the expected state changes.
+   */
   Store.dispatch(BridgeSlice::Actions::BridgeValidationPending());
   TestEqual("Bridge validating", Store.getState().Bridge.Status,
             FString(TEXT("validating")));
@@ -90,17 +104,26 @@ bool FStoreRemovalCascadeTest::RunTest(const FString &Parameters) {
   PresetIds.Add(TEXT("preset_keep"));
   Store.dispatch(BridgeSlice::Actions::SetAvailablePresetIds(PresetIds));
 
-  // Start ghost session
+  /**
+   * Start ghost session
+   * User Story: As a maintainer, I need this step note so I can follow the scenario progression and reason about the expected state changes.
+   */
   Store.dispatch(
       GhostSlice::Actions::GhostSessionStarted(TEXT("gs_1"), TEXT("running")));
   TestEqual("Ghost running", Store.getState().Ghost.Status,
             FString(TEXT("running")));
 
-  // Add a directive
+  /**
+   * Add a directive
+   * User Story: As a maintainer, I need this step note so I can follow the scenario progression and reason about the expected state changes.
+   */
   Store.dispatch(DirectiveSlice::Actions::DirectiveRunStarted(
       TEXT("dir_1"), TEXT("cascade_npc"), TEXT("observe")));
 
-  // Remove NPC — should cascade clear
+  /**
+   * Remove NPC — should cascade clear
+   * User Story: As a maintainer, I need this step note so I can follow the scenario progression and reason about the expected state changes.
+   */
   Store.dispatch(NPCSlice::Actions::RemoveNPC(TEXT("cascade_npc")));
 
   TestTrue("NPC removed",
@@ -109,7 +132,10 @@ bool FStoreRemovalCascadeTest::RunTest(const FString &Parameters) {
   TestTrue("ActiveNpcId cleared",
            Store.getState().NPCs.ActiveNpcId.IsEmpty());
 
-  // Cascade effects
+  /**
+   * Cascade effects
+   * User Story: As a maintainer, I need this note so the surrounding code intent stays clear during maintenance and debugging.
+   */
   TestEqual("Memory cleared after active NPC removal",
             MemorySlice::SelectAllMemories(Store.getState().Memory).Num(), 0);
   TestEqual("Bridge reset", Store.getState().Bridge.Status,
@@ -130,9 +156,10 @@ bool FStoreRemovalCascadeTest::RunTest(const FString &Parameters) {
   return true;
 }
 
-// ---------------------------------------------------------------------------
-// Test: Multiple NPCs, remove non-active — no cascade on memory
-// ---------------------------------------------------------------------------
+/**
+ * Test: Multiple NPCs, remove non-active — no cascade on memory
+ * User Story: As a maintainer, I need this note so the surrounding code intent stays clear during maintenance and debugging.
+ */
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(
     FStoreRemoveNonActiveTest,
     "ForbocAI.Integration.Store.RemoveNonActive",
@@ -141,7 +168,10 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(
 bool FStoreRemoveNonActiveTest::RunTest(const FString &Parameters) {
   EnhancedStore<FStoreState> Store = createStore();
 
-  // Create two NPCs
+  /**
+   * Create two NPCs
+   * User Story: As a maintainer, I need this step note so I can follow the scenario progression and reason about the expected state changes.
+   */
   FNPCInternalState A;
   A.Id = TEXT("npc_a");
   A.Persona = TEXT("Alpha");
@@ -152,18 +182,27 @@ bool FStoreRemoveNonActiveTest::RunTest(const FString &Parameters) {
   B.Persona = TEXT("Beta");
   Store.dispatch(NPCSlice::Actions::SetNPCInfo(B));
 
-  // Active is now B
+  /**
+   * Active is now B
+   * User Story: As a maintainer, I need this note so the surrounding code intent stays clear during maintenance and debugging.
+   */
   TestEqual("Active is B", Store.getState().NPCs.ActiveNpcId,
             FString(TEXT("npc_b")));
 
-  // Store memory
+  /**
+   * Store memory
+   * User Story: As a maintainer, I need this note so the surrounding code intent stays clear during maintenance and debugging.
+   */
   FMemoryItem Mem;
   Mem.Id = TEXT("keep_mem");
   Mem.Text = TEXT("Should survive");
   Mem.Importance = 0.5f;
   Store.dispatch(MemorySlice::Actions::MemoryStoreSuccess(Mem));
 
-  // Remove A (not active) — memory should NOT be cleared
+  /**
+   * Remove A (not active) — memory should NOT be cleared
+   * User Story: As a maintainer, I need this step note so I can follow the scenario progression and reason about the expected state changes.
+   */
   Store.dispatch(NPCSlice::Actions::RemoveNPC(TEXT("npc_a")));
 
   TestFalse("A removed",

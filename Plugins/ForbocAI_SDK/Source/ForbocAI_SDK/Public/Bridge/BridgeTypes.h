@@ -8,6 +8,8 @@
 
 /**
  * Validation Result — Immutable data.
+ * User Story: As bridge validation flows, I need one immutable result shape so
+ * success and failure outcomes can move through reducers consistently.
  */
 USTRUCT(BlueprintType)
 struct FValidationResult {
@@ -27,6 +29,8 @@ struct FValidationResult {
 
 /**
  * Validation Context
+ * User Story: As bridge validation inputs, I need a dedicated context payload
+ * so NPC, world, and constraint state are passed together.
  */
 USTRUCT(BlueprintType)
 struct FBridgeValidationContext {
@@ -46,6 +50,8 @@ struct FBridgeValidationContext {
 
 /**
  * Bridge Rule
+ * User Story: As bridge rule catalogs, I need a typed rule model so server and
+ * local validation rules can be represented in one shared shape.
  */
 USTRUCT(BlueprintType)
 struct FBridgeRule {
@@ -65,6 +71,8 @@ struct FBridgeRule {
 
 /**
  * Directive Rule Set
+ * User Story: As bridge preset management, I need a ruleset model so grouped
+ * validation rules can be stored, selected, and exchanged consistently.
  */
 USTRUCT(BlueprintType)
 struct FDirectiveRuleSet {
@@ -95,6 +103,11 @@ struct FBridgeValidateRequest {
 
 namespace TypeFactory {
 
+/**
+ * Builds a successful bridge validation result.
+ * User Story: As bridge validation, I need a factory for success results so
+ * reducers and callers can construct valid outcomes consistently.
+ */
 inline FValidationResult Valid(FString Reason) {
   FValidationResult R;
   R.bValid = true;
@@ -102,6 +115,11 @@ inline FValidationResult Valid(FString Reason) {
   return R;
 }
 
+/**
+ * Builds a failed bridge validation result.
+ * User Story: As bridge validation, I need a factory for invalid results so
+ * rejection reasons are carried through one shared shape.
+ */
 inline FValidationResult Invalid(FString Reason) {
   FValidationResult R;
   R.bValid = false;
@@ -109,6 +127,11 @@ inline FValidationResult Invalid(FString Reason) {
   return R;
 }
 
+/**
+ * Builds the bridge validation request payload.
+ * User Story: As bridge API calls, I need a request factory so action and
+ * context are packaged consistently before dispatch.
+ */
 inline FBridgeValidateRequest
 BridgeValidateRequest(const FAgentAction &Action,
                       const FBridgeValidationContext &Context) {

@@ -6,17 +6,15 @@
 
 namespace rtk {
 
-// Forward declarations
+/**
+ * Forward declarations
+ * User Story: As a maintainer, I need this section note so related declarations and logic stay easy to locate.
+ */
 inline ThunkAction<FMemoryItem, FStoreState>
 nodeMemoryStoreThunk(const FMemoryItem &Item);
 
 inline ThunkAction<TArray<FMemoryItem>, FStoreState>
 nodeMemoryRecallThunk(const FMemoryRecallRequest &Request);
-
-// ---------------------------------------------------------------------------
-// Node memory thunks (mirrors TS nodeMemorySlice.ts)
-// memory operations stay grounded in explicit IO paths
-// ---------------------------------------------------------------------------
 
 /**
  * User Story: As memory persistence setup, I need validated DB/table paths so
@@ -143,10 +141,9 @@ nodeMemoryRecallThunk(const FMemoryRecallRequest &Request) {
 }
 
 /**
- * User Story: As recall query post-processing, I need row-to-memory mapping
- * that normalizes records into store FMemoryItem shape. (From TS)
+ * Convenience wrappers
+ * User Story: As a maintainer, I need this note so the surrounding code intent stays clear during maintenance and debugging.
  */
-// Convenience wrappers
 inline ThunkAction<FMemoryItem, FStoreState>
 storeNodeMemoryThunk(const FString &Text,
                      const FString &Type = TEXT("observation"),
@@ -229,7 +226,10 @@ initNodeVectorThunk(const FString &EmbeddingModelPath = TEXT("")) {
               AsyncTask(ENamedThreads::GameThread,
                         [Handle, Dispatch, Resolve, Reject]() {
                           if (Handle) {
-                            // G3: Dispatch embedder readiness
+                            /**
+                             * G3: Dispatch embedder readiness
+                             * User Story: As a maintainer, I need this step note so I can follow the scenario progression and reason about the expected state changes.
+                             */
                             Dispatch(CortexSlice::Actions::SetEmbedderReady(true));
                             Resolve(rtk::FEmptyPayload{});
                           } else {
@@ -257,7 +257,10 @@ initNodeVectorThunk(const FString &EmbeddingModelPath = TEXT("")) {
           }
 #else
           static_cast<void>(EmbeddingModelPath);
-          // G3: Mock mode — embedder is "ready" immediately
+          /**
+           * G3: Mock mode — embedder is "ready" immediately
+           * User Story: As a maintainer, I need this implementation note so I can understand which milestone behavior the surrounding code is preserving.
+           */
           Dispatch(CortexSlice::Actions::SetEmbedderReady(true));
           Resolve(rtk::FEmptyPayload{});
 #endif
@@ -265,9 +268,10 @@ initNodeVectorThunk(const FString &EmbeddingModelPath = TEXT("")) {
   };
 }
 
-// ---------------------------------------------------------------------------
-// Remote memory thunks (mirrors TS core thunks.ts)
-// ---------------------------------------------------------------------------
+/**
+ * Remote memory thunks (mirrors TS core thunks.ts)
+ * User Story: As a maintainer, I need this section note so related declarations and logic stay easy to locate.
+ */
 
 inline ThunkAction<rtk::FEmptyPayload, FStoreState>
 storeMemoryRemoteThunk(const FString &NpcId, const FString &Observation,

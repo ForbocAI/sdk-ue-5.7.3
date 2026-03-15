@@ -1,7 +1,10 @@
 #include "API/APISlice.h"
 #include "RuntimeStore.h"
 
-// Define the global API slice instance
+/**
+ * Define the global API slice instance
+ * User Story: As a maintainer, I need this note so the surrounding code intent stays clear during maintenance and debugging.
+ */
 rtk::ApiSlice<FStoreState> APISlice::ForbocAiApi = []() {
   rtk::ApiSlice<FStoreState> Api;
   Api.ReducerPath = TEXT("forbocApi");

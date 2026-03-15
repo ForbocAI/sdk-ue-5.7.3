@@ -9,12 +9,18 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(FRtkApiSliceTest, "ForbocAI.Core.RTK.ApiSlice",
                                  EAutomationTestFlags_ApplicationContextMask |
                                      EAutomationTestFlags::EngineFilter)
 bool FRtkApiSliceTest::RunTest(const FString &Parameters) {
-  // 1. Define an API Endpoint
+  /**
+   * 1. Define an API Endpoint
+   * User Story: As a maintainer, I need this note so the surrounding code intent stays clear during maintenance and debugging.
+   */
   ApiEndpoint<FString, int32> GetUserEndpoint;
   GetUserEndpoint.EndpointName = TEXT("getUser");
   GetUserEndpoint.ProvidesTags = {{TEXT("User"), TEXT("ID")}};
 
-  // Mock HTTP Builder that resolves after parsing
+  /**
+   * Mock HTTP Builder that resolves after parsing
+   * User Story: As a maintainer, I need this note so the surrounding code intent stays clear during maintenance and debugging.
+   */
   GetUserEndpoint.RequestBuilder = [](const FString &UserId) {
     return func::AsyncResult<func::HttpResult<int32>>::create(
         [UserId](auto Resolve, auto Reject) {
@@ -34,7 +40,10 @@ bool FRtkApiSliceTest::RunTest(const FString &Parameters) {
         });
   };
 
-  // 2. Register Endpoint in ApiSlice
+  /**
+   * 2. Register Endpoint in ApiSlice
+   * User Story: As a maintainer, I need this note so the surrounding code intent stays clear during maintenance and debugging.
+   */
   ApiSlice<FAppMockState> TestApi;
   TestApi.ReducerPath = TEXT("testApi");
 
@@ -50,7 +59,10 @@ bool FRtkApiSliceTest::RunTest(const FString &Parameters) {
     return FAppMockState{};
   };
 
-  // 3. Test Successful HTTP Call
+  /**
+   * 3. Test Successful HTTP Call
+   * User Story: As a maintainer, I need this note so the surrounding code intent stays clear during maintenance and debugging.
+   */
   auto SuccessOp = GetUserThunk(TEXT("123"));
   SuccessOp(MockDispatch, MockGetState).execute();
 
@@ -60,7 +72,10 @@ bool FRtkApiSliceTest::RunTest(const FString &Parameters) {
             FString(TEXT("testApi/getUser/fulfilled")));
   EventLog.Empty();
 
-  // 4. Test Failed HTTP Call
+  /**
+   * 4. Test Failed HTTP Call
+   * User Story: As a maintainer, I need this step note so I can follow the scenario progression and reason about the expected state changes.
+   */
   auto FailOp = GetUserThunk(TEXT("error"));
   FailOp(MockDispatch, MockGetState).execute();
 

@@ -1,5 +1,8 @@
-// processNPC full protocol loop — uses SDKConfig resolution (localhost:8080 default) — I.2 Thunk Integration Tests
-// Requires FORBOCAI_API_KEY. Set FORBOCAI_API_URL for production. Exercises tape evolution, NPC state, history, block behavior.
+/**
+ * processNPC full protocol loop — uses SDKConfig resolution (localhost:8080 default) — I.2 Thunk Integration Tests
+ * Requires FORBOCAI_API_KEY. Set FORBOCAI_API_URL for production. Exercises tape evolution, NPC state, history, block behavior.
+ * User Story: As a maintainer, I need this section note so related declarations and logic stay easy to locate.
+ */
 
 #include "Core/rtk.hpp"
 #include "CoreMinimal.h"
@@ -13,7 +16,10 @@
 
 using namespace rtk;
 
-// Shared state for latent async: completed, success, store, response, error
+/**
+ * Shared state for latent async: completed, success, store, response, error
+ * User Story: As a maintainer, I need this note so the surrounding code intent stays clear during maintenance and debugging.
+ */
 struct FProcessNPCTestState {
   bool bCompleted = false;
   bool bSuccess = false;
@@ -28,7 +34,10 @@ struct FProcessNPCParams {
   FString Persona;
 };
 
-// Starts processNPC and polls until complete. Uses SDKConfig resolution.
+/**
+ * Starts processNPC and polls until complete. Uses SDKConfig resolution.
+ * User Story: As a maintainer, I need this note so the surrounding code intent stays clear during maintenance and debugging.
+ */
 DEFINE_LATENT_AUTOMATION_COMMAND_THREE_PARAMETER(
     FProcessNPCWaitComplete, TSharedPtr<FProcessNPCTestState>, State,
     FProcessNPCParams, Params, int32, PollCount);
@@ -65,9 +74,10 @@ bool FProcessNPCWaitComplete::Update() {
   return false;
 }
 
-// ---------------------------------------------------------------------------
-// Test: processNPC with real API — full flow (valid verdict)
-// ---------------------------------------------------------------------------
+/**
+ * Test: processNPC with real API — full flow (valid verdict)
+ * User Story: As a maintainer, I need this note so the surrounding code intent stays clear during maintenance and debugging.
+ */
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(
     FProcessNPCMockFinalizeValidTest,
     "ForbocAI.Integration.Protocol.ProcessNPCMockFinalizeValid",
@@ -120,10 +130,11 @@ bool FProcessNPCMockFinalizeValidTest::RunTest(const FString &Parameters) {
   return true;
 }
 
-// ---------------------------------------------------------------------------
-// Test: processNPC with real API — block behavior (invalid verdict)
-// Uses observation that may be blocked by API rules.
-// ---------------------------------------------------------------------------
+/**
+ * Test: processNPC with real API — block behavior (invalid verdict)
+ * Uses observation that may be blocked by API rules.
+ * User Story: As a maintainer, I need this note so the surrounding code intent stays clear during maintenance and debugging.
+ */
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(
     FProcessNPCMockFinalizeInvalidTest,
     "ForbocAI.Integration.Protocol.ProcessNPCMockFinalizeInvalid",
@@ -165,9 +176,10 @@ bool FProcessNPCMockFinalizeInvalidTest::RunTest(const FString &Parameters) {
   return true;
 }
 
-// ---------------------------------------------------------------------------
-// Test: processNPC directive lifecycle — Started -> Completed
-// ---------------------------------------------------------------------------
+/**
+ * Test: processNPC directive lifecycle — Started -> Completed
+ * User Story: As a maintainer, I need this section note so related declarations and logic stay easy to locate.
+ */
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(
     FProcessNPCDirectiveLifecycleTest,
     "ForbocAI.Integration.Protocol.ProcessNPCDirectiveLifecycle",

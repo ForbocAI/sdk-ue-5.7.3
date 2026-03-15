@@ -1,6 +1,9 @@
 #pragma once
-// G7: Stream helpers — mirrors TS stream.ts
-// Convenience free functions for consuming streaming cortex completions
+/**
+ * G7: Stream helpers — mirrors TS stream.ts
+ * Convenience free functions for consuming streaming cortex completions
+ * User Story: As a maintainer, I need this section note so related declarations and logic stay easy to locate.
+ */
 
 #include "Core/functional_core.hpp"
 #include "Cortex/CortexModule.h"
@@ -16,6 +19,7 @@ using FOnError = std::function<void(const FString &Error)>;
  * Stream tokens from a cortex with a per-chunk callback.
  * Mirrors TS `streamFromCortex(cortex, prompt, onChunk, options)`.
  * Returns a Future resolving to the full response.
+ * User Story: As an SDK integrator, I need this type or module note so I can understand the role of the surrounding API surface quickly.
  */
 inline TFuture<CortexTypes::CortexCompletionResult>
 StreamFromCortex(const FCortex &Cortex, const FString &Prompt,
@@ -27,6 +31,7 @@ StreamFromCortex(const FCortex &Cortex, const FString &Prompt,
  * Stream tokens from a cortex with completion and error callbacks.
  * Mirrors TS `streamToCallback` + error handling pattern.
  * Fire-and-forget: callbacks run on the game thread.
+ * User Story: As a maintainer, I need this note so the surrounding API intent stays clear during maintenance and integration.
  */
 inline void StreamFromCortexWithCallbacks(const FCortex &Cortex,
                                           const FString &Prompt,

@@ -7,6 +7,7 @@
 
 /**
  * Memory Item — Immutable data.
+ * User Story: As an SDK integrator, I need this type or module note so I can understand the role of the surrounding API surface quickly.
  */
 USTRUCT(BlueprintType)
 struct FMemoryItem {
@@ -38,6 +39,7 @@ struct FMemoryItem {
 
 /**
  * Memory Configuration — Immutable data.
+ * User Story: As an SDK integrator, I need this type or module note so I can understand the role of the surrounding API surface quickly.
  */
 USTRUCT(BlueprintType)
 struct FMemoryConfig {
@@ -66,6 +68,7 @@ struct FMemoryConfig {
 /**
  * Memory Store — runtime-only data.
  * Native handles remain outside reflected UE types.
+ * User Story: As an SDK integrator, I need this type or module note so I can understand the role of the surrounding API surface quickly.
  */
 struct FMemoryStore {
   FMemoryConfig Config;
@@ -78,6 +81,7 @@ struct FMemoryStore {
 
 /**
  * Memory Recall Request
+ * User Story: As an SDK integrator, I need this type or module note so I can understand the role of the surrounding API surface quickly.
  */
 USTRUCT(BlueprintType)
 struct FMemoryRecallRequest {

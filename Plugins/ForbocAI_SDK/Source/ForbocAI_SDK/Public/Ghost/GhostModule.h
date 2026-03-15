@@ -5,17 +5,10 @@
 #include "CoreMinimal.h"
 #include "Types.h"
 
-// ==========================================================
-// Ghost Module — Automated QA Testing (UE SDK)
-// ==========================================================
-// Strict functional programming implementation for automated
-// testing of agent behavior and responses.
-// All operations are pure free functions.
-// Enhanced with functional core patterns for better
-// error handling and composition.
-// ==========================================================
-
-// Functional Core Type Aliases for Ghost operations
+/**
+ * Functional Core Type Aliases for Ghost operations
+ * User Story: As a maintainer, I need this section note so related declarations and logic stay easy to locate.
+ */
 namespace GhostTypes {
 using func::AsyncResult;
 using func::ConfigBuilder;
@@ -32,31 +25,36 @@ using func::make_left;
 using func::make_right;
 using func::nothing;
 
-// Type aliases for Ghost operations
+/**
+ * Type aliases for Ghost operations
+ * User Story: As a maintainer, I need this section note so related declarations and logic stay easy to locate.
+ */
 using GhostCreationResult = Either<FString, FGhost>;
 using GhostTestRunResult = AsyncResult<FGhostTestResult>;
 using GhostTestRunAllResult = AsyncResult<FGhostTestReport>;
 using GhostValidationResult = Either<FString, FGhostConfig>;
 } // namespace GhostTypes
 
-// Types (FGhostConfig, FGhostTestResult, FGhostTestReport, FGhost) are defined in ForbocAI_SDK_Types.h
-
 /**
  * Ghost Operations — Stateless free functions.
+ * User Story: As SDK QA flows, I need a single namespace for ghost operations
+ * so test creation, execution, and export stay discoverable and consistent.
  */
 namespace GhostOps {
 
 /**
- * Factory: Creates a Ghost test instance.
- * Pure function: Config -> Ghost
+ * Creates a ghost test instance from configuration.
+ * User Story: As automated QA setup, I need a pure ghost factory so test runs
+ * can start from validated configuration without hidden side effects.
  * @param Config The test configuration.
  * @return A new Ghost test instance.
  */
 FORBOCAI_SDK_API FGhost Create(const FGhostConfig &Config);
 
 /**
- * Runs a single test scenario.
- * Async function: (Ghost, Scenario) -> AsyncResult<Result>
+ * Runs a single ghost test scenario.
+ * User Story: As scenario-level QA, I need one run function so a specific
+ * behavior script can be exercised and measured independently.
  * @param Ghost The Ghost test instance.
  * @param Scenario The scenario to test.
  * @return The async test result.
@@ -65,8 +63,9 @@ FORBOCAI_SDK_API GhostTypes::GhostTestRunResult
 RunTest(const FGhost &Ghost, const FString &Scenario);
 
 /**
- * Runs all test scenarios.
- * Async function: Ghost -> AsyncResult<Report>
+ * Runs all configured ghost test scenarios.
+ * User Story: As full-suite QA, I need one function that executes every
+ * scenario so I can collect a complete ghost report in one call.
  * @param Ghost The Ghost test instance.
  * @return The complete test report (async).
  */
@@ -74,8 +73,9 @@ FORBOCAI_SDK_API GhostTypes::GhostTestRunAllResult
 RunAllTests(const FGhost &Ghost);
 
 /**
- * Validates the test configuration.
- * Pure function: Config -> Result
+ * Validates the ghost test configuration.
+ * User Story: As ghost configuration checks, I need validation before execution
+ * so invalid scenarios fail before a test run starts.
  * @param Config The test configuration to validate.
  * @return The validation result.
  */
@@ -83,8 +83,9 @@ FORBOCAI_SDK_API GhostTypes::GhostValidationResult
 ValidateConfig(const FGhostConfig &Config);
 
 /**
- * Generates a summary report.
- * Pure function: Report -> Summary
+ * Generates a summary string from a ghost report.
+ * User Story: As report consumers, I need a compact summary so I can review
+ * the overall ghost outcome without parsing the full report payload.
  * @param Report The test report.
  * @return The summary string or error.
  */
@@ -92,8 +93,9 @@ FORBOCAI_SDK_API GhostTypes::Either<FString, FString>
 GenerateSummary(const FGhostTestReport &Report);
 
 /**
- * Exports test results to JSON.
- * Pure function: Report -> JSON
+ * Exports ghost test results to JSON.
+ * User Story: As report export flows, I need JSON serialization so ghost
+ * results can be saved or transmitted to other tools.
  * @param Report The test report.
  * @return The JSON string or error.
  */
@@ -101,8 +103,9 @@ FORBOCAI_SDK_API GhostTypes::Either<FString, FString>
 ExportToJson(const FGhostTestReport &Report);
 
 /**
- * Exports test results to CSV.
- * Pure function: Report -> CSV
+ * Exports ghost test results to CSV.
+ * User Story: As report export flows, I need CSV output so results can be
+ * reviewed in spreadsheets and external QA tooling.
  * @param Report The test report.
  * @return The CSV string or error.
  */
@@ -111,22 +114,41 @@ ExportToCsv(const FGhostTestReport &Report);
 
 } // namespace GhostOps
 
-// Factory namespace for consistency with other modules
+/**
+ * Factory namespace for consistency with other modules
+ * User Story: As a maintainer, I need this section note so related declarations and logic stay easy to locate.
+ */
 namespace GhostFactory {
+/**
+ * Creates a ghost value from configuration through GhostOps.
+ * User Story: As callers standardizing module access, I need a factory wrapper
+ * so ghost construction follows the same pattern as other SDK modules.
+ */
 inline FGhost Create(const FGhostConfig &Config) {
   return GhostOps::Create(Config);
 }
 } // namespace GhostFactory
 
-// GhostHelpers moved to end of file to ensure type visibility
-// Functional Core Helper Functions for Ghost operations
+/**
+ * GhostHelpers moved to end of file to ensure type visibility
+ * Functional Core Helper Functions for Ghost operations
+ * User Story: As a maintainer, I need this section note so related declarations and logic stay easy to locate.
+ */
 namespace GhostHelpers {
-// Helper to create a lazy ghost
+/**
+ * Creates a lazy ghost factory that defers GhostOps construction.
+ * User Story: As deferred ghost setup, I need lazy construction so expensive
+ * ghost creation can be postponed until the value is required.
+ */
 inline GhostTypes::Lazy<FGhost> createLazyGhost(const FGhostConfig &config) {
   return func::lazy([config]() -> FGhost { return GhostOps::Create(config); });
 }
 
-// Helper to create a validation pipeline for ghost configuration
+/**
+ * Builds the validation pipeline for ghost configuration.
+ * User Story: As ghost config validation, I need one reusable pipeline so
+ * invalid agent or scenario data fails before test execution starts.
+ */
 inline GhostTypes::ValidationPipeline<FGhostConfig, FString>
 ghostConfigValidationPipeline() {
   return func::validationPipeline<FGhostConfig, FString>()
@@ -159,12 +181,20 @@ ghostConfigValidationPipeline() {
       });
 }
 
-// Helper to create a pipeline for ghost test execution
+/**
+ * Builds the pipeline wrapper for ghost test execution.
+ * User Story: As functional ghost helpers, I need a pipe-ready value so
+ * downstream composition can extend ghost execution ergonomically.
+ */
 inline GhostTypes::Pipeline<FGhost> ghostTestPipeline(const FGhost &ghost) {
   return func::pipe(ghost);
 }
 
-// Helper to create a curried ghost creation function
+/**
+ * Builds the curried ghost creation helper.
+ * User Story: As functional construction flows, I need a curried creator so
+ * ghost initialization can participate in composable pipelines.
+ */
 inline auto curriedGhostCreation()
     -> decltype(func::curry<1>(
         std::function<GhostTypes::GhostCreationResult(FGhostConfig)>())) {

@@ -17,6 +17,11 @@ namespace {
 
 constexpr int32 EmbeddingDimensions = 384;
 
+/**
+ * Computes a case-insensitive stable hash used for generated memory ids.
+ * User Story: As local-memory persistence, I need stable hashes so derived
+ * memory ids stay deterministic across repeated saves.
+ */
 uint64 StableHashString(const FString &Value) {
   uint64 Hash = 1469598103934665603ull;
   for (int32 Index = 0; Index < Value.Len(); ++Index) {
@@ -27,6 +32,11 @@ uint64 StableHashString(const FString &Value) {
   return Hash;
 }
 
+/**
+ * Derives a deterministic memory id from the item's stable content fields.
+ * User Story: As local-memory persistence, I need deterministic ids so the
+ * same memory content can be upserted without creating duplicates.
+ */
 FString MakeStableMemoryId(const FMemoryItem &Item) {
   const FString Seed =
       FString::Printf(TEXT("%s|%s|%lld"), *Item.Type, *Item.Text,
@@ -35,6 +45,11 @@ FString MakeStableMemoryId(const FMemoryItem &Item) {
                                                   StableHashString(Seed)));
 }
 
+/**
+ * Truncates generated text at the earliest configured stop token.
+ * User Story: As inference consumers, I need generated text cut at stop tokens
+ * so local completions honor the same boundaries as configured runtimes.
+ */
 FString ApplyStopTokens(const FString &Value,
                         const TArray<FString> &StopTokens) {
   int32 EarliestStop = INDEX_NONE;
@@ -53,6 +68,11 @@ FString ApplyStopTokens(const FString &Value,
   return EarliestStop == INDEX_NONE ? Value : Value.Left(EarliestStop);
 }
 
+/**
+ * Normalizes a memory item before persistence and ensures it has an id.
+ * User Story: As local-memory writes, I need items normalized before storage so
+ * sqlite rows always have stable ids and clean similarity defaults.
+ */
 FMemoryItem PrepareStoredItem(const FMemoryItem &Item) {
   FMemoryItem StoredItem = Item;
 
@@ -69,6 +89,11 @@ FMemoryItem PrepareStoredItem(const FMemoryItem &Item) {
 namespace Native {
 namespace Llama {
 
+/**
+ * Loads the primary inference model and returns an opaque native context.
+ * User Story: As local-cortex setup, I need the primary model loaded into a
+ * native context so inference requests can execute locally.
+ */
 Context LoadModel(const FString &Path) {
 #if WITH_FORBOC_NATIVE
   auto Utf8Path = StringCast<UTF8CHAR>(*Path);
@@ -80,6 +105,11 @@ Context LoadModel(const FString &Path) {
 #endif
 }
 
+/**
+ * Loads the embedding model and returns an opaque native context.
+ * User Story: As local-vector setup, I need the embedding model loaded into a
+ * native context so text can be converted into vectors locally.
+ */
 Context LoadEmbeddingModel(const FString &Path) {
 #if WITH_FORBOC_NATIVE
   auto Utf8Path = StringCast<UTF8CHAR>(*Path);
@@ -91,6 +121,11 @@ Context LoadEmbeddingModel(const FString &Path) {
 #endif
 }
 
+/**
+ * Frees a previously loaded native model context.
+ * User Story: As native-runtime teardown, I need loaded model contexts freed so
+ * local inference and embedding do not leak native resources.
+ */
 void FreeModel(Context Ctx) {
   if (!Ctx) {
     return;
@@ -102,6 +137,11 @@ void FreeModel(Context Ctx) {
 #endif
 }
 
+/**
+ * Generates a fixed-width embedding vector for the supplied text.
+ * User Story: As local-vector workflows, I need text embedded into a fixed
+ * vector shape so semantic search can use node-backed memory locally.
+ */
 TArray<float> Embed(Context Ctx, const FString &Text) {
 #if WITH_FORBOC_NATIVE
   if (Ctx) {
@@ -119,6 +159,11 @@ TArray<float> Embed(Context Ctx, const FString &Text) {
   return TArray<float>();
 }
 
+/**
+ * Runs plain text inference with a simple max-token limit.
+ * User Story: As local-cortex workflows, I need a simple inference path so
+ * prompts can be completed even without advanced config options.
+ */
 FString Infer(Context Ctx, const FString &Prompt, int32 MaxTokens) {
   if (!Ctx) {
     return TEXT("Error: Model not loaded");
@@ -141,8 +186,14 @@ FString Infer(Context Ctx, const FString &Prompt, int32 MaxTokens) {
 #endif
 }
 
+/**
+ * Runs configured inference, including optional grammar and stop handling.
+ * User Story: As local-cortex workflows, I need config-aware inference so
+ * grammar, temperature, and stop tokens are honored locally. Supplying a GBNF
+ * grammar routes through grammar-constrained inference before stop-token
+ * truncation is applied.
+ */
 FString Infer(Context Ctx, const FString &Prompt, const FCortexConfig &Config) {
-  // G11: If GBNF grammar is provided, use grammar-constrained inference
   if (!Config.GbnfGrammar.IsEmpty()) {
 #if WITH_FORBOC_NATIVE
     if (!Ctx) {
@@ -168,6 +219,12 @@ FString Infer(Context Ctx, const FString &Prompt, const FCortexConfig &Config) {
   return ApplyStopTokens(Infer(Ctx, Prompt, Config.MaxTokens), Config.Stop);
 }
 
+/**
+ * Streams inference tokens to the caller while respecting stop tokens.
+ * User Story: As streaming inference consumers, I need token callbacks and
+ * stop-token handling so local streaming mirrors runtime expectations. Token
+ * forwarding stops as soon as the accumulated output contains a stop sequence.
+ */
 FString InferStream(Context Ctx, const FString &Prompt,
                     const FCortexConfig &Config,
                     const TokenCallback &OnToken) {
@@ -196,7 +253,6 @@ FString InferStream(Context Ctx, const FString &Prompt,
         if (S->bStopped) return;
         FString Token(Len, UTF8_TO_TCHAR(TokenUtf8));
         S->Accumulated += Token;
-        // Check stop tokens after each token
         for (const FString &Stop : S->StopTokens) {
           if (!Stop.IsEmpty() && S->Accumulated.Contains(Stop)) {
             S->bStopped = true;
@@ -218,6 +274,12 @@ FString InferStream(Context Ctx, const FString &Prompt,
 
 namespace File {
 
+/**
+ * Downloads a binary asset to disk, following redirect responses as needed.
+ * User Story: As local-runtime setup, I need binary assets downloaded safely so
+ * models and native artifacts can be prepared on demand. Redirect responses are
+ * followed before the payload is persisted.
+ */
 func::AsyncResult<FString> DownloadBinary(const FString &Url,
                                           const FString &DestPath) {
   return func::AsyncResult<FString>::create(
@@ -242,7 +304,6 @@ func::AsyncResult<FString> DownloadBinary(const FString &Url,
 
                 const int32 Code = Res->GetResponseCode();
 
-                // Handle Redirects
                 if (Code == 301 || Code == 302 || Code == 303 || Code == 307 ||
                     Code == 308) {
                   const FString Location = Res->GetHeader(TEXT("Location"));
@@ -276,12 +337,18 @@ func::AsyncResult<FString> DownloadBinary(const FString &Url,
 
 namespace Sqlite {
 
+/**
+ * Opens the sqlite-vec database handle for local memory storage.
+ * User Story: As local-memory initialization, I need a sqlite-vec handle so
+ * vector-backed memory rows can be persisted and queried locally. Relative
+ * paths are normalized, traversal segments are rejected, and the vector table
+ * is created before the handle is returned.
+ */
 DB Open(const FString &Path) {
   const FString NormalizedPath = Path.IsEmpty()
                                      ? TEXT(":memory:")
                                      : FPaths::ConvertRelativePathToFull(Path);
 
-  // G6: Directory traversal guard — reject paths containing ".." segments
   if (NormalizedPath != TEXT(":memory:") && NormalizedPath.Contains(TEXT(".."))) {
     UE_LOG(LogTemp, Error,
            TEXT("ForbocAI: Rejected database path containing '..': %s"),
@@ -300,7 +367,6 @@ DB Open(const FString &Path) {
     return nullptr;
   }
 
-  // Ensure vector table exists; assumes vec0/sqlite-vec is compiled in.
   const char *CreateSql =
       "CREATE VIRTUAL TABLE IF NOT EXISTS memories USING "
       "vec0(embedding float[384], "
@@ -319,6 +385,11 @@ DB Open(const FString &Path) {
 #endif
 }
 
+/**
+ * Closes a sqlite-vec database handle created by Open.
+ * User Story: As local-memory shutdown, I need opened sqlite handles closed so
+ * vector storage does not leak native resources.
+ */
 void Close(DB Database) {
   if (!Database) {
     return;
@@ -340,6 +411,11 @@ void Close(DB Database) {
 #endif
 }
 
+/**
+ * Deletes all rows from the in-memory sqlite-vec backing table.
+ * User Story: As local-memory reset flows, I need the vector table cleared so
+ * tests and fresh sessions can start from an empty store.
+ */
 void Clear(DB Database) {
 #if WITH_FORBOC_SQLITE_VEC
   struct FSqliteHandle {
@@ -358,12 +434,18 @@ void Clear(DB Database) {
 #endif
 }
 
+/**
+ * Clears a database path when higher layers request a full reset.
+ * User Story: As local-memory reset flows, I need path-based clearing guarded
+ * so higher layers can request resets without unsafe file operations. Under
+ * sqlite-vec this only validates the path and leaves file deletion to higher
+ * layers.
+ */
 void ClearPath(const FString &Path) {
   const FString NormalizedPath = Path.IsEmpty()
                                      ? TEXT(":memory:")
                                      : FPaths::ConvertRelativePathToFull(Path);
 
-  // G6: Directory traversal guard
   if (NormalizedPath != TEXT(":memory:") && NormalizedPath.Contains(TEXT(".."))) {
     UE_LOG(LogTemp, Error,
            TEXT("ForbocAI: Rejected database path containing '..': %s"),
@@ -372,14 +454,17 @@ void ClearPath(const FString &Path) {
   }
 
 #if WITH_FORBOC_SQLITE_VEC
-  // Under sqlite-vec, ClearPath is a no-op; file deletion is handled by higher
-  // layers (clearNodeMemoryThunk).
   static_cast<void>(NormalizedPath);
 #else
   (void)NormalizedPath;
 #endif
 }
 
+/**
+ * Executes a vector similarity search and materializes matching memory rows.
+ * User Story: As local-memory recall, I need nearest-neighbor rows turned into
+ * memory items so search results can flow back into higher-level thunks.
+ */
 TArray<FMemoryItem> SearchRows(DB Database, const TArray<float> &Vector,
                                int32 TopK) {
   TArray<FMemoryItem> Results;
@@ -452,9 +537,14 @@ TArray<FMemoryItem> SearchRows(DB Database, const TArray<float> &Vector,
 #endif
 }
 
+/**
+ * Upserts a memory item using its embedded vector payload.
+ * User Story: As local-memory writes, I need an upsert path that reuses the
+ * item's embedding so stored rows stay aligned with computed vectors when no
+ * explicit vector override is provided.
+ */
 bool Upsert(DB Database, const FMemoryItem &Item) {
 #if WITH_FORBOC_SQLITE_VEC
-  // When no explicit embedding is provided, rely on Item.Embedding.
   return Upsert(Database, Item, Item.Embedding);
 #else
   (void)Database;
@@ -463,11 +553,21 @@ bool Upsert(DB Database, const FMemoryItem &Item) {
 #endif
 }
 
+/**
+ * Searches the vector store for the nearest memory rows.
+ * User Story: As local-memory recall, I need a public search helper so higher
+ * layers can run similarity lookup without touching sqlite directly.
+ */
 TArray<FMemoryItem> Search(DB Database, const TArray<float> &Vector,
                            int32 TopK) {
   return SearchRows(Database, Vector, TopK);
 }
 
+/**
+ * Upserts a memory item with an explicitly supplied embedding vector.
+ * User Story: As local-memory writes, I need an explicit-vector upsert so
+ * callers can persist precomputed embeddings without recomputing them.
+ */
 bool Upsert(DB Database, const FMemoryItem &Item, const TArray<float> &Vector) {
 #if WITH_FORBOC_SQLITE_VEC
   struct FSqliteHandle {

@@ -1,5 +1,8 @@
 #pragma once
-// G5: IMemory function-pointer struct for testability
+/**
+ * G5: IMemory function-pointer struct for testability
+ * User Story: As a maintainer, I need this implementation note so I can understand which milestone behavior the surrounding code is preserving.
+ */
 
 #include "Memory/MemoryTypes.h"
 #include "NativeEngine.h"
@@ -10,18 +13,17 @@ namespace Memory {
  * Function-pointer struct wrapping Native::Sqlite:: operations.
  * Defaults to real implementations. Swap individual pointers for
  * test doubles without touching thunk code.
- *
  * Usage:
  *   // Production (default)
  *   auto &Ops = Memory::GetOps();
  *   auto Db = Ops.Open(Path);
- *
  *   // Test override
  *   Memory::FMemoryOps TestOps;
  *   TestOps.Search = [](void*, const TArray<float>&, int32) {
  *       return TArray<FMemoryItem>();
  *   };
  *   Memory::SetOps(TestOps);
+ * User Story: As an SDK integrator, I need this type or module note so I can understand the role of the surrounding API surface quickly.
  */
 struct FMemoryOps {
   std::function<Native::Sqlite::DB(const FString &)> Open;

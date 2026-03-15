@@ -1,6 +1,9 @@
 #pragma once
-// Test-game orchestrator — mirrors TS test-game/src/game.ts
-// Executes scenario steps, records transcripts, enforces CLI coverage
+/**
+ * Test-game orchestrator — mirrors TS test-game/src/game.ts
+ * Executes scenario steps, records transcripts, enforces CLI coverage
+ * User Story: As a maintainer, I need this section note so related declarations and logic stay easy to locate.
+ */
 
 #include "CoreMinimal.h"
 #include "TestGame/TestGameLib.h"
@@ -8,12 +11,10 @@
 
 namespace TestGame {
 
-// -------------------------------------------------------------------------
-// Verdict parsing helper
-// -------------------------------------------------------------------------
-
 /**
  * Attempts to parse a JSON verdict from CLI output.
+ * User Story: As test-game transcript replay, I need a parsed verdict shape so
+ * CLI output can be converted into structured follow-up actions.
  * Returns true if a verdict with an action type was found.
  */
 struct FParsedVerdict {
@@ -24,9 +25,17 @@ struct FParsedVerdict {
   FParsedVerdict() : bValid(false), SuspicionDelta(0) {}
 };
 
+/**
+ * Attempts to parse a verdict payload from CLI output.
+ * User Story: As transcript replay, I need verdict parsing so command output
+ * can drive follow-up state updates inside the test-game store.
+ */
 inline FParsedVerdict TryParseVerdict(const FString &Output) {
   FParsedVerdict V;
-  // Simple JSON extraction — look for {"action":{"type":"..."}}
+  /**
+   * Simple JSON extraction — look for {"action":{"type":"..."}}
+   * User Story: As a maintainer, I need this note so the surrounding code intent stays clear during maintenance and debugging.
+   */
   int32 ActionIdx = Output.Find(TEXT("\"action\""));
   if (ActionIdx == INDEX_NONE) return V;
 
@@ -34,7 +43,10 @@ inline FParsedVerdict TryParseVerdict(const FString &Output) {
                                ESearchDir::FromStart, ActionIdx);
   if (TypeIdx == INDEX_NONE) return V;
 
-  // Extract type value between quotes after "type":
+  /**
+   * Extract type value between quotes after "type":
+   * User Story: As a maintainer, I need this note so the surrounding code intent stays clear during maintenance and debugging.
+   */
   int32 ColonIdx = Output.Find(TEXT(":"), ESearchCase::IgnoreCase,
                                 ESearchDir::FromStart, TypeIdx + 6);
   if (ColonIdx == INDEX_NONE) return V;
@@ -54,13 +66,11 @@ inline FParsedVerdict TryParseVerdict(const FString &Output) {
   return V;
 }
 
-// -------------------------------------------------------------------------
-// Scenario initial state setup
-// -------------------------------------------------------------------------
-
 /**
  * Applies initial state mutations for a scenario event type.
  * Mirrors TS applyScenarioInitialState().
+ * User Story: As scenario setup, I need event-specific initialization so each
+ * scenario starts with the right NPCs, dialogue, and memory state.
  */
 inline void ApplyScenarioInitialState(
     const FScenarioStep &Step,
@@ -130,20 +140,21 @@ inline void ApplyScenarioInitialState(
   }
 }
 
-// -------------------------------------------------------------------------
-// Main orchestrator
-// -------------------------------------------------------------------------
-
 /**
  * Runs a full game session in the given mode.
  * Returns a GameRunResult with coverage status and transcript.
  * Mirrors TS runGame().
+ * User Story: As end-to-end test execution, I need one orchestrator entrypoint
+ * so a full scenario suite can run and report transcript plus coverage state.
  */
 inline FGameRunResult RunGame(EPlayMode Mode) {
   auto Store = createTestGameStoreWithListeners();
   Store.dispatch(UIActions::SetMode(Mode));
 
-  // Seed initial player NPC
+  /**
+   * Seed initial player NPC
+   * User Story: As a maintainer, I need this note so the surrounding code intent stays clear during maintenance and debugging.
+   */
   FGameNPC Scout;
   Scout.Id = TEXT("scout");
   Scout.Name = TEXT("Scout");
@@ -170,10 +181,16 @@ inline FGameRunResult RunGame(EPlayMode Mode) {
     for (const FCommandSpec &Cmd : Step.Commands) {
       FCommandResult CmdResult = RunCommand(Cmd);
 
-      // Update coverage
+      /**
+       * Update coverage
+       * User Story: As a maintainer, I need this step note so I can follow the scenario progression and reason about the expected state changes.
+       */
       Store.dispatch(HarnessActions::MarkCovered(Cmd.Group));
 
-      // Record transcript
+      /**
+       * Record transcript
+       * User Story: As a maintainer, I need this note so the surrounding code intent stays clear during maintenance and debugging.
+       */
       TranscriptActions::FRecordTranscriptPayload TxPayload;
       TxPayload.ScenarioId = Step.Id;
       TxPayload.CommandGroup = Cmd.Group;
@@ -183,11 +200,17 @@ inline FGameRunResult RunGame(EPlayMode Mode) {
       TxPayload.Output = CmdResult.Output;
       Store.dispatch(TranscriptActions::RecordTranscript(TxPayload));
 
-      // Drive state from CLI output
+      /**
+       * Drive state from CLI output
+       * User Story: As a maintainer, I need this note so the surrounding code intent stays clear during maintenance and debugging.
+       */
       if (Cmd.Group == ECommandGroup::NpcProcessChat) {
         FParsedVerdict Verdict = TryParseVerdict(CmdResult.Output);
         if (Verdict.bValid) {
-          // Extract NPC id from command string
+          /**
+           * Extract NPC id from command string
+           * User Story: As a maintainer, I need this note so the surrounding code intent stays clear during maintenance and debugging.
+           */
           FString NpcId;
           int32 ProcessIdx = Cmd.Command.Find(TEXT("process "));
           int32 ChatIdx = Cmd.Command.Find(TEXT("chat "));
@@ -235,7 +258,10 @@ inline FGameRunResult RunGame(EPlayMode Mode) {
     }
   }
 
-  // Build result
+  /**
+   * Build result
+   * User Story: As a maintainer, I need this note so the surrounding code intent stays clear during maintenance and debugging.
+   */
   const auto &State = Store.getState();
   TArray<ECommandGroup> Missing = SelectMissingGroups(State.Harness.Covered);
   bool bComplete = Missing.Num() == 0;
@@ -251,7 +277,10 @@ inline FGameRunResult RunGame(EPlayMode Mode) {
     }
   }
 
-  // Log transcript summary
+  /**
+   * Log transcript summary
+   * User Story: As a maintainer, I need this note so the surrounding code intent stays clear during maintenance and debugging.
+   */
   UE_LOG(LogTemp, Display, TEXT("\n=== Transcript Summary ==="));
   for (const FTranscriptEntry &E : State.Transcript.Entries) {
     FString StatusColor = E.Status == ETranscriptStatus::Ok

@@ -10,9 +10,10 @@
 
 using namespace rtk;
 
-// ---------------------------------------------------------------------------
-// Test: Full store wiring — NPC creation, state update, history, selectors
-// ---------------------------------------------------------------------------
+/**
+ * Test: Full store wiring — NPC creation, state update, history, selectors
+ * User Story: As a maintainer, I need this section note so related declarations and logic stay easy to locate.
+ */
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FProtocolStoreWiringTest,
                                  "ForbocAI.Integration.Protocol.StoreWiring",
                                  EAutomationTestFlags_ApplicationContextMask |
@@ -20,14 +21,20 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(FProtocolStoreWiringTest,
 bool FProtocolStoreWiringTest::RunTest(const FString &Parameters) {
   Store<FStoreState> TestStore = createStore();
 
-  // Create NPC
+  /**
+   * Create NPC
+   * User Story: As a maintainer, I need this step note so I can follow the scenario progression and reason about the expected state changes.
+   */
   FNPCInternalState Npc;
   Npc.Id = TEXT("ag_test1");
   Npc.Persona = TEXT("A test knight");
   TestStore.dispatch(NPCSlice::Actions::SetNPCInfo(Npc));
   TestStore.dispatch(NPCSlice::Actions::SetActiveNPC(TEXT("ag_test1")));
 
-  // Verify NPC exists
+  /**
+   * Verify NPC exists
+   * User Story: As a maintainer, I need this note so the surrounding code intent stays clear during maintenance and debugging.
+   */
   FStoreState State = TestStore.getState();
   func::Maybe<FNPCInternalState> Found =
       NPCSlice::SelectNPCById(State.NPCs, TEXT("ag_test1"));
@@ -39,7 +46,10 @@ bool FProtocolStoreWiringTest::RunTest(const FString &Parameters) {
   TestEqual("Active NPC set", NPCSlice::SelectActiveNpcId(State.NPCs),
             FString(TEXT("ag_test1")));
 
-  // Update state
+  /**
+   * Update state
+   * User Story: As a maintainer, I need this step note so I can follow the scenario progression and reason about the expected state changes.
+   */
   FAgentState NewState;
   NewState.JsonData = TEXT("{\"health\":100}");
   TestStore.dispatch(NPCSlice::Actions::UpdateNPCState(TEXT("ag_test1"), NewState));
@@ -52,7 +62,10 @@ bool FProtocolStoreWiringTest::RunTest(const FString &Parameters) {
              Found.value.State.JsonData.Contains(TEXT("health")));
   }
 
-  // Add history
+  /**
+   * Add history
+   * User Story: As a maintainer, I need this step note so I can follow the scenario progression and reason about the expected state changes.
+   */
   TestStore.dispatch(NPCSlice::Actions::AddToHistory(TEXT("ag_test1"),
                                                       TEXT("Player: Hello")));
   TestStore.dispatch(NPCSlice::Actions::AddToHistory(TEXT("ag_test1"),
@@ -67,7 +80,10 @@ bool FProtocolStoreWiringTest::RunTest(const FString &Parameters) {
               FString(TEXT("Player: Hello")));
   }
 
-  // Set last action
+  /**
+   * Set last action
+   * User Story: As a maintainer, I need this note so the surrounding code intent stays clear during maintenance and debugging.
+   */
   FAgentAction Attack;
   Attack.Type = TEXT("ATTACK");
   Attack.Target = TEXT("goblin");
@@ -84,7 +100,10 @@ bool FProtocolStoreWiringTest::RunTest(const FString &Parameters) {
               FString(TEXT("goblin")));
   }
 
-  // Block action
+  /**
+   * Block action
+   * User Story: As a maintainer, I need this note so the surrounding code intent stays clear during maintenance and debugging.
+   */
   TestStore.dispatch(NPCSlice::Actions::BlockAction(
       TEXT("ag_test1"), TEXT("Cannot attack civilians")));
 
@@ -97,7 +116,10 @@ bool FProtocolStoreWiringTest::RunTest(const FString &Parameters) {
               FString(TEXT("Cannot attack civilians")));
   }
 
-  // Clear block
+  /**
+   * Clear block
+   * User Story: As a maintainer, I need this step note so I can follow the scenario progression and reason about the expected state changes.
+   */
   TestStore.dispatch(NPCSlice::Actions::ClearBlock(TEXT("ag_test1")));
   State = TestStore.getState();
   Found = NPCSlice::SelectNPCById(State.NPCs, TEXT("ag_test1"));
@@ -109,9 +131,10 @@ bool FProtocolStoreWiringTest::RunTest(const FString &Parameters) {
   return true;
 }
 
-// ---------------------------------------------------------------------------
-// Test: Directive lifecycle through real store dispatch
-// ---------------------------------------------------------------------------
+/**
+ * Test: Directive lifecycle through real store dispatch
+ * User Story: As a maintainer, I need this section note so related declarations and logic stay easy to locate.
+ */
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FProtocolDirectiveLifecycleTest,
                                  "ForbocAI.Integration.Protocol.DirectiveLifecycle",
                                  EAutomationTestFlags_ApplicationContextMask |
@@ -119,14 +142,20 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(FProtocolDirectiveLifecycleTest,
 bool FProtocolDirectiveLifecycleTest::RunTest(const FString &Parameters) {
   Store<FStoreState> TestStore = createStore();
 
-  // Set up NPC
+  /**
+   * Set up NPC
+   * User Story: As a maintainer, I need this note so the surrounding code intent stays clear during maintenance and debugging.
+   */
   FNPCInternalState Npc;
   Npc.Id = TEXT("ag_dir_test");
   Npc.Persona = TEXT("A directive test NPC");
   TestStore.dispatch(NPCSlice::Actions::SetNPCInfo(Npc));
   TestStore.dispatch(NPCSlice::Actions::SetActiveNPC(TEXT("ag_dir_test")));
 
-  // Start directive run
+  /**
+   * Start directive run
+   * User Story: As a maintainer, I need this step note so I can follow the scenario progression and reason about the expected state changes.
+   */
   TestStore.dispatch(DirectiveSlice::Actions::DirectiveRunStarted(
       TEXT("run_1"), TEXT("ag_dir_test"), TEXT("Player attacks goblin")));
 
@@ -143,7 +172,10 @@ bool FProtocolDirectiveLifecycleTest::RunTest(const FString &Parameters) {
               static_cast<int32>(DirectiveSlice::EDirectiveStatus::Running));
   }
 
-  // Simulate directive response
+  /**
+   * Simulate directive response
+   * User Story: As a maintainer, I need this note so the surrounding code intent stays clear during maintenance and debugging.
+   */
   FDirectiveResponse DirResponse;
   DirResponse.MemoryRecall.Query = TEXT("goblin encounter");
   DirResponse.MemoryRecall.Limit = 5;
@@ -151,7 +183,10 @@ bool FProtocolDirectiveLifecycleTest::RunTest(const FString &Parameters) {
   TestStore.dispatch(
       DirectiveSlice::Actions::DirectiveReceived(TEXT("run_1"), DirResponse));
 
-  // Simulate verdict
+  /**
+   * Simulate verdict
+   * User Story: As a maintainer, I need this note so the surrounding code intent stays clear during maintenance and debugging.
+   */
   FVerdictResponse Verdict;
   Verdict.bValid = true;
   Verdict.Dialogue = TEXT("You swing your sword at the goblin!");
@@ -176,9 +211,10 @@ bool FProtocolDirectiveLifecycleTest::RunTest(const FString &Parameters) {
   return true;
 }
 
-// ---------------------------------------------------------------------------
-// Test: Memory slice lifecycle through real store dispatch
-// ---------------------------------------------------------------------------
+/**
+ * Test: Memory slice lifecycle through real store dispatch
+ * User Story: As a maintainer, I need this section note so related declarations and logic stay easy to locate.
+ */
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FProtocolMemoryLifecycleTest,
                                  "ForbocAI.Integration.Protocol.MemoryLifecycle",
                                  EAutomationTestFlags_ApplicationContextMask |
@@ -186,13 +222,19 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(FProtocolMemoryLifecycleTest,
 bool FProtocolMemoryLifecycleTest::RunTest(const FString &Parameters) {
   Store<FStoreState> TestStore = createStore();
 
-  // Store start
+  /**
+   * Store start
+   * User Story: As a maintainer, I need this note so the surrounding code intent stays clear during maintenance and debugging.
+   */
   TestStore.dispatch(MemorySlice::Actions::MemoryStoreStart());
   FStoreState State = TestStore.getState();
   TestEqual("Store status loading", State.Memory.StoreStatus,
             FString(TEXT("loading")));
 
-  // Store success
+  /**
+   * Store success
+   * User Story: As a maintainer, I need this note so the surrounding code intent stays clear during maintenance and debugging.
+   */
   FMemoryItem Item;
   Item.Id = TEXT("mem_1");
   Item.Text = TEXT("The player found a key");
@@ -205,13 +247,19 @@ bool FProtocolMemoryLifecycleTest::RunTest(const FString &Parameters) {
   TestEqual("Store status idle", State.Memory.StoreStatus,
             FString(TEXT("idle")));
 
-  // Recall start
+  /**
+   * Recall start
+   * User Story: As a maintainer, I need this note so the surrounding code intent stays clear during maintenance and debugging.
+   */
   TestStore.dispatch(MemorySlice::Actions::MemoryRecallStart());
   State = TestStore.getState();
   TestEqual("Recall status loading", State.Memory.RecallStatus,
             FString(TEXT("loading")));
 
-  // Recall success
+  /**
+   * Recall success
+   * User Story: As a maintainer, I need this note so the surrounding code intent stays clear during maintenance and debugging.
+   */
   TArray<FMemoryItem> Recalled;
   FMemoryItem Recalled1;
   Recalled1.Id = TEXT("mem_1");
@@ -229,7 +277,10 @@ bool FProtocolMemoryLifecycleTest::RunTest(const FString &Parameters) {
   TestEqual("Recalled text", LastRecalled[0].Text,
             FString(TEXT("The player found a key")));
 
-  // Store failure
+  /**
+   * Store failure
+   * User Story: As a maintainer, I need this note so the surrounding code intent stays clear during maintenance and debugging.
+   */
   TestStore.dispatch(MemorySlice::Actions::MemoryStoreStart());
   TestStore.dispatch(
       MemorySlice::Actions::MemoryStoreFailed(TEXT("DB connection lost")));
@@ -237,7 +288,10 @@ bool FProtocolMemoryLifecycleTest::RunTest(const FString &Parameters) {
   TestEqual("Store status error", State.Memory.StoreStatus,
             FString(TEXT("error")));
 
-  // Recall failure
+  /**
+   * Recall failure
+   * User Story: As a maintainer, I need this note so the surrounding code intent stays clear during maintenance and debugging.
+   */
   TestStore.dispatch(MemorySlice::Actions::MemoryRecallStart());
   TestStore.dispatch(
       MemorySlice::Actions::MemoryRecallFailed(TEXT("Query timeout")));
@@ -245,7 +299,10 @@ bool FProtocolMemoryLifecycleTest::RunTest(const FString &Parameters) {
   TestEqual("Recall status error", State.Memory.RecallStatus,
             FString(TEXT("error")));
 
-  // Clear
+  /**
+   * Clear
+   * User Story: As a maintainer, I need this step note so I can follow the scenario progression and reason about the expected state changes.
+   */
   TestStore.dispatch(MemorySlice::Actions::MemoryClear());
   State = TestStore.getState();
   TestEqual("Memories cleared",
@@ -254,9 +311,10 @@ bool FProtocolMemoryLifecycleTest::RunTest(const FString &Parameters) {
   return true;
 }
 
-// ---------------------------------------------------------------------------
-// Test: NPC removal cascades to directive cleanup via listener
-// ---------------------------------------------------------------------------
+/**
+ * Test: NPC removal cascades to directive cleanup via listener
+ * User Story: As a maintainer, I need this note so the surrounding code intent stays clear during maintenance and debugging.
+ */
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FProtocolNpcRemovalCascadeTest,
                                  "ForbocAI.Integration.Protocol.NpcRemovalCascade",
                                  EAutomationTestFlags_ApplicationContextMask |
@@ -264,7 +322,10 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(FProtocolNpcRemovalCascadeTest,
 bool FProtocolNpcRemovalCascadeTest::RunTest(const FString &Parameters) {
   Store<FStoreState> TestStore = createStore();
 
-  // Create NPC and directive
+  /**
+   * Create NPC and directive
+   * User Story: As a maintainer, I need this step note so I can follow the scenario progression and reason about the expected state changes.
+   */
   FNPCInternalState Npc;
   Npc.Id = TEXT("ag_cascade");
   Npc.Persona = TEXT("Cascade test");
@@ -279,23 +340,30 @@ bool FProtocolNpcRemovalCascadeTest::RunTest(const FString &Parameters) {
            DirectiveSlice::SelectDirectiveById(State.Directive,
                                                 TEXT("dir_cascade")).hasValue);
 
-  // Remove NPC — listener should cascade-clear directives
+  /**
+   * Remove NPC — listener should cascade-clear directives
+   * User Story: As a maintainer, I need this step note so I can follow the scenario progression and reason about the expected state changes.
+   */
   TestStore.dispatch(NPCSlice::Actions::RemoveNPC(TEXT("ag_cascade")));
 
   State = TestStore.getState();
   TestFalse("NPC removed",
             NPCSlice::SelectNPCById(State.NPCs, TEXT("ag_cascade")).hasValue);
 
-  // Directive cleanup depends on listener middleware being installed.
-  // If the store's createNpcRemovalListener is wired, directives should be
-  // cleared. This test verifies the NPC removal action itself is correct.
+  /**
+   * Directive cleanup depends on listener middleware being installed.
+   * If the store's createNpcRemovalListener is wired, directives should be
+   * cleared. This test verifies the NPC removal action itself is correct.
+   * User Story: As a maintainer, I need this note so the surrounding code intent stays clear during maintenance and debugging.
+   */
 
   return true;
 }
 
-// ---------------------------------------------------------------------------
-// Test: Multiple NPCs coexist with independent state
-// ---------------------------------------------------------------------------
+/**
+ * Test: Multiple NPCs coexist with independent state
+ * User Story: As a maintainer, I need this note so the surrounding code intent stays clear during maintenance and debugging.
+ */
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FProtocolMultiNpcTest,
                                  "ForbocAI.Integration.Protocol.MultiNpc",
                                  EAutomationTestFlags_ApplicationContextMask |
@@ -319,7 +387,10 @@ bool FProtocolMultiNpcTest::RunTest(const FString &Parameters) {
   TestEqual("Active is m1", NPCSlice::SelectActiveNpcId(State.NPCs),
             FString(TEXT("ag_m1")));
 
-  // Update only m2
+  /**
+   * Update only m2
+   * User Story: As a maintainer, I need this step note so I can follow the scenario progression and reason about the expected state changes.
+   */
   FAgentState M2State;
   M2State.JsonData = TEXT("{\"goods\":[\"sword\",\"potion\"]}");
   TestStore.dispatch(NPCSlice::Actions::UpdateNPCState(TEXT("ag_m2"), M2State));
@@ -335,7 +406,10 @@ bool FProtocolMultiNpcTest::RunTest(const FString &Parameters) {
     TestTrue("M2 state updated", M2.value.State.JsonData.Contains(TEXT("sword")));
   }
 
-  // Switch active
+  /**
+   * Switch active
+   * User Story: As a maintainer, I need this note so the surrounding code intent stays clear during maintenance and debugging.
+   */
   TestStore.dispatch(NPCSlice::Actions::SetActiveNPC(TEXT("ag_m2")));
   State = TestStore.getState();
   TestEqual("Active is m2", NPCSlice::SelectActiveNpcId(State.NPCs),

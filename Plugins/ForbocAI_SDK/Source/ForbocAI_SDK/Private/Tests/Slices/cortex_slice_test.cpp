@@ -6,9 +6,10 @@
 using namespace rtk;
 using namespace CortexSlice;
 
-// ---------------------------------------------------------------------------
-// Test: CortexInit Pending / Success / Failed lifecycle
-// ---------------------------------------------------------------------------
+/**
+ * Test: CortexInit Pending / Success / Failed lifecycle
+ * User Story: As a maintainer, I need this step note so I can follow the scenario progression and reason about the expected state changes.
+ */
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FCortexSliceInitTest,
                                  "ForbocAI.Slices.Cortex.InitLifecycle",
                                  EAutomationTestFlags_ApplicationContextMask |
@@ -17,11 +18,17 @@ bool FCortexSliceInitTest::RunTest(const FString &Parameters) {
   Slice<FCortexSliceState> CSlice = CreateCortexSlice();
   FCortexSliceState State;
 
-  // Initial
+  /**
+   * Initial
+   * User Story: As a maintainer, I need this step note so I can follow the scenario progression and reason about the expected state changes.
+   */
   TestTrue("Initial status Idle",
            State.Status == ECortexEngineStatus::Idle);
 
-  // Pending
+  /**
+   * Pending
+   * User Story: As a maintainer, I need this step note so I can follow the scenario progression and reason about the expected state changes.
+   */
   State = CSlice.Reducer(
       State, CortexSlice::Actions::CortexInitPending(TEXT("llama-3.2-1b")));
   TestTrue("Status Initializing",
@@ -30,7 +37,10 @@ bool FCortexSliceInitTest::RunTest(const FString &Parameters) {
             FString(TEXT("llama-3.2-1b")));
   TestTrue("Error cleared", State.Error.IsEmpty());
 
-  // Success
+  /**
+   * Success
+   * User Story: As a maintainer, I need this step note so I can follow the scenario progression and reason about the expected state changes.
+   */
   FCortexStatus CortexStatus;
   CortexStatus.Model = TEXT("llama-3.2-1b");
   CortexStatus.bReady = true;
@@ -41,9 +51,10 @@ bool FCortexSliceInitTest::RunTest(const FString &Parameters) {
   return true;
 }
 
-// ---------------------------------------------------------------------------
-// Test: CortexInit Failed
-// ---------------------------------------------------------------------------
+/**
+ * Test: CortexInit Failed
+ * User Story: As a maintainer, I need this step note so I can follow the scenario progression and reason about the expected state changes.
+ */
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FCortexSliceInitFailTest,
                                  "ForbocAI.Slices.Cortex.InitFailed",
                                  EAutomationTestFlags_ApplicationContextMask |
@@ -65,9 +76,10 @@ bool FCortexSliceInitFailTest::RunTest(const FString &Parameters) {
   return true;
 }
 
-// ---------------------------------------------------------------------------
-// Test: CortexComplete Pending / Success / Failed lifecycle
-// ---------------------------------------------------------------------------
+/**
+ * Test: CortexComplete Pending / Success / Failed lifecycle
+ * User Story: As a maintainer, I need this step note so I can follow the scenario progression and reason about the expected state changes.
+ */
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FCortexSliceCompleteTest,
                                  "ForbocAI.Slices.Cortex.CompleteLifecycle",
                                  EAutomationTestFlags_ApplicationContextMask |
@@ -76,20 +88,29 @@ bool FCortexSliceCompleteTest::RunTest(const FString &Parameters) {
   Slice<FCortexSliceState> CSlice = CreateCortexSlice();
   FCortexSliceState State;
 
-  // Init first
+  /**
+   * Init first
+   * User Story: As a maintainer, I need this note so the surrounding code intent stays clear during maintenance and debugging.
+   */
   FCortexStatus CortexStatus;
   CortexStatus.Model = TEXT("llama-3.2-1b");
   CortexStatus.bReady = true;
   State = CSlice.Reducer(State, CortexSlice::Actions::CortexInitFulfilled(CortexStatus));
 
-  // Complete Pending
+  /**
+   * Complete Pending
+   * User Story: As a maintainer, I need this step note so I can follow the scenario progression and reason about the expected state changes.
+   */
   State = CSlice.Reducer(
       State, CortexSlice::Actions::CortexCompletePending(TEXT("What is the meaning?")));
   TestEqual("LastPrompt set", State.LastPrompt,
             FString(TEXT("What is the meaning?")));
   TestTrue("Error cleared on pending", State.Error.IsEmpty());
 
-  // Complete Success
+  /**
+   * Complete Success
+   * User Story: As a maintainer, I need this step note so I can follow the scenario progression and reason about the expected state changes.
+   */
   FCortexResponse Response;
   Response.Text = TEXT("42");
   State = CSlice.Reducer(State, CortexSlice::Actions::CortexCompleteFulfilled(Response));
@@ -99,9 +120,10 @@ bool FCortexSliceCompleteTest::RunTest(const FString &Parameters) {
   return true;
 }
 
-// ---------------------------------------------------------------------------
-// Test: CortexComplete Failed
-// ---------------------------------------------------------------------------
+/**
+ * Test: CortexComplete Failed
+ * User Story: As a maintainer, I need this step note so I can follow the scenario progression and reason about the expected state changes.
+ */
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FCortexSliceCompleteFailTest,
                                  "ForbocAI.Slices.Cortex.CompleteFailed",
                                  EAutomationTestFlags_ApplicationContextMask |

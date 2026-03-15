@@ -12,18 +12,19 @@ namespace Handlers {
 
 namespace {
 
-// -------------------------------------------------------------------------
-// Version constants (single source of truth — mirrors vendor_thirdparty.sh)
-// -------------------------------------------------------------------------
+/**
+ * Version constants (single source of truth — mirrors vendor_thirdparty.sh)
+ * User Story: As a maintainer, I need this note so the surrounding code intent stays clear during maintenance and debugging.
+ */
 static const TCHAR *SQLITE_VERSION = TEXT("3460100");
 static const TCHAR *SQLITE_VEC_VERSION = TEXT("v0.1.6");
 static const TCHAR *LLAMA_CPP_TAG = TEXT("b8191");
 
-// -------------------------------------------------------------------------
-// Process helpers
-// -------------------------------------------------------------------------
-
-/** Runs an external process synchronously. Returns exit code. */
+/**
+ * Runs an external process synchronously.
+ * User Story: As setup automation, I need process execution wrapped so build
+ * and extraction commands can run with shared logging and timeout handling.
+ */
 int32 RunProcess(const FString &Executable, const FString &Args,
                  const FString &WorkingDir = TEXT(""),
                  float TimeoutSeconds = 300.0f) {
@@ -51,7 +52,10 @@ int32 RunProcess(const FString &Executable, const FString &Args,
     return -1;
   }
 
-  // Wait with timeout
+  /**
+   * Wait with timeout
+   * User Story: As a maintainer, I need this note so the surrounding code intent stays clear during maintenance and debugging.
+   */
   const double StartTime = FPlatformTime::Seconds();
   while (FPlatformProcess::IsProcRunning(Proc)) {
     StdOut += FPlatformProcess::ReadPipe(ReadPipe);
@@ -76,7 +80,11 @@ int32 RunProcess(const FString &Executable, const FString &Args,
   return ReturnCode;
 }
 
-/** Extracts a zip file to a destination directory. */
+/**
+ * Extracts a zip file to a destination directory.
+ * User Story: As dependency setup, I need zip extraction so downloaded archives
+ * can be unpacked into the ThirdParty layout automatically.
+ */
 bool ExtractZip(const FString &ZipPath, const FString &DestDir) {
   IPlatformFile &PF = FPlatformFileManager::Get().GetPlatformFile();
   PF.CreateDirectoryTree(*DestDir);
@@ -85,7 +93,10 @@ bool ExtractZip(const FString &ZipPath, const FString &DestDir) {
   return RunProcess(TEXT("/usr/bin/unzip"), FString::Printf(
       TEXT("-qo \"%s\" -d \"%s\""), *ZipPath, *DestDir)) == 0;
 #elif PLATFORM_WINDOWS
-  // PowerShell Expand-Archive
+  /**
+   * PowerShell Expand-Archive
+   * User Story: As a maintainer, I need this note so the surrounding code intent stays clear during maintenance and debugging.
+   */
   return RunProcess(TEXT("powershell.exe"), FString::Printf(
       TEXT("-NoProfile -Command \"Expand-Archive -Force -Path '%s' -DestinationPath '%s'\""),
       *ZipPath, *DestDir)) == 0;
@@ -95,7 +106,11 @@ bool ExtractZip(const FString &ZipPath, const FString &DestDir) {
 #endif
 }
 
-/** Extracts a tar.gz file to a destination directory. */
+/**
+ * Extracts a tar.gz file to a destination directory.
+ * User Story: As dependency setup, I need tarball extraction so downloaded
+ * source archives can be unpacked into the expected build directories.
+ */
 bool ExtractTarGz(const FString &TarPath, const FString &DestDir) {
   IPlatformFile &PF = FPlatformFileManager::Get().GetPlatformFile();
   PF.CreateDirectoryTree(*DestDir);
@@ -111,7 +126,11 @@ bool ExtractTarGz(const FString &TarPath, const FString &DestDir) {
 #endif
 }
 
-/** Finds first subdirectory matching a prefix inside a directory. */
+/**
+ * Finds the first subdirectory matching a prefix inside a directory.
+ * User Story: As dependency setup, I need directory discovery so extracted
+ * archives can be relocated without hard-coding versioned folder names.
+ */
 FString FindSubdirWithPrefix(const FString &Dir, const FString &Prefix) {
   TArray<FString> Dirs;
   IFileManager::Get().FindFiles(Dirs, *(Dir / TEXT("*")), false, true);
@@ -123,11 +142,11 @@ FString FindSubdirWithPrefix(const FString &Dir, const FString &Prefix) {
   return TEXT("");
 }
 
-// -------------------------------------------------------------------------
-// Verify (read-only check)
-// -------------------------------------------------------------------------
-
-/** Reports ThirdParty dependency presence without modifying anything. */
+/**
+ * Reports ThirdParty dependency presence without modifying anything.
+ * User Story: As setup diagnostics, I need a read-only verification pass so I
+ * can inspect native dependency readiness before changing the workspace.
+ */
 Result VerifyThirdParty() {
   const FString PluginDir =
       FPaths::ProjectPluginsDir() / TEXT("ForbocAI_SDK");
@@ -217,10 +236,11 @@ Result VerifyThirdParty() {
                    : Result::Failure("Some build-time dependencies missing");
 }
 
-// -------------------------------------------------------------------------
-// Setup deps (download + extract — replaces vendor_thirdparty.sh)
-// -------------------------------------------------------------------------
-
+/**
+ * Installs or verifies the ThirdParty dependency bundle.
+ * User Story: As setup flows, I need one dependency installer so llama.cpp and
+ * sqlite-vss assets can be downloaded and arranged predictably.
+ */
 Result SetupThirdPartyDeps(rtk::EnhancedStore<FStoreState> &Store,
                            const TArray<FString> &Args) {
   const FString PluginDir =
@@ -282,9 +302,10 @@ Result SetupThirdPartyDeps(rtk::EnhancedStore<FStoreState> &Store,
     }
   };
 
-  // -----------------------------------------------------------------------
-  // sqlite3 amalgamation + sqlite-vec (replaces vendor_sqlite in script)
-  // -----------------------------------------------------------------------
+  /**
+   * sqlite3 amalgamation + sqlite-vec (replaces vendor_sqlite in script)
+   * User Story: As a maintainer, I need this note so the surrounding code intent stays clear during maintenance and debugging.
+   */
   if (bDoSqlite) {
     UE_LOG(LogTemp, Display, TEXT(""));
     UE_LOG(LogTemp, Display, TEXT("  --- sqlite3 + sqlite-vec ---"));
@@ -293,7 +314,10 @@ Result SetupThirdPartyDeps(rtk::EnhancedStore<FStoreState> &Store,
     const FString Sqlite3extDest = SqliteIncDir / TEXT("sqlite3ext.h");
     const FString Sqlite3cDest = SqliteSrcDir / TEXT("sqlite3.c");
 
-    // Download + extract sqlite3 amalgamation if any file missing
+    /**
+     * Download + extract sqlite3 amalgamation if any file missing
+     * User Story: As a maintainer, I need this note so the surrounding code intent stays clear during maintenance and debugging.
+     */
     if (!PF.FileExists(*Sqlite3hDest) || !PF.FileExists(*Sqlite3cDest)) {
       const FString SqliteZipUrl = FString::Printf(
           TEXT("https://www.sqlite.org/2024/sqlite-amalgamation-%s.zip"),
@@ -326,7 +350,10 @@ Result SetupThirdPartyDeps(rtk::EnhancedStore<FStoreState> &Store,
       UE_LOG(LogTemp, Display, TEXT("  [skip] sqlite3 amalgamation (exists)"));
     }
 
-    // Download + extract sqlite-vec
+    /**
+     * Download + extract sqlite-vec
+     * User Story: As a maintainer, I need this note so the surrounding code intent stays clear during maintenance and debugging.
+     */
     const FString Vec0Dest = SqliteSrcDir / TEXT("vec0.c");
     if (!PF.FileExists(*Vec0Dest)) {
       const FString VecZipUrl = FString::Printf(
@@ -340,11 +367,17 @@ Result SetupThirdPartyDeps(rtk::EnhancedStore<FStoreState> &Store,
       if (DownloadOne(VecZipUrl, VecZip)) {
         UE_LOG(LogTemp, Display, TEXT("  [extract] sqlite-vec-amalgamation.zip"));
         if (ExtractZip(VecZip, VecExtractDir)) {
-          // sqlite-vec amalgamation zip contains sqlite-vec.c at root
+          /**
+           * sqlite-vec amalgamation zip contains sqlite-vec.c at root
+           * User Story: As a maintainer, I need this note so the surrounding code intent stays clear during maintenance and debugging.
+           */
           IFileManager &FM = IFileManager::Get();
           const FString VecSrc1 = VecExtractDir / TEXT("sqlite-vec.c");
           const FString VecSrc2 = VecExtractDir / TEXT("vec0.c");
-          // Check for nested dir too
+          /**
+           * Check for nested dir too
+           * User Story: As a maintainer, I need this note so the surrounding code intent stays clear during maintenance and debugging.
+           */
           const FString VecSubDir = FindSubdirWithPrefix(
               VecExtractDir, TEXT("sqlite-vec-"));
           const FString VecSrc3 =
@@ -358,7 +391,10 @@ Result SetupThirdPartyDeps(rtk::EnhancedStore<FStoreState> &Store,
           } else if (!VecSrc3.IsEmpty() && PF.FileExists(*VecSrc3)) {
             FM.Copy(*Vec0Dest, *VecSrc3);
           } else {
-            // Try src/ subdirectory
+            /**
+             * Try src/ subdirectory
+             * User Story: As a maintainer, I need this note so the surrounding code intent stays clear during maintenance and debugging.
+             */
             const FString VecSrc4 =
                 VecSubDir.IsEmpty()
                     ? TEXT("")
@@ -376,7 +412,10 @@ Result SetupThirdPartyDeps(rtk::EnhancedStore<FStoreState> &Store,
             UE_LOG(LogTemp, Display, TEXT("  [OK] sqlite-vec (vec0.c) installed"));
           }
 
-          // Copy header if present
+          /**
+           * Copy header if present
+           * User Story: As a maintainer, I need this note so the surrounding code intent stays clear during maintenance and debugging.
+           */
           const FString VecHdrSrc =
               VecSubDir.IsEmpty() ? (VecExtractDir / TEXT("sqlite-vec.h"))
                                  : (VecSubDir / TEXT("sqlite-vec.h"));
@@ -392,9 +431,10 @@ Result SetupThirdPartyDeps(rtk::EnhancedStore<FStoreState> &Store,
     }
   }
 
-  // -----------------------------------------------------------------------
-  // llama.cpp headers (replaces vendor_llama_headers in script)
-  // -----------------------------------------------------------------------
+  /**
+   * llama.cpp headers (replaces vendor_llama_headers in script)
+   * User Story: As a maintainer, I need this note so the surrounding code intent stays clear during maintenance and debugging.
+   */
   if (bDoLlama) {
     UE_LOG(LogTemp, Display, TEXT(""));
     UE_LOG(LogTemp, Display, TEXT("  --- llama.cpp headers (%s) ---"), LLAMA_CPP_TAG);
@@ -417,7 +457,10 @@ Result SetupThirdPartyDeps(rtk::EnhancedStore<FStoreState> &Store,
         "  To build libllama, run: setup_build_llama"));
   }
 
-  // Clean up temp dir
+  /**
+   * Clean up temp dir
+   * User Story: As a maintainer, I need this note so the surrounding code intent stays clear during maintenance and debugging.
+   */
   IFileManager::Get().DeleteDirectory(*TmpDir, true, true);
 
   UE_LOG(LogTemp, Display, TEXT(""));
@@ -432,10 +475,11 @@ Result SetupThirdPartyDeps(rtk::EnhancedStore<FStoreState> &Store,
              : Result::Failure("Some downloads failed — see logs above");
 }
 
-// -------------------------------------------------------------------------
-// Build llama (replaces build_llama.sh)
-// -------------------------------------------------------------------------
-
+/**
+ * Builds the native llama.cpp library for the current platform.
+ * User Story: As native setup, I need a build helper so the local inference
+ * library can be compiled after sources are downloaded.
+ */
 Result BuildLlama(const TArray<FString> &Args) {
   const FString PluginDir =
       FPaths::ProjectPluginsDir() / TEXT("ForbocAI_SDK");
@@ -452,7 +496,10 @@ Result BuildLlama(const TArray<FString> &Args) {
 
   IPlatformFile &PF = FPlatformFileManager::Get().GetPlatformFile();
 
-  // Check if lib already exists
+  /**
+   * Check if lib already exists
+   * User Story: As a maintainer, I need this note so the surrounding code intent stays clear during maintenance and debugging.
+   */
 #if PLATFORM_MAC
   const FString LibDest = ThirdPartyDir / TEXT("llama.cpp/lib/Mac/libllama.a");
   const FString LibName = TEXT("libllama.a");
@@ -474,11 +521,17 @@ Result BuildLlama(const TArray<FString> &Args) {
   UE_LOG(LogTemp, Display, TEXT("  This may take several minutes..."));
   UE_LOG(LogTemp, Display, TEXT(""));
 
-  // Clean and create build dir
+  /**
+   * Clean and create build dir
+   * User Story: As a maintainer, I need this note so the surrounding code intent stays clear during maintenance and debugging.
+   */
   IFileManager::Get().DeleteDirectory(*TmpDir, true, true);
   PF.CreateDirectoryTree(*TmpDir);
 
-  // Step 1: Clone llama.cpp
+  /**
+   * Step 1: Clone llama.cpp
+   * User Story: As a maintainer, I need this note so the surrounding code intent stays clear during maintenance and debugging.
+   */
   UE_LOG(LogTemp, Display, TEXT("  Step 1/3: Cloning llama.cpp..."));
   const FString CloneDir = TmpDir / TEXT("llama.cpp");
 
@@ -495,13 +548,19 @@ Result BuildLlama(const TArray<FString> &Args) {
     return Result::Failure("git clone failed");
   }
 
-  // Step 2: CMake configure
+  /**
+   * Step 2: CMake configure
+   * User Story: As a maintainer, I need this note so the surrounding code intent stays clear during maintenance and debugging.
+   */
   UE_LOG(LogTemp, Display, TEXT("  Step 2/3: Configuring with CMake..."));
   const FString BuildDir = CloneDir / TEXT("build");
 
 #if PLATFORM_MAC || PLATFORM_LINUX
   const FString CmakeExe = TEXT("/usr/local/bin/cmake");
-  // Try /usr/local/bin first, fallback to PATH
+  /**
+   * Try /usr/local/bin first, fallback to PATH
+   * User Story: As a maintainer, I need this note so the surrounding code intent stays clear during maintenance and debugging.
+   */
   const FString CmakeExeAlt = TEXT("cmake");
 #elif PLATFORM_WINDOWS
   const FString CmakeExe = TEXT("cmake.exe");
@@ -517,14 +576,20 @@ Result BuildLlama(const TArray<FString> &Args) {
 
   Rc = RunProcess(CmakeExe, CmakeConfigArgs, CloneDir, 120.0f);
   if (Rc != 0) {
-    // Retry with alternative cmake path
+    /**
+     * Retry with alternative cmake path
+     * User Story: As a maintainer, I need this note so the surrounding code intent stays clear during maintenance and debugging.
+     */
     Rc = RunProcess(CmakeExeAlt, CmakeConfigArgs, CloneDir, 120.0f);
     if (Rc != 0) {
       return Result::Failure("cmake configure failed — is cmake installed?");
     }
   }
 
-  // Step 3: Build
+  /**
+   * Step 3: Build
+   * User Story: As a maintainer, I need this note so the surrounding code intent stays clear during maintenance and debugging.
+   */
   UE_LOG(LogTemp, Display, TEXT("  Step 3/3: Building llama target..."));
   const FString CmakeBuildArgs = FString::Printf(
       TEXT("--build \"%s\" --target llama -j"), *BuildDir);
@@ -537,7 +602,10 @@ Result BuildLlama(const TArray<FString> &Args) {
     }
   }
 
-  // Copy library to ThirdParty
+  /**
+   * Copy library to ThirdParty
+   * User Story: As a maintainer, I need this note so the surrounding code intent stays clear during maintenance and debugging.
+   */
 #if PLATFORM_MAC
   const FString BuiltLib = BuildDir / TEXT("src/libllama.a");
 #elif PLATFORM_WINDOWS
@@ -556,7 +624,10 @@ Result BuildLlama(const TArray<FString> &Args) {
     return Result::Failure("Build succeeded but library not found");
   }
 
-  // Clean up build dir
+  /**
+   * Clean up build dir
+   * User Story: As a maintainer, I need this note so the surrounding code intent stays clear during maintenance and debugging.
+   */
   IFileManager::Get().DeleteDirectory(*TmpDir, true, true);
 
   UE_LOG(LogTemp, Display, TEXT(
@@ -568,9 +639,14 @@ Result BuildLlama(const TArray<FString> &Args) {
 
 } // anonymous namespace
 
+/**
+ * Routes setup-related CLI commands to the appropriate setup helper.
+ * User Story: As CLI users, I need setup commands dispatched through one
+ * handler so verification, install, and build flows share parsing logic.
+ */
 HandlerResult HandleSetup(rtk::EnhancedStore<FStoreState> &Store,
-                         const FString &CommandKey,
-                         const TArray<FString> &Args) {
+                          const FString &CommandKey,
+                          const TArray<FString> &Args) {
   using func::just;
   using func::nothing;
 

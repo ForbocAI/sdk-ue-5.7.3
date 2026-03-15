@@ -7,9 +7,10 @@
 
 namespace rtk {
 
-// ---------------------------------------------------------------------------
-// Ghost thunks (mirrors TS ghostSlice.ts)
-// ---------------------------------------------------------------------------
+/**
+ * Ghost thunks (mirrors TS ghostSlice.ts)
+ * User Story: As a maintainer, I need this section note so related declarations and logic stay easy to locate.
+ */
 
 inline ThunkAction<FGhostRunResponse, FStoreState>
 startGhostThunk(const FGhostConfig &Config) {
@@ -132,7 +133,10 @@ stopGhostThunk(const FString &SessionId) {
   };
 }
 
-// Local ghost execution (no API). Defined in GhostModule.cpp (uses GhostInternal).
+/**
+ * Local ghost execution (no API). Defined in GhostModule.cpp (uses GhostInternal).
+ * User Story: As a maintainer, I need this note so the surrounding code intent stays clear during maintenance and debugging.
+ */
 ThunkAction<FGhostTestResult, FStoreState>
 runLocalGhostTestThunk(const FAgent &Agent, const FString &Scenario);
 

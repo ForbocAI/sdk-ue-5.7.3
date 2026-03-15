@@ -20,16 +20,31 @@ using namespace rtk;
 
 namespace Detail {
 
+/**
+ * Serializes a UStruct-like value into JSON text.
+ * User Story: As API request builders, I need a generic JSON encoder so typed
+ * payloads can be posted without handwritten serialization per endpoint.
+ */
 template <typename T> inline FString ToJson(const T &Value) {
   FString Json;
   FJsonObjectConverter::UStructToJsonObjectString(Value, Json);
   return Json;
 }
 
+/**
+ * URL-encodes a value for safe path and query usage.
+ * User Story: As endpoint builders, I need path-safe encoding so ids and other
+ * dynamic values can be inserted into API URLs without corruption.
+ */
 inline FString Encode(const FString &Value) {
   return FGenericPlatformHttp::UrlEncode(Value);
 }
 
+/**
+ * Serializes a JSON object into text.
+ * User Story: As codec helpers, I need object-to-string conversion so ad hoc
+ * payloads can move through the generic HTTP helpers unchanged.
+ */
 inline FString ToJsonString(const TSharedRef<FJsonObject> &Object) {
   FString Json;
   const TSharedRef<TJsonWriter<>> Writer = TJsonWriterFactory<>::Create(&Json);
@@ -37,6 +52,11 @@ inline FString ToJsonString(const TSharedRef<FJsonObject> &Object) {
   return Json;
 }
 
+/**
+ * Builds the specialized payload for remote cortex completion.
+ * User Story: As cortex completion flows, I need request shaping that omits
+ * unset fields so the API only receives intentional completion options.
+ */
 inline FString
 BuildCortexCompletePayload(const FCortexCompleteRequest &Request) {
   const TSharedRef<FJsonObject> Payload = MakeShared<FJsonObject>();
@@ -72,6 +92,11 @@ BuildCortexCompletePayload(const FCortexCompleteRequest &Request) {
   return ToJsonString(Payload);
 }
 
+/**
+ * Builds an injected RTK-style endpoint thunk from request metadata.
+ * User Story: As API endpoint wiring, I need one endpoint factory so store
+ * integration, tags, and request builders stay consistent across endpoints.
+ */
 template <typename Arg, typename Result>
 inline ThunkAction<Result, FStoreState> MakeEndpoint(
     const FString &EndpointName, const Arg &ArgValue,
@@ -88,6 +113,11 @@ inline ThunkAction<Result, FStoreState> MakeEndpoint(
   return ForbocAiApi.injectEndpoint(Endpoint)(ArgValue);
 }
 
+/**
+ * Builds a GET endpoint thunk.
+ * User Story: As read-only API calls, I need a GET factory so fetch endpoints
+ * can reuse the same store integration path.
+ */
 template <typename Result>
 inline ThunkAction<Result, FStoreState>
 MakeGet(const FString &EndpointName, const FString &Url,
@@ -100,6 +130,11 @@ MakeGet(const FString &EndpointName, const FString &Url,
       Tags);
 }
 
+/**
+ * Builds a POST endpoint thunk using struct-to-JSON encoding.
+ * User Story: As write-oriented API calls, I need a POST factory so typed
+ * request payloads can be serialized and dispatched uniformly.
+ */
 template <typename Request, typename Result>
 inline ThunkAction<Result, FStoreState> MakePost(
     const FString &EndpointName, const FString &Url,
@@ -114,6 +149,11 @@ inline ThunkAction<Result, FStoreState> MakePost(
       TArray<FApiEndpointTag>(), Invalidates);
 }
 
+/**
+ * Builds a DELETE endpoint thunk.
+ * User Story: As destructive API calls, I need a DELETE factory so endpoint
+ * removal flows share the same dispatch and invalidation behavior.
+ */
 template <typename Result>
 inline ThunkAction<Result, FStoreState> MakeDelete(
     const FString &EndpointName, const FString &Url,
@@ -126,6 +166,11 @@ inline ThunkAction<Result, FStoreState> MakeDelete(
       TArray<FApiEndpointTag>(), Invalidates);
 }
 
+/**
+ * Decodes a raw string HTTP result into a typed HTTP result.
+ * User Story: As endpoint codecs, I need shared decode handling so response
+ * parsing and transport failures are mapped consistently.
+ */
 template <typename Result>
 inline func::AsyncResult<func::HttpResult<Result>>
 DecodeHttpResult(func::AsyncResult<func::HttpResult<FString>> RawResult,
@@ -159,6 +204,11 @@ DecodeHttpResult(func::AsyncResult<func::HttpResult<FString>> RawResult,
       });
 }
 
+/**
+ * Builds a POST endpoint thunk that uses custom encode and decode functions.
+ * User Story: As custom API codecs, I need one helper for hand-rolled payloads
+ * so endpoints can bypass generic struct serialization when needed.
+ */
 template <typename Request, typename Result>
 inline ThunkAction<Result, FStoreState> MakePostWithCodec(
     const FString &EndpointName, const FString &Url,
@@ -177,6 +227,11 @@ inline ThunkAction<Result, FStoreState> MakePostWithCodec(
       TArray<FApiEndpointTag>(), Invalidates);
 }
 
+/**
+ * Builds a GET endpoint thunk that decodes a custom response shape.
+ * User Story: As custom API codecs, I need GET helpers with pluggable decoders
+ * so complex JSON responses can still use the common endpoint pipeline.
+ */
 template <typename Result>
 inline ThunkAction<Result, FStoreState> MakeGetWithCodec(
     const FString &EndpointName, const FString &Url,
@@ -192,6 +247,11 @@ inline ThunkAction<Result, FStoreState> MakeGetWithCodec(
       Tags);
 }
 
+/**
+ * Builds a POST endpoint thunk from raw JSON text plus a custom decoder.
+ * User Story: As raw-payload endpoints, I need a helper that accepts JSON text
+ * directly so already-shaped payloads can be posted without double encoding.
+ */
 template <typename Result>
 inline ThunkAction<Result, FStoreState>
 MakePostRawWithCodec(const FString &EndpointName, const FString &Url,
@@ -205,6 +265,11 @@ MakePostRawWithCodec(const FString &EndpointName, const FString &Url,
       });
 }
 
+/**
+ * Encodes an NPC process tape into a JSON object.
+ * User Story: As protocol request composition, I need process tapes converted
+ * into JSON objects so nested runtime state can be transmitted cleanly.
+ */
 inline TSharedRef<FJsonObject>
 EncodeProcessTapeObject(const FNPCProcessTape &Tape) {
   const TSharedRef<FJsonObject> Root = MakeShared<FJsonObject>();
@@ -249,6 +314,11 @@ EncodeProcessTapeObject(const FNPCProcessTape &Tape) {
   return Root;
 }
 
+/**
+ * Decodes a process tape JSON object into a typed tape value.
+ * User Story: As protocol response handling, I need process tapes parsed back
+ * into runtime types so downstream orchestration can inspect the turn state.
+ */
 inline bool DecodeProcessTapeObject(const TSharedPtr<FJsonObject> &Object,
                                     FNPCProcessTape &Tape) {
   if (!Object.IsValid()) {
@@ -295,6 +365,11 @@ inline bool DecodeProcessTapeObject(const TSharedPtr<FJsonObject> &Object,
   return true;
 }
 
+/**
+ * Encodes an NPC process request into JSON text.
+ * User Story: As process endpoint callers, I need a request encoder so typed
+ * process requests can be posted without duplicating JSON assembly logic.
+ */
 inline FString EncodeNpcProcessRequest(const FNPCProcessRequest &Request) {
   const TSharedRef<FJsonObject> Root = MakeShared<FJsonObject>();
   Root->SetObjectField(TEXT("tape"), EncodeProcessTapeObject(Request.Tape));
@@ -305,6 +380,11 @@ inline FString EncodeNpcProcessRequest(const FNPCProcessRequest &Request) {
   return ToJsonString(Root);
 }
 
+/**
+ * Decodes an instruction object from JSON.
+ * User Story: As process response handling, I need typed instruction parsing so
+ * protocol actions can be reconstructed from the API payload.
+ */
 inline bool DecodeInstructionObject(const TSharedPtr<FJsonObject> &Object,
                                     FNPCInstruction &Instruction) {
   if (!Object.IsValid()) {
@@ -376,9 +456,9 @@ inline bool DecodeInstructionObject(const TSharedPtr<FJsonObject> &Object,
 }
 
 /**
- * User Story: As the SDK protocol loop, I need a single process endpoint
- * that returns one atomic instruction per turn while echoing full tape state.
- * one hop in, one hop out, like passing a lit shard through vacuum. (From TS)
+ * Decodes a process response into its instruction and tape payloads.
+ * User Story: As the SDK protocol loop, I need one process-response decoder so
+ * turn instructions and echoed tape state are reconstructed together.
  */
 inline bool DecodeNpcProcessResponse(const FString &Json,
                                      FNPCProcessResponse &Response) {
@@ -398,6 +478,11 @@ inline bool DecodeNpcProcessResponse(const FString &Json,
                                  Response.Tape);
 }
 
+/**
+ * Encodes a directive request into JSON text.
+ * User Story: As directive endpoint callers, I need a request encoder so
+ * observation, state, and context fields are posted with a stable schema.
+ */
 inline FString EncodeDirectiveRequest(const FDirectiveRequest &Request) {
   const TSharedRef<FJsonObject> Root = MakeShared<FJsonObject>();
   Root->SetStringField(TEXT("observation"), Request.Observation);
@@ -408,6 +493,11 @@ inline FString EncodeDirectiveRequest(const FDirectiveRequest &Request) {
   return ToJsonString(Root);
 }
 
+/**
+ * Decodes a directive response into the memory-recall instruction payload.
+ * User Story: As directive endpoint callers, I need typed response decoding so
+ * recall query, limit, and threshold values can drive the next lookup step.
+ */
 inline bool DecodeDirectiveResponse(const FString &Json,
                                     FDirectiveResponse &Response) {
   TSharedPtr<FJsonObject> Root;
@@ -429,6 +519,11 @@ inline bool DecodeDirectiveResponse(const FString &Json,
   return true;
 }
 
+/**
+ * Encodes a context-building request into JSON text.
+ * User Story: As context endpoint callers, I need a request encoder so
+ * observation, persona, and recalled memories reach the API in one payload.
+ */
 inline FString EncodeContextRequest(const FContextRequest &Request) {
   const TSharedRef<FJsonObject> Root = MakeShared<FJsonObject>();
   Root->SetStringField(TEXT("observation"), Request.Observation);
@@ -445,6 +540,11 @@ inline FString EncodeContextRequest(const FContextRequest &Request) {
   return ToJsonString(Root);
 }
 
+/**
+ * Decodes a context response into prompt and constraint data.
+ * User Story: As context endpoint callers, I need typed response decoding so
+ * prompt generation results can feed later inference and validation stages.
+ */
 inline bool DecodeContextResponse(const FString &Json,
                                   FContextResponse &Response) {
   TSharedPtr<FJsonObject> Root;
@@ -460,6 +560,11 @@ inline bool DecodeContextResponse(const FString &Json,
   return true;
 }
 
+/**
+ * Encodes a verdict request into JSON text.
+ * User Story: As verdict endpoint callers, I need a request encoder so the
+ * generated output and NPC state can be evaluated against the observation.
+ */
 inline FString EncodeVerdictRequest(const FVerdictRequest &Request) {
   const TSharedRef<FJsonObject> Root = MakeShared<FJsonObject>();
   Root->SetStringField(TEXT("generatedOutput"), Request.GeneratedOutput);
@@ -469,6 +574,11 @@ inline FString EncodeVerdictRequest(const FVerdictRequest &Request) {
   return ToJsonString(Root);
 }
 
+/**
+ * Decodes a verdict response into a typed verdict result.
+ * User Story: As verdict endpoint callers, I need response decoding so
+ * validity, dialogue, actions, and memory updates return to gameplay code.
+ */
 inline bool DecodeVerdictResponse(const FString &Json,
                                   FVerdictResponse &Response) {
   TSharedPtr<FJsonObject> Root;
@@ -504,6 +614,11 @@ inline bool DecodeVerdictResponse(const FString &Json,
   return true;
 }
 
+/**
+ * Encodes a bridge-validation request into JSON text.
+ * User Story: As bridge-rule validation callers, I need a request encoder so
+ * action and validation context values are serialized consistently.
+ */
 inline FString
 EncodeBridgeValidateRequest(const FBridgeValidateRequest &Request) {
   const TSharedRef<FJsonObject> Root = MakeShared<FJsonObject>();
@@ -514,6 +629,11 @@ EncodeBridgeValidateRequest(const FBridgeValidateRequest &Request) {
   return ToJsonString(Root);
 }
 
+/**
+ * Decodes a validation response into a typed validation result.
+ * User Story: As bridge-rule validation callers, I need one decoder so both
+ * wrapped and direct validation payloads map into the same runtime type.
+ */
 inline bool DecodeValidationResult(const FString &Json,
                                    FValidationResult &Result) {
   TSharedPtr<FJsonObject> Root;
@@ -529,6 +649,11 @@ inline bool DecodeValidationResult(const FString &Json,
   return true;
 }
 
+/**
+ * Reads a string array field from a JSON object.
+ * User Story: As codec helpers, I need a reusable array reader so repeated
+ * string-list decoding stays consistent across bridge and ruleset payloads.
+ */
 inline TArray<FString>
 DecodeStringArrayField(const TSharedPtr<FJsonObject> &Object,
                        const FString &FieldName) {
@@ -548,6 +673,11 @@ DecodeStringArrayField(const TSharedPtr<FJsonObject> &Object,
   return Values;
 }
 
+/**
+ * Decodes a bridge-rule object into a typed bridge rule.
+ * User Story: As bridge rule management, I need rule-object decoding so mixed
+ * API field shapes still produce one normalized bridge-rule value.
+ */
 inline bool DecodeBridgeRuleObject(const TSharedPtr<FJsonObject> &Object,
                                    FBridgeRule &Rule) {
   if (!Object.IsValid()) {
@@ -589,6 +719,11 @@ inline bool DecodeBridgeRuleObject(const TSharedPtr<FJsonObject> &Object,
   return true;
 }
 
+/**
+ * Decodes a directive ruleset object into a typed ruleset value.
+ * User Story: As directive rule management, I need ruleset-object decoding so
+ * nested rule arrays become a usable runtime ruleset structure.
+ */
 inline bool DecodeDirectiveRuleSetObject(const TSharedPtr<FJsonObject> &Object,
                                          FDirectiveRuleSet &Ruleset) {
   if (!Object.IsValid()) {
@@ -622,6 +757,11 @@ inline bool DecodeDirectiveRuleSetObject(const TSharedPtr<FJsonObject> &Object,
   return true;
 }
 
+/**
+ * Decodes a bridge-rules response into a typed rule collection.
+ * User Story: As bridge rule management, I need list-response decoding so API
+ * rule inventories can be consumed without handwritten JSON walking.
+ */
 inline bool DecodeBridgeRulesResponse(const FString &Json,
                                       TArray<FBridgeRule> &Rules) {
   TArray<TSharedPtr<FJsonValue>> Values;
@@ -645,6 +785,11 @@ inline bool DecodeBridgeRulesResponse(const FString &Json,
   return true;
 }
 
+/**
+ * Decodes a directive-ruleset response into a single ruleset value.
+ * User Story: As directive rule management, I need single-ruleset decoding so
+ * details views and edits can load one ruleset cleanly.
+ */
 inline bool DecodeDirectiveRuleSetResponse(const FString &Json,
                                            FDirectiveRuleSet &Ruleset) {
   TSharedPtr<FJsonObject> Root;
@@ -655,6 +800,11 @@ inline bool DecodeDirectiveRuleSetResponse(const FString &Json,
   return DecodeDirectiveRuleSetObject(Root, Ruleset);
 }
 
+/**
+ * Decodes a directive-ruleset list response into typed rulesets.
+ * User Story: As directive rule management, I need list-response decoding so
+ * ruleset indexes can hydrate strongly typed runtime collections.
+ */
 inline bool
 DecodeDirectiveRuleSetListResponse(const FString &Json,
                                    TArray<FDirectiveRuleSet> &Rulesets) {
@@ -679,6 +829,11 @@ DecodeDirectiveRuleSetListResponse(const FString &Json,
   return true;
 }
 
+/**
+ * Encodes the first soul-export request into JSON text.
+ * User Story: As soul export flows, I need phase-one request encoding so NPC
+ * identity, persona, and state can be sent for upload preparation.
+ */
 inline FString
 EncodeSoulExportPhase1Request(const FSoulExportPhase1Request &Request) {
   const TSharedRef<FJsonObject> Root = MakeShared<FJsonObject>();
@@ -689,6 +844,11 @@ EncodeSoulExportPhase1Request(const FSoulExportPhase1Request &Request) {
   return ToJsonString(Root);
 }
 
+/**
+ * Decodes the first soul-export response into upload instructions.
+ * User Story: As soul export flows, I need phase-one response decoding so the
+ * client can execute upload instructions and preserve signed payload metadata.
+ */
 inline bool
 DecodeSoulExportPhase1Response(const FString &Json,
                                FSoulExportPhase1Response &Response) {
@@ -707,6 +867,11 @@ DecodeSoulExportPhase1Response(const FString &Json,
   return true;
 }
 
+/**
+ * Encodes the soul-export confirmation request into JSON text.
+ * User Story: As soul export flows, I need confirmation request encoding so
+ * upload results and signatures can be posted back to finalize export.
+ */
 inline FString
 EncodeSoulExportConfirmRequest(const FSoulExportConfirmRequest &Request) {
   const TSharedRef<FJsonObject> Root = MakeShared<FJsonObject>();
@@ -719,6 +884,11 @@ EncodeSoulExportConfirmRequest(const FSoulExportConfirmRequest &Request) {
   return ToJsonString(Root);
 }
 
+/**
+ * Decodes the final soul-export response into typed export details.
+ * User Story: As soul export flows, I need final response decoding so the
+ * transaction id, Arweave URL, and optional soul payload are available locally.
+ */
 inline bool DecodeSoulExportResponse(const FString &Json,
                                      FSoulExportResponse &Response) {
   TSharedPtr<FJsonObject> Root;
@@ -737,6 +907,11 @@ inline bool DecodeSoulExportResponse(const FString &Json,
   return true;
 }
 
+/**
+ * Encodes the first soul-import request into JSON text.
+ * User Story: As soul import flows, I need phase-one request encoding so the
+ * referenced transaction id can be sent to start remote retrieval.
+ */
 inline FString
 EncodeSoulImportPhase1Request(const FSoulImportPhase1Request &Request) {
   const TSharedRef<FJsonObject> Root = MakeShared<FJsonObject>();
@@ -744,6 +919,11 @@ EncodeSoulImportPhase1Request(const FSoulImportPhase1Request &Request) {
   return ToJsonString(Root);
 }
 
+/**
+ * Decodes the first soul-import response into download instructions.
+ * User Story: As soul import flows, I need phase-one response decoding so the
+ * client can perform the requested download before confirming import.
+ */
 inline bool
 DecodeSoulImportPhase1Response(const FString &Json,
                                FSoulImportPhase1Response &Response) {
@@ -758,6 +938,11 @@ DecodeSoulImportPhase1Response(const FString &Json,
   return true;
 }
 
+/**
+ * Encodes the soul-import confirmation request into JSON text.
+ * User Story: As soul import flows, I need confirmation request encoding so
+ * download results can be posted to complete the import handshake.
+ */
 inline FString
 EncodeSoulImportConfirmRequest(const FSoulImportConfirmRequest &Request) {
   const TSharedRef<FJsonObject> Root = MakeShared<FJsonObject>();
@@ -768,6 +953,11 @@ EncodeSoulImportConfirmRequest(const FSoulImportConfirmRequest &Request) {
   return ToJsonString(Root);
 }
 
+/**
+ * Decodes an imported NPC payload into a typed NPC value.
+ * User Story: As soul import flows, I need imported NPC decoding so gameplay
+ * systems can consume the restored character data directly.
+ */
 inline bool DecodeImportedNpc(const FString &Json, FImportedNpc &Npc) {
   TSharedPtr<FJsonObject> Root;
   if (!JsonInterop::ParseJsonObject(Json, Root) || !Root.IsValid()) {
@@ -777,6 +967,11 @@ inline bool DecodeImportedNpc(const FString &Json, FImportedNpc &Npc) {
   return true;
 }
 
+/**
+ * Decodes a soul-verification response into a verification result.
+ * User Story: As soul verification flows, I need response decoding so validity
+ * and failure reasons map into one runtime verification record.
+ */
 inline bool DecodeSoulVerifyResponse(const FString &Json,
                                      FSoulVerifyResult &Response) {
   TSharedPtr<FJsonObject> Root;
@@ -800,6 +995,11 @@ inline bool DecodeSoulVerifyResponse(const FString &Json,
   return true;
 }
 
+/**
+ * Decodes a ghost-run response into run metadata.
+ * User Story: As ghost execution flows, I need run-response decoding so the
+ * created session id and initial run status are captured immediately.
+ */
 inline bool DecodeGhostRunResponse(const FString &Json,
                                    FGhostRunResponse &Response) {
   TSharedPtr<FJsonObject> Root;
@@ -811,6 +1011,11 @@ inline bool DecodeGhostRunResponse(const FString &Json,
   return true;
 }
 
+/**
+ * Reads an int64 from either numeric or string JSON fields.
+ * User Story: As ghost and history codecs, I need tolerant integer parsing so
+ * timestamp fields decode correctly even when the API changes wire formats.
+ */
 inline int64 JsonNumberOrStringToInt64(const TSharedPtr<FJsonObject> &Object,
                                        const FString &FieldName) {
   if (!Object.IsValid() || !Object->HasField(FieldName)) {
@@ -830,6 +1035,11 @@ inline int64 JsonNumberOrStringToInt64(const TSharedPtr<FJsonObject> &Object,
   return 0;
 }
 
+/**
+ * Decodes a ghost-status response into a typed status snapshot.
+ * User Story: As ghost execution flows, I need status-response decoding so
+ * progress, timing, and error fields can drive polling and UI updates.
+ */
 inline bool DecodeGhostStatusResponse(const FString &Json,
                                       FGhostStatusResponse &Response) {
   TSharedPtr<FJsonObject> Root;
@@ -878,6 +1088,11 @@ inline bool DecodeGhostStatusResponse(const FString &Json,
   return true;
 }
 
+/**
+ * Decodes a ghost-results response into typed result records.
+ * User Story: As ghost execution flows, I need results-response decoding so
+ * aggregate metrics and per-test outcomes can be inspected in tooling.
+ */
 inline bool DecodeGhostResultsResponse(const FString &Json,
                                        FGhostResultsResponse &Response) {
   TSharedPtr<FJsonObject> Root;
@@ -949,6 +1164,11 @@ inline bool DecodeGhostResultsResponse(const FString &Json,
   return true;
 }
 
+/**
+ * Decodes a ghost-stop response into typed stop metadata.
+ * User Story: As ghost execution flows, I need stop-response decoding so the
+ * caller can confirm the target session stopped and record its final state.
+ */
 inline bool DecodeGhostStopResponse(const FString &Json,
                                     FGhostStopResponse &Response) {
   TSharedPtr<FJsonObject> Root;
@@ -962,6 +1182,11 @@ inline bool DecodeGhostStopResponse(const FString &Json,
   return true;
 }
 
+/**
+ * Decodes a ghost-history response into typed session history.
+ * User Story: As ghost execution flows, I need history-response decoding so
+ * prior sessions can be listed with ids, timing, status, and pass-rate data.
+ */
 inline bool DecodeGhostHistoryResponse(const FString &Json,
                                        FGhostHistoryResponse &Response) {
   TSharedPtr<FJsonObject> Root;

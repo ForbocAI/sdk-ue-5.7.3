@@ -89,6 +89,11 @@ struct FNPCSliceState {
   FNPCSliceState() : Entities(GetNPCAdapter().getInitialState()) {}
 };
 
+/**
+ * Merges a partial state delta into the current NPC state JSON.
+ * User Story: As NPC state updates, I need deltas merged into the current
+ * state so protocol turns can evolve state without replacing everything.
+ */
 inline FAgentState MergeStateDelta(const FAgentState &Current,
                                    const FAgentState &Delta) {
   if (Delta.JsonData.IsEmpty() || Delta.JsonData == TEXT("{}")) {
@@ -124,6 +129,11 @@ inline FAgentState MergeStateDelta(const FAgentState &Current,
   return TypeFactory::AgentState(MergedJson);
 }
 
+/**
+ * Builds a timestamped state-log entry from delta and resulting state.
+ * User Story: As NPC audit trails, I need state log entries created so state
+ * transitions can be inspected after updates occur.
+ */
 inline FNPCStateLogEntry MakeStateLogEntry(const FAgentState &Delta,
                                            const FAgentState &State) {
   FNPCStateLogEntry Entry;

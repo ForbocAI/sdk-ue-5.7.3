@@ -184,6 +184,11 @@ struct FVerdictResponse {
 
 namespace TypeFactory {
 
+/**
+ * Builds the process tape payload for the NPC process endpoint.
+ * User Story: As protocol turn assembly, I need one factory for process tapes
+ * so observation, context, and NPC state are packaged consistently.
+ */
 inline FNPCProcessTape ProcessTape(const FString &Observation,
                                    const FString &ContextJson,
                                    const FAgentState &NpcState,
@@ -196,6 +201,11 @@ inline FNPCProcessTape ProcessTape(const FString &Observation,
   return Tape;
 }
 
+/**
+ * Builds the directive request payload for a protocol turn.
+ * User Story: As directive composition, I need a factory that packages the
+ * observation, NPC state, and context into one request object.
+ */
 inline FDirectiveRequest DirectiveRequest(const FString &Observation,
                                           const FAgentState &NpcState,
                                           const FString &ContextJson) {
@@ -206,6 +216,11 @@ inline FDirectiveRequest DirectiveRequest(const FString &Observation,
   return Request;
 }
 
+/**
+ * Builds the context request payload for a protocol turn.
+ * User Story: As context composition, I need a factory that binds recalled
+ * memories with observation and persona into one request.
+ */
 inline FContextRequest ContextRequest(const TArray<FRecalledMemory> &Memories,
                                       const FString &Observation,
                                       const FAgentState &NpcState,
@@ -218,6 +233,11 @@ inline FContextRequest ContextRequest(const TArray<FRecalledMemory> &Memories,
   return Request;
 }
 
+/**
+ * Builds the verdict request payload for a protocol turn.
+ * User Story: As verdict validation, I need a factory that packages generated
+ * output with the original observation and NPC state.
+ */
 inline FVerdictRequest VerdictRequest(const FString &GeneratedOutput,
                                       const FString &Observation,
                                       const FAgentState &NpcState) {

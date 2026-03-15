@@ -6,9 +6,10 @@
 using namespace rtk;
 using namespace MemorySlice;
 
-// ---------------------------------------------------------------------------
-// Test: MemoryStoreStart / Success / Failed lifecycle
-// ---------------------------------------------------------------------------
+/**
+ * Test: MemoryStoreStart / Success / Failed lifecycle
+ * User Story: As a maintainer, I need this step note so I can follow the scenario progression and reason about the expected state changes.
+ */
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FMemorySliceStoreTest,
                                  "ForbocAI.Slices.Memory.StoreLifecycle",
                                  EAutomationTestFlags_ApplicationContextMask |
@@ -17,16 +18,25 @@ bool FMemorySliceStoreTest::RunTest(const FString &Parameters) {
   Slice<FMemorySliceState> MemSlice = CreateMemorySlice();
   FMemorySliceState State;
 
-  // Initial state
+  /**
+   * Initial state
+   * User Story: As a maintainer, I need this step note so I can follow the scenario progression and reason about the expected state changes.
+   */
   TestEqual("Initial StorageStatus", State.StorageStatus,
             FString(TEXT("idle")));
 
-  // StoreStart
+  /**
+   * StoreStart
+   * User Story: As a maintainer, I need this note so the surrounding code intent stays clear during maintenance and debugging.
+   */
   State = MemSlice.Reducer(State, MemorySlice::Actions::MemoryStoreStart());
   TestEqual("StorageStatus storing", State.StorageStatus,
             FString(TEXT("storing")));
 
-  // StoreSuccess
+  /**
+   * StoreSuccess
+   * User Story: As a maintainer, I need this note so the surrounding code intent stays clear during maintenance and debugging.
+   */
   FMemoryItem Item;
   Item.Id = TEXT("mem_1");
   Item.Text = TEXT("The dragon appeared");
@@ -45,9 +55,10 @@ bool FMemorySliceStoreTest::RunTest(const FString &Parameters) {
   return true;
 }
 
-// ---------------------------------------------------------------------------
-// Test: MemoryStoreFailed sets error
-// ---------------------------------------------------------------------------
+/**
+ * Test: MemoryStoreFailed sets error
+ * User Story: As a maintainer, I need this note so the surrounding code intent stays clear during maintenance and debugging.
+ */
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FMemorySliceStoreFailTest,
                                  "ForbocAI.Slices.Memory.StoreFailed",
                                  EAutomationTestFlags_ApplicationContextMask |
@@ -67,9 +78,10 @@ bool FMemorySliceStoreFailTest::RunTest(const FString &Parameters) {
   return true;
 }
 
-// ---------------------------------------------------------------------------
-// Test: MemoryRecallStart / Success / Failed lifecycle
-// ---------------------------------------------------------------------------
+/**
+ * Test: MemoryRecallStart / Success / Failed lifecycle
+ * User Story: As a maintainer, I need this step note so I can follow the scenario progression and reason about the expected state changes.
+ */
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FMemorySliceRecallTest,
                                  "ForbocAI.Slices.Memory.RecallLifecycle",
                                  EAutomationTestFlags_ApplicationContextMask |
@@ -78,12 +90,18 @@ bool FMemorySliceRecallTest::RunTest(const FString &Parameters) {
   Slice<FMemorySliceState> MemSlice = CreateMemorySlice();
   FMemorySliceState State;
 
-  // RecallStart
+  /**
+   * RecallStart
+   * User Story: As a maintainer, I need this note so the surrounding code intent stays clear during maintenance and debugging.
+   */
   State = MemSlice.Reducer(State, MemorySlice::Actions::MemoryRecallStart());
   TestEqual("RecallStatus recalling", State.RecallStatus,
             FString(TEXT("recalling")));
 
-  // RecallSuccess with multiple items
+  /**
+   * RecallSuccess with multiple items
+   * User Story: As a maintainer, I need this note so the surrounding code intent stays clear during maintenance and debugging.
+   */
   TArray<FMemoryItem> Items;
   FMemoryItem M1;
   M1.Id = TEXT("r1");
@@ -109,9 +127,10 @@ bool FMemorySliceRecallTest::RunTest(const FString &Parameters) {
   return true;
 }
 
-// ---------------------------------------------------------------------------
-// Test: MemoryRecallFailed
-// ---------------------------------------------------------------------------
+/**
+ * Test: MemoryRecallFailed
+ * User Story: As a maintainer, I need this note so the surrounding code intent stays clear during maintenance and debugging.
+ */
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FMemorySliceRecallFailTest,
                                  "ForbocAI.Slices.Memory.RecallFailed",
                                  EAutomationTestFlags_ApplicationContextMask |
@@ -130,9 +149,10 @@ bool FMemorySliceRecallFailTest::RunTest(const FString &Parameters) {
   return true;
 }
 
-// ---------------------------------------------------------------------------
-// Test: MemoryClear resets to initial state
-// ---------------------------------------------------------------------------
+/**
+ * Test: MemoryClear resets to initial state
+ * User Story: As a maintainer, I need this note so the surrounding code intent stays clear during maintenance and debugging.
+ */
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FMemorySliceClearTest,
                                  "ForbocAI.Slices.Memory.Clear",
                                  EAutomationTestFlags_ApplicationContextMask |

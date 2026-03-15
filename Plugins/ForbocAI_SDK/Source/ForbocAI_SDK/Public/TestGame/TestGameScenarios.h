@@ -1,6 +1,9 @@
 #pragma once
-// Static scenario definitions — mirrors TS test-game scenarioSlice steps
-// 4 scenarios × N commands = full CLI coverage matrix
+/**
+ * Static scenario definitions — mirrors TS test-game scenarioSlice steps
+ * 4 scenarios × N commands = full CLI coverage matrix
+ * User Story: As a maintainer, I need this section note so related declarations and logic stay easy to locate.
+ */
 
 #include "CoreMinimal.h"
 #include "TestGame/TestGameTypes.h"
@@ -10,7 +13,10 @@ namespace TestGame {
 inline TArray<FScenarioStep> GetDefaultScenarioSteps() {
   TArray<FScenarioStep> Steps;
 
-  // --- Scenario 1: Spatial Strategy & Stealth ---
+  /**
+   * --- Scenario 1: Spatial Strategy & Stealth ---
+   * User Story: As a maintainer, I need this section note so related declarations and logic stay easy to locate.
+   */
   {
     FScenarioStep S;
     S.Id = TEXT("stealth-door-open");
@@ -52,7 +58,10 @@ inline TArray<FScenarioStep> GetDefaultScenarioSteps() {
     Steps.Add(S);
   }
 
-  // --- Scenario 2: Social Simulation ---
+  /**
+   * --- Scenario 2: Social Simulation ---
+   * User Story: As a maintainer, I need this section note so related declarations and logic stay easy to locate.
+   */
   {
     FScenarioStep S;
     S.Id = TEXT("social-miller-encounter");
@@ -87,7 +96,10 @@ inline TArray<FScenarioStep> GetDefaultScenarioSteps() {
     Steps.Add(S);
   }
 
-  // --- Scenario 3: Real-Time Escape ---
+  /**
+   * --- Scenario 3: Real-Time Escape ---
+   * User Story: As a maintainer, I need this section note so related declarations and logic stay easy to locate.
+   */
   {
     FScenarioStep S;
     S.Id = TEXT("escape-realtime-pursuit");
@@ -135,7 +147,10 @@ inline TArray<FScenarioStep> GetDefaultScenarioSteps() {
     Steps.Add(S);
   }
 
-  // --- Scenario 4: Persistence & Recovery ---
+  /**
+   * --- Scenario 4: Persistence & Recovery ---
+   * User Story: As a maintainer, I need this section note so related declarations and logic stay easy to locate.
+   */
   {
     FScenarioStep S;
     S.Id = TEXT("persistence-recovery");

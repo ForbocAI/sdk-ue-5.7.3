@@ -5,9 +5,10 @@
 
 namespace Errors {
 
-// ---------------------------------------------------------------------------
-// G9: Consistent error shape — all SDK errors flow through this type
-// ---------------------------------------------------------------------------
+/**
+ * G9: Consistent error shape — all SDK errors flow through this type
+ * User Story: As a maintainer, I need this implementation note so I can understand which milestone behavior the surrounding code is preserving.
+ */
 
 enum class EErrorCategory : uint8 {
   Network,    // Connection failed, timeout, DNS
@@ -32,7 +33,11 @@ struct FSDKError {
         Message(TEXT("")), StatusCode(0) {}
 };
 
-// Factory functions for each error category
+/**
+ * Builds a normalized network error.
+ * User Story: As SDK error consumers, I need transport failures normalized so
+ * retry and UI flows can branch on a stable category.
+ */
 inline FSDKError NetworkError(const FString &Message) {
   FSDKError E;
   E.Category = EErrorCategory::Network;
@@ -41,6 +46,11 @@ inline FSDKError NetworkError(const FString &Message) {
   return E;
 }
 
+/**
+ * Builds a normalized HTTP error with status code metadata.
+ * User Story: As API callers, I need HTTP failures normalized with status
+ * codes so handlers can map them to the right recovery path.
+ */
 inline FSDKError HttpError(int32 StatusCode, const FString &Message) {
   FSDKError E;
   E.Category = EErrorCategory::Http;
@@ -50,6 +60,11 @@ inline FSDKError HttpError(int32 StatusCode, const FString &Message) {
   return E;
 }
 
+/**
+ * Builds a normalized validation error.
+ * User Story: As input-validation flows, I need invalid requests surfaced in a
+ * shared shape so user-facing feedback stays consistent.
+ */
 inline FSDKError ValidationError(const FString &Message) {
   FSDKError E;
   E.Category = EErrorCategory::Validation;
@@ -58,6 +73,11 @@ inline FSDKError ValidationError(const FString &Message) {
   return E;
 }
 
+/**
+ * Builds a normalized protocol error.
+ * User Story: As protocol orchestration, I need protocol-loop failures
+ * normalized so the turn runner can stop cleanly and report the cause.
+ */
 inline FSDKError ProtocolError(const FString &Message) {
   FSDKError E;
   E.Category = EErrorCategory::Protocol;
@@ -66,6 +86,11 @@ inline FSDKError ProtocolError(const FString &Message) {
   return E;
 }
 
+/**
+ * Builds a normalized memory error.
+ * User Story: As memory runtime consumers, I need storage and recall failures
+ * normalized so diagnostics stay consistent across backends.
+ */
 inline FSDKError MemoryError(const FString &Message) {
   FSDKError E;
   E.Category = EErrorCategory::Memory;
@@ -74,6 +99,11 @@ inline FSDKError MemoryError(const FString &Message) {
   return E;
 }
 
+/**
+ * Builds a normalized cortex error.
+ * User Story: As cortex runtime consumers, I need inference failures
+ * normalized so callers can handle model issues without ad hoc parsing.
+ */
 inline FSDKError CortexError(const FString &Message) {
   FSDKError E;
   E.Category = EErrorCategory::Cortex;
@@ -82,6 +112,11 @@ inline FSDKError CortexError(const FString &Message) {
   return E;
 }
 
+/**
+ * Builds a normalized Arweave error.
+ * User Story: As soul import/export flows, I need upload and download failures
+ * normalized so recovery guidance is consistent.
+ */
 inline FSDKError ArweaveError(const FString &Message) {
   FSDKError E;
   E.Category = EErrorCategory::Arweave;
@@ -90,6 +125,11 @@ inline FSDKError ArweaveError(const FString &Message) {
   return E;
 }
 
+/**
+ * Builds a normalized config error.
+ * User Story: As environment and config setup flows, I need configuration
+ * mistakes normalized so setup guidance can be shown consistently.
+ */
 inline FSDKError ConfigError(const FString &Message) {
   FSDKError E;
   E.Category = EErrorCategory::Config;
@@ -98,15 +138,18 @@ inline FSDKError ConfigError(const FString &Message) {
   return E;
 }
 
-// ---------------------------------------------------------------------------
-// G1: Error normalization — classify raw error strings into FSDKError
-// Uses multi_match (§20) for pattern-based classification
-// ---------------------------------------------------------------------------
-
+/**
+ * Classifies a raw thunk or transport error string into the SDK error shape.
+ * User Story: As thunk callers, I need raw failure text classified so UI and
+ * retry logic can work from categories instead of string matching everywhere.
+ */
 inline FSDKError classifyError(const FString &RawError) {
   std::vector<func::MatchCase<FString, FSDKError>> cases;
 
-  // Network errors
+  /**
+   * Network errors
+   * User Story: As a maintainer, I need this note so the surrounding code intent stays clear during maintenance and debugging.
+   */
   cases.push_back(func::when<FString, FSDKError>(
       [](const FString &E) { return E.Contains(TEXT("network_error")); },
       [](const FString &E) { return NetworkError(E); }));
@@ -117,7 +160,10 @@ inline FSDKError classifyError(const FString &RawError) {
       [](const FString &E) { return E.Contains(TEXT("timeout")); },
       [](const FString &E) { return NetworkError(E); }));
 
-  // HTTP errors (status code in message)
+  /**
+   * HTTP errors (status code in message)
+   * User Story: As a maintainer, I need this note so the surrounding code intent stays clear during maintenance and debugging.
+   */
   cases.push_back(func::when<FString, FSDKError>(
       [](const FString &E) { return E.Contains(TEXT("status_4")); },
       [](const FString &E) { return HttpError(400, E); }));
@@ -125,7 +171,10 @@ inline FSDKError classifyError(const FString &RawError) {
       [](const FString &E) { return E.Contains(TEXT("status_5")); },
       [](const FString &E) { return HttpError(500, E); }));
 
-  // Arweave errors
+  /**
+   * Arweave errors
+   * User Story: As a maintainer, I need this note so the surrounding code intent stays clear during maintenance and debugging.
+   */
   cases.push_back(func::when<FString, FSDKError>(
       [](const FString &E) {
         return E.Contains(TEXT("Arweave")) || E.Contains(TEXT("upload")) ||
@@ -133,7 +182,10 @@ inline FSDKError classifyError(const FString &RawError) {
       },
       [](const FString &E) { return ArweaveError(E); }));
 
-  // Protocol errors
+  /**
+   * Protocol errors
+   * User Story: As a maintainer, I need this note so the surrounding code intent stays clear during maintenance and debugging.
+   */
   cases.push_back(func::when<FString, FSDKError>(
       [](const FString &E) {
         return E.Contains(TEXT("Protocol")) || E.Contains(TEXT("max turns")) ||
@@ -141,14 +193,20 @@ inline FSDKError classifyError(const FString &RawError) {
       },
       [](const FString &E) { return ProtocolError(E); }));
 
-  // Memory errors
+  /**
+   * Memory errors
+   * User Story: As a maintainer, I need this note so the surrounding code intent stays clear during maintenance and debugging.
+   */
   cases.push_back(func::when<FString, FSDKError>(
       [](const FString &E) {
         return E.Contains(TEXT("memory")) || E.Contains(TEXT("Memory"));
       },
       [](const FString &E) { return MemoryError(E); }));
 
-  // Cortex errors
+  /**
+   * Cortex errors
+   * User Story: As a maintainer, I need this note so the surrounding code intent stays clear during maintenance and debugging.
+   */
   cases.push_back(func::when<FString, FSDKError>(
       [](const FString &E) {
         return E.Contains(TEXT("cortex")) || E.Contains(TEXT("Cortex")) ||
@@ -156,7 +214,10 @@ inline FSDKError classifyError(const FString &RawError) {
       },
       [](const FString &E) { return CortexError(E); }));
 
-  // Config/validation errors
+  /**
+   * Config/validation errors
+   * User Story: As a maintainer, I need this section note so related declarations and logic stay easy to locate.
+   */
   cases.push_back(func::when<FString, FSDKError>(
       [](const FString &E) {
         return E.Contains(TEXT("API key")) || E.Contains(TEXT("apiKey")) ||
@@ -164,7 +225,10 @@ inline FSDKError classifyError(const FString &RawError) {
       },
       [](const FString &E) { return ConfigError(E); }));
 
-  // Wildcard default
+  /**
+   * Wildcard default
+   * User Story: As a maintainer, I need this note so the surrounding code intent stays clear during maintenance and debugging.
+   */
   cases.push_back(func::when<FString, FSDKError>(
       func::wildcard<FString>(), [](const FString &E) {
         FSDKError Err;
@@ -178,26 +242,33 @@ inline FSDKError classifyError(const FString &RawError) {
       .value; // wildcard guarantees a match
 }
 
-// ---------------------------------------------------------------------------
-// extractThunkErrorMessage — existing API preserved, enhanced
-// ---------------------------------------------------------------------------
-
+/**
+ * Returns a non-empty thunk error message for FString-based failures.
+ * User Story: As thunk adapters, I need a guaranteed message string so CLI and
+ * UI surfaces never render empty failure text.
+ */
 inline FString extractThunkErrorMessage(const FString &Message,
                                         const FString &Fallback =
                                             TEXT("Request failed")) {
   return Message.IsEmpty() ? Fallback : Message;
 }
 
+/**
+ * Returns a non-empty thunk error message for std::string-based failures.
+ * User Story: As thunk adapters, I need a guaranteed message string even for
+ * native std::string errors so reporting stays consistent across layers.
+ */
 inline FString extractThunkErrorMessage(const std::string &Message,
                                         const FString &Fallback =
                                             TEXT("Request failed")) {
   return Message.empty() ? Fallback : FString(UTF8_TO_TCHAR(Message.c_str()));
 }
 
-// ---------------------------------------------------------------------------
-// requireApiKeyGuidance — returns guidance message if key missing for prod
-// ---------------------------------------------------------------------------
-
+/**
+ * Returns guidance when production API calls are missing an API key.
+ * User Story: As SDK setup flows, I need targeted guidance for missing keys so
+ * production calls fail with actionable remediation instead of a dead end.
+ */
 inline func::Maybe<FString>
 requireApiKeyGuidance(const FString &ApiUrl, const FString &ApiKey) {
   if (ApiKey.IsEmpty() && ApiUrl.Contains(TEXT("api.forboc.ai"))) {

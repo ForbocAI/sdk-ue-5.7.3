@@ -5,17 +5,10 @@
 #include "CoreMinimal.h"
 #include "Types.h"
 
-// ==========================================================
-// Memory Module — Full Embedding-Based Memory (UE SDK)
-// ==========================================================
-// Strict functional programming implementation for
-// persistent, semantic recall using sqlite-vss for vector search.
-// All operations are pure free functions.
-// Enhanced with functional core patterns for better
-// error handling and composition.
-// ==========================================================
-
-// Functional Core Type Aliases for Memory operations
+/**
+ * Functional Core Type Aliases for Memory operations
+ * User Story: As a maintainer, I need this section note so related declarations and logic stay easy to locate.
+ */
 namespace MemoryTypes {
 using func::AsyncResult;
 using func::ConfigBuilder;
@@ -32,7 +25,10 @@ using func::make_left;
 using func::make_right;
 using func::nothing;
 
-// Type aliases for Memory operations
+/**
+ * Type aliases for Memory operations
+ * User Story: As a maintainer, I need this section note so related declarations and logic stay easy to locate.
+ */
 using MemoryStoreResult = Either<FString, FMemoryStore>;
 using MemoryStoreCreationResult = Either<FString, FMemoryStore>;
 using MemoryStoreInitializationResult = Either<FString, bool>;
@@ -41,21 +37,17 @@ using MemoryStoreRecallResult = Either<FString, TArray<FMemoryItem>>;
 using MemoryStoreEmbeddingResult = Either<FString, TArray<float>>;
 } // namespace MemoryTypes
 
-// Functional Core Helper Functions for Memory operations
-// MemoryHelpers moved to end of file to ensure type visibility
-
-// Types (FMemoryConfig, FMemoryStore) are defined in ForbocAI_SDK_Types.h
-
 /**
  * Memory Operations — Stateless free functions.
+ * User Story: As memory runtime flows, I need a single namespace for memory
+ * operations so store, recall, and cleanup functions stay discoverable.
  */
 namespace MemoryOps {
 
-// MemoryOps::CreateStore removed in favor of MemoryFactory::CreateStore
-
 /**
  * Initializes the memory store and database.
- * Pure function: Store -> Result
+ * User Story: As memory startup, I need store initialization to prepare the
+ * database before writes and recalls can run safely.
  * @param Store The memory store to initialize.
  * @return A validation result indicating success or failure.
  */
@@ -63,8 +55,9 @@ FORBOCAI_SDK_API MemoryTypes::MemoryStoreInitializationResult
 Initialize(FMemoryStore &Store);
 
 /**
- * Stores a new memory.
- * Pure function: (Store, Text, Type, Importance) -> NewStore
+ * Stores a new memory from raw text input.
+ * User Story: As memory persistence, I need a store operation that accepts raw
+ * text so observations can become searchable memories.
  * @param Store The current memory store.
  * @param Text The memory content.
  * @param Type The memory type.
@@ -77,7 +70,8 @@ Store(const FMemoryStore &Store, const FString &Text, const FString &Type,
 
 /**
  * Stores a pre-built memory item.
- * Pure function: (Store, Item) -> NewStore
+ * User Story: As memory persistence, I need an item-based store operation so
+ * callers with fully shaped memory records can persist them directly.
  * @param Store The current memory store.
  * @param Item The memory item to add.
  * @return A new memory store with the item added.
@@ -87,7 +81,8 @@ Add(const FMemoryStore &Store, const FMemoryItem &Item);
 
 /**
  * Performs semantic recall using vector search.
- * Pure function: (Store, Query, Limit) -> Results
+ * User Story: As memory recall, I need semantic search so relevant memories can
+ * be retrieved from natural-language queries.
  * @param Store The memory store to search.
  * @param Query The search query text.
  * @param Limit The maximum number of results to return.
@@ -98,7 +93,8 @@ Recall(const FMemoryStore &Store, const FString &Query, int32 Limit = -1);
 
 /**
  * Generates a vector embedding for text.
- * Pure function: (Store, Text) -> Vector
+ * User Story: As memory indexing, I need embeddings for text so memories and
+ * recall queries can participate in vector search.
  * @param Store The memory store.
  * @param Text The text to embed.
  * @return The vector embedding.
@@ -108,7 +104,8 @@ GenerateEmbedding(const FMemoryStore &Store, const FString &Text);
 
 /**
  * Gets the current memory statistics.
- * Pure function: Store -> Statistics
+ * User Story: As runtime inspection, I need memory statistics so tooling can
+ * report the current health and size of the memory store.
  * @param Store The memory store.
  * @return The memory statistics.
  */
@@ -116,27 +113,39 @@ FORBOCAI_SDK_API FString GetStatistics(const FMemoryStore &Store);
 
 /**
  * Cleans up resources and closes the database.
- * Pure function: Store -> Void
+ * User Story: As memory shutdown, I need cleanup so database handles and other
+ * resources are released when the store is no longer needed.
  * @param Store The memory store to clean up.
  */
 FORBOCAI_SDK_API void Cleanup(FMemoryStore &Store);
 
 } // namespace MemoryOps
 
-// Memory Factory
+/**
+ * Memory Factory
+ * User Story: As a maintainer, I need this section note so related declarations and logic stay easy to locate.
+ */
 namespace MemoryFactory {
 /**
- * Factory: Creates a memory store.
- * Pure function: Config -> Store
+ * Creates a memory store from configuration.
+ * User Story: As memory setup, I need a factory so store creation is
+ * standardized before initialization and use.
  * @param Config The memory configuration.
  * @return A new memory store.
  */
 FORBOCAI_SDK_API FMemoryStore CreateStore(const FMemoryConfig &Config);
 } // namespace MemoryFactory
 
-// Memory Helpers (Functional)
+/**
+ * Memory Helpers (Functional)
+ * User Story: As a maintainer, I need this section note so related declarations and logic stay easy to locate.
+ */
 namespace MemoryHelpers {
-// Helper to create a lazy memory store
+/**
+ * Creates a lazy memory store factory from configuration.
+ * User Story: As deferred memory setup, I need lazy construction so pipelines
+ * can assemble store creation without opening resources immediately.
+ */
 inline MemoryTypes::Lazy<FMemoryStore>
 createLazyMemoryStore(const FMemoryConfig &config) {
   return func::lazy([config]() -> FMemoryStore {
@@ -144,7 +153,11 @@ createLazyMemoryStore(const FMemoryConfig &config) {
   });
 }
 
-// Helper to create a validation pipeline for memory configuration
+/**
+ * Builds the validation pipeline for memory configuration.
+ * User Story: As memory config validation, I need one reusable pipeline so
+ * invalid paths or limits fail before store creation begins.
+ */
 inline MemoryTypes::ValidationPipeline<FMemoryConfig, FString>
 memoryConfigValidationPipeline() {
   return func::validationPipeline<FMemoryConfig, FString>()
@@ -186,13 +199,21 @@ memoryConfigValidationPipeline() {
       });
 }
 
-// Helper to create a pipeline for memory store creation
+/**
+ * Builds the pipeline wrapper for memory store creation.
+ * User Story: As functional memory helpers, I need a pipe-ready store value so
+ * later creation steps can compose around it.
+ */
 inline MemoryTypes::Pipeline<FMemoryStore>
 memoryStoreCreationPipeline(const FMemoryStore &store) {
   return func::pipe(store);
 }
 
-// Helper to create a curried memory store creation function
+/**
+ * Builds the curried memory store creation helper.
+ * User Story: As functional memory construction, I need a curried creator so
+ * store creation can be partially applied in pipelines.
+ */
 inline auto curriedMemoryStoreCreation()
     -> decltype(func::curry<1>(
         std::function<MemoryTypes::MemoryStoreCreationResult(FMemoryConfig)>())) {

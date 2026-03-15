@@ -3,7 +3,10 @@
 #include "Core/functional_core.hpp"
 #include "CoreMinimal.h"
 
-// Subdomain Types
+/**
+ * Subdomain Types
+ * User Story: As a maintainer, I need this section note so related declarations and logic stay easy to locate.
+ */
 #include "Bridge/BridgeTypes.h"
 #include "Core/SystemTypes.h"
 #include "Cortex/CortexTypes.h"
@@ -14,16 +17,10 @@
 #include "Protocol/ProtocolTypes.h"
 #include "Soul/SoulTypes.h"
 
-// ==========================================================
-// ForbocAI SDK — Data Types (Strict FP with Master Include)
-// ==========================================================
-//
-// This file aggregates all subdomain types for convenience.
-// All types are plain data structs. NO parameterized
-// constructors, NO member functions, NO classes.
-// ==========================================================
-
-// Functional Core Type Aliases for SDK types
+/**
+ * Functional Core Type Aliases for SDK types
+ * User Story: As a maintainer, I need this section note so related declarations and logic stay easy to locate.
+ */
 namespace SDKTypes {
 using func::AsyncResult;
 using func::ConfigBuilder;
@@ -35,7 +32,10 @@ using func::Pipeline;
 using func::TestResult;
 using func::ValidationPipeline;
 
-// Type aliases for SDK operations
+/**
+ * Type aliases for SDK operations
+ * User Story: As a maintainer, I need this section note so related declarations and logic stay easy to locate.
+ */
 using AgentCreationResult = Either<FString, FAgent>;
 using AgentValidationResult = Either<FString, FAgentState>;
 using AgentProcessResult = Either<FString, FAgentResponse>;

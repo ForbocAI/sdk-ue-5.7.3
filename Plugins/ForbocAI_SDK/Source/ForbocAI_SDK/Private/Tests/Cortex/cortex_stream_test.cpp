@@ -1,4 +1,7 @@
-// Tests for G7 streaming completions — CortexSlice actions + NativeEngine
+/**
+ * Tests for G7 streaming completions — CortexSlice actions + NativeEngine
+ * User Story: As a maintainer, I need this implementation note so I can understand which milestone behavior the surrounding code is preserving.
+ */
 
 #include "Cortex/CortexSlice.h"
 #include "Core/functional_core.hpp"
@@ -6,9 +9,10 @@
 #include "Misc/AutomationTest.h"
 #include "NativeEngine.h"
 
-// ---------------------------------------------------------------------------
-// Test: CortexStreamStart clears state and sets bIsStreaming
-// ---------------------------------------------------------------------------
+/**
+ * Test: CortexStreamStart clears state and sets bIsStreaming
+ * User Story: As a maintainer, I need this note so the surrounding code intent stays clear during maintenance and debugging.
+ */
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(
     FCortexStreamStartTest,
     "ForbocAI.Cortex.Stream.StartAction",
@@ -18,7 +22,10 @@ bool FCortexStreamStartTest::RunTest(const FString &Parameters) {
   auto Slice = CortexSlice::CreateCortexSlice();
   auto State = Slice.initialState;
 
-  // Simulate some prior state
+  /**
+   * Simulate some prior state
+   * User Story: As a maintainer, I need this note so the surrounding code intent stays clear during maintenance and debugging.
+   */
   State.LastResponseText = TEXT("old response");
   State.Error = TEXT("old error");
 
@@ -33,9 +40,10 @@ bool FCortexStreamStartTest::RunTest(const FString &Parameters) {
   return true;
 }
 
-// ---------------------------------------------------------------------------
-// Test: CortexStreamToken accumulates text
-// ---------------------------------------------------------------------------
+/**
+ * Test: CortexStreamToken accumulates text
+ * User Story: As a maintainer, I need this note so the surrounding code intent stays clear during maintenance and debugging.
+ */
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(
     FCortexStreamTokenTest,
     "ForbocAI.Cortex.Stream.TokenAction",
@@ -45,10 +53,16 @@ bool FCortexStreamTokenTest::RunTest(const FString &Parameters) {
   auto Slice = CortexSlice::CreateCortexSlice();
   auto State = Slice.initialState;
 
-  // Start streaming
+  /**
+   * Start streaming
+   * User Story: As a maintainer, I need this step note so I can follow the scenario progression and reason about the expected state changes.
+   */
   State = Slice.reducer(State, CortexSlice::Actions::CortexStreamStart(TEXT("p")));
 
-  // Send tokens
+  /**
+   * Send tokens
+   * User Story: As a maintainer, I need this note so the surrounding code intent stays clear during maintenance and debugging.
+   */
   State = Slice.reducer(State, CortexSlice::Actions::CortexStreamToken(TEXT("Hello")));
   TestEqual("First token accumulated", State.StreamAccumulated, TEXT("Hello"));
 
@@ -63,9 +77,10 @@ bool FCortexStreamTokenTest::RunTest(const FString &Parameters) {
   return true;
 }
 
-// ---------------------------------------------------------------------------
-// Test: CortexStreamComplete sets final text and clears streaming state
-// ---------------------------------------------------------------------------
+/**
+ * Test: CortexStreamComplete sets final text and clears streaming state
+ * User Story: As a maintainer, I need this note so the surrounding code intent stays clear during maintenance and debugging.
+ */
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(
     FCortexStreamCompleteTest,
     "ForbocAI.Cortex.Stream.CompleteAction",
@@ -75,7 +90,10 @@ bool FCortexStreamCompleteTest::RunTest(const FString &Parameters) {
   auto Slice = CortexSlice::CreateCortexSlice();
   auto State = Slice.initialState;
 
-  // Start + tokens + complete
+  /**
+   * Start + tokens + complete
+   * User Story: As a maintainer, I need this step note so I can follow the scenario progression and reason about the expected state changes.
+   */
   State = Slice.reducer(State, CortexSlice::Actions::CortexStreamStart(TEXT("p")));
   State = Slice.reducer(State, CortexSlice::Actions::CortexStreamToken(TEXT("Hello")));
   State = Slice.reducer(State, CortexSlice::Actions::CortexStreamComplete(TEXT("Hello world")));
@@ -87,9 +105,10 @@ bool FCortexStreamCompleteTest::RunTest(const FString &Parameters) {
   return true;
 }
 
-// ---------------------------------------------------------------------------
-// Test: LoadModel returns nullptr for non-existent model path
-// ---------------------------------------------------------------------------
+/**
+ * Test: LoadModel returns nullptr for non-existent model path
+ * User Story: As a maintainer, I need this note so the surrounding code intent stays clear during maintenance and debugging.
+ */
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(
     FLoadModelNonExistentTest,
     "ForbocAI.Cortex.Stream.LoadModelNonExistent",
@@ -117,9 +136,10 @@ bool FLoadModelNonExistentTest::RunTest(const FString &Parameters) {
   return true;
 }
 
-// ---------------------------------------------------------------------------
-// Test: InferStream with null context returns error
-// ---------------------------------------------------------------------------
+/**
+ * Test: InferStream with null context returns error
+ * User Story: As a maintainer, I need this note so the surrounding code intent stays clear during maintenance and debugging.
+ */
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(
     FInferStreamNullCtxTest,
     "ForbocAI.Cortex.Stream.NullContext",

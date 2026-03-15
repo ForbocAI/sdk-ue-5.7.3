@@ -7,6 +7,7 @@
 
 /**
  * Api Status Response
+ * User Story: As an SDK integrator, I need this type or module note so I can understand the role of the surrounding API surface quickly.
  */
 USTRUCT(BlueprintType)
 struct FApiStatusResponse {

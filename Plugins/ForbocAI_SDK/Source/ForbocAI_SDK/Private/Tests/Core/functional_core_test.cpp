@@ -1,12 +1,16 @@
-// Tests for functional_core.hpp §19 Dispatcher, §20 multi_match, §21 from_nullable
+/**
+ * Tests for functional_core.hpp §19 Dispatcher, §20 multi_match, §21 from_nullable
+ * User Story: As a maintainer, I need this note so the surrounding code intent stays clear during maintenance and debugging.
+ */
 
 #include "Core/functional_core.hpp"
 #include "CoreMinimal.h"
 #include "Misc/AutomationTest.h"
 
-// ---------------------------------------------------------------------------
-// Test: Dispatcher — key lookup returns just(handler())
-// ---------------------------------------------------------------------------
+/**
+ * Test: Dispatcher — key lookup returns just(handler())
+ * User Story: As a maintainer, I need this note so the surrounding code intent stays clear during maintenance and debugging.
+ */
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(
     FDispatcherKeyLookupTest,
     "ForbocAI.Core.FunctionalCore.Dispatcher.KeyLookup",
@@ -35,9 +39,10 @@ bool FDispatcherKeyLookupTest::RunTest(const FString &Parameters) {
   return true;
 }
 
-// ---------------------------------------------------------------------------
-// Test: Dispatcher — missing key returns nothing
-// ---------------------------------------------------------------------------
+/**
+ * Test: Dispatcher — missing key returns nothing
+ * User Story: As a maintainer, I need this note so the surrounding code intent stays clear during maintenance and debugging.
+ */
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(
     FDispatcherMissingKeyTest,
     "ForbocAI.Core.FunctionalCore.Dispatcher.MissingKey",
@@ -55,9 +60,10 @@ bool FDispatcherMissingKeyTest::RunTest(const FString &Parameters) {
   return true;
 }
 
-// ---------------------------------------------------------------------------
-// Test: Dispatcher — has() and keys()
-// ---------------------------------------------------------------------------
+/**
+ * Test: Dispatcher — has() and keys()
+ * User Story: As a maintainer, I need this note so the surrounding code intent stays clear during maintenance and debugging.
+ */
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(
     FDispatcherHasAndKeysTest,
     "ForbocAI.Core.FunctionalCore.Dispatcher.HasAndKeys",
@@ -80,9 +86,10 @@ bool FDispatcherHasAndKeysTest::RunTest(const FString &Parameters) {
   return true;
 }
 
-// ---------------------------------------------------------------------------
-// Test: multi_match — predicate matching
-// ---------------------------------------------------------------------------
+/**
+ * Test: multi_match — predicate matching
+ * User Story: As a maintainer, I need this note so the surrounding code intent stays clear during maintenance and debugging.
+ */
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(
     FMultiMatchPredicateTest,
     "ForbocAI.Core.FunctionalCore.MultiMatch.Predicate",
@@ -115,9 +122,10 @@ bool FMultiMatchPredicateTest::RunTest(const FString &Parameters) {
   return true;
 }
 
-// ---------------------------------------------------------------------------
-// Test: multi_match — wildcard catches all
-// ---------------------------------------------------------------------------
+/**
+ * Test: multi_match — wildcard catches all
+ * User Story: As a maintainer, I need this note so the surrounding code intent stays clear during maintenance and debugging.
+ */
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(
     FMultiMatchWildcardTest,
     "ForbocAI.Core.FunctionalCore.MultiMatch.Wildcard",
@@ -143,9 +151,10 @@ bool FMultiMatchWildcardTest::RunTest(const FString &Parameters) {
   return true;
 }
 
-// ---------------------------------------------------------------------------
-// Test: multi_match — no match returns nothing
-// ---------------------------------------------------------------------------
+/**
+ * Test: multi_match — no match returns nothing
+ * User Story: As a maintainer, I need this note so the surrounding code intent stays clear during maintenance and debugging.
+ */
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(
     FMultiMatchNoMatchTest,
     "ForbocAI.Core.FunctionalCore.MultiMatch.NoMatch",
@@ -163,9 +172,10 @@ bool FMultiMatchNoMatchTest::RunTest(const FString &Parameters) {
   return true;
 }
 
-// ---------------------------------------------------------------------------
-// Test: multi_match — value equality via equals()
-// ---------------------------------------------------------------------------
+/**
+ * Test: multi_match — value equality via equals()
+ * User Story: As a maintainer, I need this note so the surrounding code intent stays clear during maintenance and debugging.
+ */
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(
     FMultiMatchEqualsTest,
     "ForbocAI.Core.FunctionalCore.MultiMatch.Equals",
@@ -197,9 +207,10 @@ bool FMultiMatchEqualsTest::RunTest(const FString &Parameters) {
   return true;
 }
 
-// ---------------------------------------------------------------------------
-// Test: from_nullable — pointer
-// ---------------------------------------------------------------------------
+/**
+ * Test: from_nullable — pointer
+ * User Story: As a maintainer, I need this note so the surrounding code intent stays clear during maintenance and debugging.
+ */
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(
     FFromNullablePtrTest,
     "ForbocAI.Core.FunctionalCore.FromNullable.Pointer",
@@ -219,9 +230,10 @@ bool FFromNullablePtrTest::RunTest(const FString &Parameters) {
   return true;
 }
 
-// ---------------------------------------------------------------------------
-// Test: from_nullable_value — explicit validity flag
-// ---------------------------------------------------------------------------
+/**
+ * Test: from_nullable_value — explicit validity flag
+ * User Story: As a maintainer, I need this note so the surrounding code intent stays clear during maintenance and debugging.
+ */
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(
     FFromNullableValueTest,
     "ForbocAI.Core.FunctionalCore.FromNullable.Value",
@@ -238,9 +250,10 @@ bool FFromNullableValueTest::RunTest(const FString &Parameters) {
   return true;
 }
 
-// ---------------------------------------------------------------------------
-// Test: require_just — extracts or throws
-// ---------------------------------------------------------------------------
+/**
+ * Test: require_just — extracts or throws
+ * User Story: As a maintainer, I need this note so the surrounding code intent stays clear during maintenance and debugging.
+ */
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(
     FRequireJustTest,
     "ForbocAI.Core.FunctionalCore.RequireJust",

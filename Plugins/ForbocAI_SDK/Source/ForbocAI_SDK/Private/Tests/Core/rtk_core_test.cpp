@@ -10,7 +10,10 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(FRtkStoreAndSliceTest,
                                  EAutomationTestFlags_ApplicationContextMask |
                                      EAutomationTestFlags::EngineFilter)
 bool FRtkStoreAndSliceTest::RunTest(const FString &Parameters) {
-  // Build Slice
+  /**
+   * Build Slice
+   * User Story: As a maintainer, I need this note so the surrounding code intent stays clear during maintenance and debugging.
+   */
   SliceBuilder<FNpcMockState> Builder(TEXT("npc"),
                                       FNpcMockState{TEXT(""), 100});
 
@@ -29,12 +32,18 @@ bool FRtkStoreAndSliceTest::RunTest(const FString &Parameters) {
 
   Slice<FNpcMockState> NpcSlice = Builder.build();
 
-  // Combine
+  /**
+   * Combine
+   * User Story: As a maintainer, I need this note so the surrounding code intent stays clear during maintenance and debugging.
+   */
   auto RootReducer = combineReducers<FAppMockState>()
                          .add(&FAppMockState::ActiveNpc, NpcSlice.Reducer)
                          .build();
 
-  // Create Store
+  /**
+   * Create Store
+   * User Story: As a maintainer, I need this step note so I can follow the scenario progression and reason about the expected state changes.
+   */
   FAppMockState InitialState{FNpcMockState{TEXT(""), 100}};
   Store<FAppMockState> AppStore(InitialState, RootReducer);
 
@@ -66,7 +75,10 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(FRtkConfigureStoreTest,
                                  EAutomationTestFlags_ApplicationContextMask |
                                      EAutomationTestFlags::EngineFilter)
 bool FRtkConfigureStoreTest::RunTest(const FString &Parameters) {
-  // 1. Setup Reducer
+  /**
+   * 1. Setup Reducer
+   * User Story: As a maintainer, I need this section note so related declarations and logic stay easy to locate.
+   */
   auto RootReducer = [](const FAppMockState &State, const AnyAction &Action) {
     FAppMockState Next = State;
     if (Action.Type == TEXT("trigger")) {
@@ -77,7 +89,10 @@ bool FRtkConfigureStoreTest::RunTest(const FString &Parameters) {
 
   FAppMockState PreloadState{FNpcMockState{TEXT("MockNpc"), 100}};
 
-  // 2. Setup Middleware
+  /**
+   * 2. Setup Middleware
+   * User Story: As a maintainer, I need this note so the surrounding code intent stays clear during maintenance and debugging.
+   */
   TArray<FString> EventLog;
   Middleware<FAppMockState> AuditMw =
       [&EventLog](const MiddlewareApi<FAppMockState> &Api)
@@ -92,14 +107,23 @@ bool FRtkConfigureStoreTest::RunTest(const FString &Parameters) {
 
   std::vector<Middleware<FAppMockState>> Middlewares = {AuditMw};
 
-  // 3. Configure Store
+  /**
+   * 3. Configure Store
+   * User Story: As a maintainer, I need this note so the surrounding code intent stays clear during maintenance and debugging.
+   */
   auto Store =
       configureStore<FAppMockState>(RootReducer, PreloadState, Middlewares);
 
-  // 4. Assert Preload
+  /**
+   * 4. Assert Preload
+   * User Story: As a maintainer, I need this note so the surrounding code intent stays clear during maintenance and debugging.
+   */
   TestEqual("Preloaded Health", Store.getState().ActiveNpc.Health, 100);
 
-  // 5. Dispatch Action & Validate Middleware Chain + State update
+  /**
+   * 5. Dispatch Action & Validate Middleware Chain + State update
+   * User Story: As a maintainer, I need this step note so I can follow the scenario progression and reason about the expected state changes.
+   */
   Store.dispatch(
       AnyAction{TEXT("trigger"), std::make_shared<rtk::FEmptyPayload>()});
 

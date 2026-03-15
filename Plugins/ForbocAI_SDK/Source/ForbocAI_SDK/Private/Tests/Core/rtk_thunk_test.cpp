@@ -10,7 +10,10 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(FRtkAsyncThunkTest,
                                  EAutomationTestFlags_ApplicationContextMask |
                                      EAutomationTestFlags::EngineFilter)
 bool FRtkAsyncThunkTest::RunTest(const FString &Parameters) {
-  // Build a mock async thunk
+  /**
+   * Build a mock async thunk
+   * User Story: As a maintainer, I need this section note so related declarations and logic stay easy to locate.
+   */
   auto TestThunk = createAsyncThunk<int, FString, FAppMockState>(
       TEXT("test/fetchData"),
       [](const FString &Arg,
@@ -37,7 +40,10 @@ bool FRtkAsyncThunkTest::RunTest(const FString &Parameters) {
     return FAppMockState{};
   };
 
-  // Test Success Path
+  /**
+   * Test Success Path
+   * User Story: As a maintainer, I need this step note so I can follow the scenario progression and reason about the expected state changes.
+   */
   auto ThunkActionSuccess = TestThunk(TEXT("success"));
   auto ResultSuccess = ThunkActionSuccess(MockDispatch, MockGetState);
   ResultSuccess.execute();
@@ -48,7 +54,10 @@ bool FRtkAsyncThunkTest::RunTest(const FString &Parameters) {
             FString(TEXT("test/fetchData/fulfilled")));
   DispatchedActions.Empty();
 
-  // Test Failure Path
+  /**
+   * Test Failure Path
+   * User Story: As a maintainer, I need this step note so I can follow the scenario progression and reason about the expected state changes.
+   */
   auto ThunkActionFail = TestThunk(TEXT("fail"));
   auto ResultFail = ThunkActionFail(MockDispatch, MockGetState);
   ResultFail.execute();

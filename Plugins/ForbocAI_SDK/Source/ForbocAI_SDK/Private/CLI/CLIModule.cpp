@@ -25,7 +25,10 @@ func::TestResult<void> DispatchCommand(const FString &CommandKey,
 
   rtk::EnhancedStore<FStoreState> &Store = GetStore();
 
-  // Phase 3.4: Handler chain — first match wins
+  /**
+   * Phase 3.4: Handler chain — first match wins
+   * User Story: As a maintainer, I need this implementation note so I can understand which milestone behavior the surrounding code is preserving.
+   */
   static const std::vector<Handler> Handlers = {
       HandleSystem, HandleNpc,    HandleMemory, HandleCortex, HandleGhost,
       HandleBridge, HandleSoul,   HandleConfig, HandleVector, HandleSetup,

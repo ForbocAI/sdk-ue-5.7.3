@@ -12,7 +12,10 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(FRtkMiddlewareTest,
 bool FRtkMiddlewareTest::RunTest(const FString &Parameters) {
   TArray<FString> EventLog;
 
-  // 1. Setup Base Dispatch and GetState
+  /**
+   * 1. Setup Base Dispatch and GetState
+   * User Story: As a maintainer, I need this step note so I can follow the scenario progression and reason about the expected state changes.
+   */
   std::function<AnyAction(const AnyAction &)> BaseDispatch =
       [&EventLog](const AnyAction &Action) {
         EventLog.Add(FString::Printf(TEXT("BaseDispatch:%s"), *Action.Type));
@@ -21,7 +24,10 @@ bool FRtkMiddlewareTest::RunTest(const FString &Parameters) {
 
   std::function<FAppMockState()> GetState = []() { return FAppMockState{}; };
 
-  // 2. Setup Middleware A (Logging before and after)
+  /**
+   * 2. Setup Middleware A (Logging before and after)
+   * User Story: As a maintainer, I need this note so the surrounding code intent stays clear during maintenance and debugging.
+   */
   Middleware<FAppMockState> MiddlewareA =
       [&EventLog](const MiddlewareApi<FAppMockState> &Api)
           -> std::function<Dispatcher(Dispatcher)> {
@@ -35,7 +41,10 @@ bool FRtkMiddlewareTest::RunTest(const FString &Parameters) {
         };
       };
 
-  // 3. Setup Listener Middleware (MwB)
+  /**
+   * 3. Setup Listener Middleware (MwB)
+   * User Story: As a maintainer, I need this note so the surrounding code intent stays clear during maintenance and debugging.
+   */
   ListenerMiddleware<FAppMockState> Listeners;
   Listeners.addListener(TEXT("trigger"),
                         [&EventLog](const AnyAction &Action,
@@ -43,16 +52,25 @@ bool FRtkMiddlewareTest::RunTest(const FString &Parameters) {
                           EventLog.Add(TEXT("Listener_Triggered"));
                         });
 
-  // 4. Compose
+  /**
+   * 4. Compose
+   * User Story: As a maintainer, I need this note so the surrounding code intent stays clear during maintenance and debugging.
+   */
   std::vector<Middleware<FAppMockState>> Chain = {MiddlewareA,
                                                   Listeners.getMiddleware()};
   auto EnhancedDispatch = applyMiddleware(BaseDispatch, GetState, Chain);
 
-  // 5. Execute
+  /**
+   * 5. Execute
+   * User Story: As a maintainer, I need this note so the surrounding code intent stays clear during maintenance and debugging.
+   */
   EnhancedDispatch(
       AnyAction{TEXT("trigger"), std::make_shared<rtk::FEmptyPayload>()});
 
-  // Validate Order
+  /**
+   * Validate Order
+   * User Story: As a maintainer, I need this note so the surrounding code intent stays clear during maintenance and debugging.
+   */
   TestEqual("Event Log Length", EventLog.Num(), 4);
   if (EventLog.Num() == 4) {
     TestEqual("0: MwA wraps everything", EventLog[0],

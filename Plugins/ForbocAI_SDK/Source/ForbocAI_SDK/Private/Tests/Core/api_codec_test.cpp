@@ -154,8 +154,11 @@ bool FApiCodecBridgeValidationWrapperTest::RunTest(const FString &Parameters) {
   return true;
 }
 
-// Response normalization: gaType→type, actionReason→reason, actionTarget→target
-// (Haskell API may return aliased field names; JsonInterop::ActionFromObject normalizes)
+/**
+ * Response normalization: gaType→type, actionReason→reason, actionTarget→target
+ * (Haskell API may return aliased field names; JsonInterop::ActionFromObject normalizes)
+ * User Story: As a maintainer, I need this note so the surrounding code intent stays clear during maintenance and debugging.
+ */
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(
     FApiCodecActionFromObjectGaTypeTest,
     "ForbocAI.Core.API.ActionFromObjectGaTypeAliases",

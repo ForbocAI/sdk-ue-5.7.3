@@ -7,6 +7,11 @@
 
 namespace {
 
+/**
+ * Normalizes legacy agent-prefixed commands to the canonical npc names.
+ * User Story: As CLI compatibility, I need old command aliases mapped forward
+ * so legacy scripts keep working with the renamed NPC command surface.
+ */
 FString NormalizeCommand(const FString &Command) {
   if (Command == TEXT("agent_list")) {
     return TEXT("npc_list");
@@ -38,6 +43,8 @@ FString NormalizeCommand(const FString &Command) {
 /**
  * Extracts a named param from UE command-line params string.
  * Returns empty string if not found.
+ * User Story: As commandlet parsing, I need named parameter extraction so raw
+ * Unreal params can be translated into structured command arguments.
  */
 FString ExtractParam(const FString &Params, const TCHAR *ParamName) {
   FString Value;
@@ -47,6 +54,8 @@ FString ExtractParam(const FString &Params, const TCHAR *ParamName) {
 
 /**
  * Appends a param value to the args array if non-empty.
+ * User Story: As commandlet parsing, I need optional args appended only when
+ * present so handlers receive a clean positional argument list.
  */
 void AddIfPresent(TArray<FString> &Args, const FString &Value) {
   if (!Value.IsEmpty()) {
@@ -54,10 +63,18 @@ void AddIfPresent(TArray<FString> &Args, const FString &Value) {
   }
 }
 
+/**
+ * Builds positional command arguments from raw Unreal commandlet params.
+ * User Story: As command dispatch, I need raw commandlet params converted into
+ * handler-friendly args so CLI routing can reuse the shared command handlers.
+ */
 TArray<FString> BuildCommandArgs(const FString &Command, const FString &Params) {
   TArray<FString> Args;
 
-  // ---- NPC ----
+  /**
+   * ---- NPC ----
+   * User Story: As a maintainer, I need this note so the surrounding code intent stays clear during maintenance and debugging.
+   */
   if (Command == TEXT("npc_create")) {
     FString Persona = ExtractParam(Params, TEXT("Persona="));
     Args.Add(Persona.IsEmpty() ? TEXT("Default UE Persona") : Persona);
@@ -84,7 +101,10 @@ TArray<FString> BuildCommandArgs(const FString &Command, const FString &Params) 
     return Args;
   }
 
-  // ---- Memory (remote) ----
+  /**
+   * ---- Memory (remote) ----
+   * User Story: As a maintainer, I need this note so the surrounding code intent stays clear during maintenance and debugging.
+   */
   if (Command == TEXT("memory_list") || Command == TEXT("memory_clear") ||
       Command == TEXT("memory_export")) {
     AddIfPresent(Args, ExtractParam(Params, TEXT("Id=")));
@@ -101,7 +121,10 @@ TArray<FString> BuildCommandArgs(const FString &Command, const FString &Params) 
     return Args;
   }
 
-  // ---- Cortex ----
+  /**
+   * ---- Cortex ----
+   * User Story: As a maintainer, I need this note so the surrounding code intent stays clear during maintenance and debugging.
+   */
   if (Command == TEXT("cortex_init")) {
     AddIfPresent(Args, ExtractParam(Params, TEXT("Model=")));
     return Args;
@@ -117,7 +140,10 @@ TArray<FString> BuildCommandArgs(const FString &Command, const FString &Params) 
     return Args;
   }
 
-  // ---- Ghost ----
+  /**
+   * ---- Ghost ----
+   * User Story: As a maintainer, I need this note so the surrounding code intent stays clear during maintenance and debugging.
+   */
   if (Command == TEXT("ghost_run")) {
     AddIfPresent(Args, ExtractParam(Params, TEXT("Suite=")));
     AddIfPresent(Args, ExtractParam(Params, TEXT("Duration=")));
@@ -133,7 +159,10 @@ TArray<FString> BuildCommandArgs(const FString &Command, const FString &Params) 
     return Args;
   }
 
-  // ---- Bridge ----
+  /**
+   * ---- Bridge ----
+   * User Story: As a maintainer, I need this note so the surrounding code intent stays clear during maintenance and debugging.
+   */
   if (Command == TEXT("bridge_validate")) {
     AddIfPresent(Args, ExtractParam(Params, TEXT("Action=")));
     return Args;
@@ -143,7 +172,10 @@ TArray<FString> BuildCommandArgs(const FString &Command, const FString &Params) 
     return Args;
   }
 
-  // ---- Rules ----
+  /**
+   * ---- Rules ----
+   * User Story: As a maintainer, I need this note so the surrounding code intent stays clear during maintenance and debugging.
+   */
   if (Command == TEXT("rules_register")) {
     AddIfPresent(Args, ExtractParam(Params, TEXT("Json=")));
     return Args;
@@ -153,7 +185,10 @@ TArray<FString> BuildCommandArgs(const FString &Command, const FString &Params) 
     return Args;
   }
 
-  // ---- Soul ----
+  /**
+   * ---- Soul ----
+   * User Story: As a maintainer, I need this note so the surrounding code intent stays clear during maintenance and debugging.
+   */
   if (Command == TEXT("soul_export")) {
     AddIfPresent(Args, ExtractParam(Params, TEXT("Id=")));
     return Args;
@@ -168,7 +203,10 @@ TArray<FString> BuildCommandArgs(const FString &Command, const FString &Params) 
     return Args;
   }
 
-  // ---- Config ----
+  /**
+   * ---- Config ----
+   * User Story: As a maintainer, I need this note so the surrounding code intent stays clear during maintenance and debugging.
+   */
   if (Command == TEXT("config_set")) {
     AddIfPresent(Args, ExtractParam(Params, TEXT("Key=")));
     AddIfPresent(Args, ExtractParam(Params, TEXT("Value=")));
@@ -191,6 +229,11 @@ UForbocAICommandlet::UForbocAICommandlet() {
   LogToConsole = true;
 }
 
+/**
+ * Runs the commandlet entrypoint for the requested CLI command.
+ * User Story: As Unreal CLI execution, I need one main entrypoint so command
+ * parameters can be validated, normalized, and dispatched consistently.
+ */
 int32 UForbocAICommandlet::Main(const FString &Params) {
   SDKConfig::InitializeConfig();
 

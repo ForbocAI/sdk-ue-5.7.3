@@ -1,6 +1,9 @@
-// API endpoint integration tests — uses SDKConfig resolution (localhost:8080 default, FORBOCAI_API_URL override)
-// I.5 — Auth, response normalization, representative endpoints, error handling
-// Requires FORBOCAI_API_KEY for auth tests. Default URL is http://localhost:8080.
+/**
+ * API endpoint integration tests — uses SDKConfig resolution (localhost:8080 default, FORBOCAI_API_URL override)
+ * I.5 — Auth, response normalization, representative endpoints, error handling
+ * Requires FORBOCAI_API_KEY for auth tests. Default URL is http://localhost:8080.
+ * User Story: As a maintainer, I need this note so the surrounding code intent stays clear during maintenance and debugging.
+ */
 
 #include "API/APICodecs.h"
 #include "API/APIEndpoints.h"
@@ -22,7 +25,10 @@ struct FApiEndpointTestState {
   bool bStarted = false;
 };
 
-// Latent command: GET request, polls until complete
+/**
+ * Latent command: GET request, polls until complete
+ * User Story: As a maintainer, I need this note so the surrounding code intent stays clear during maintenance and debugging.
+ */
 DEFINE_LATENT_AUTOMATION_COMMAND_THREE_PARAMETER(
     FHttpGetWaitComplete, FString, Url, FString, ApiKey,
     TSharedPtr<FApiEndpointTestState>, State);
@@ -49,7 +55,10 @@ bool FHttpGetWaitComplete::Update() {
   return false;
 }
 
-// Latent command: POST request
+/**
+ * Latent command: POST request
+ * User Story: As a maintainer, I need this note so the surrounding code intent stays clear during maintenance and debugging.
+ */
 DEFINE_LATENT_AUTOMATION_COMMAND_FOUR_PARAMETER(
     FHttpPostWaitComplete, FString, Url, FString, Payload, FString, ApiKey,
     TSharedPtr<FApiEndpointTestState>, State);
@@ -79,9 +88,10 @@ bool FHttpPostWaitComplete::Update() {
 static FString GetBaseUrl() { return SDKConfig::GetApiUrl(); }
 static FString GetApiKey() { return SDKConfig::GetApiKey(); }
 
-// ---------------------------------------------------------------------------
-// Auth: getApiStatus (no auth required) — connectivity check
-// ---------------------------------------------------------------------------
+/**
+ * Auth: getApiStatus (no auth required) — connectivity check
+ * User Story: As a maintainer, I need this note so the surrounding code intent stays clear during maintenance and debugging.
+ */
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(
     FApiEndpointStatusNoAuthTest,
     "ForbocAI.Integration.API.Endpoint.StatusNoAuth",
@@ -110,9 +120,10 @@ bool FApiEndpointStatusNoAuthTest::RunTest(const FString &Parameters) {
   return true;
 }
 
-// ---------------------------------------------------------------------------
-// Auth: getSouls with valid key — 200 and parseable
-// ---------------------------------------------------------------------------
+/**
+ * Auth: getSouls with valid key — 200 and parseable
+ * User Story: As a maintainer, I need this note so the surrounding code intent stays clear during maintenance and debugging.
+ */
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(
     FApiEndpointSoulsValidKeyTest,
     "ForbocAI.Integration.API.Endpoint.SoulsValidKey",
@@ -150,9 +161,10 @@ bool FApiEndpointSoulsValidKeyTest::RunTest(const FString &Parameters) {
   return true;
 }
 
-// ---------------------------------------------------------------------------
-// Auth: getSouls with no key — expect 401
-// ---------------------------------------------------------------------------
+/**
+ * Auth: getSouls with no key — expect 401
+ * User Story: As a maintainer, I need this note so the surrounding code intent stays clear during maintenance and debugging.
+ */
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(
     FApiEndpointSoulsNoKeyTest,
     "ForbocAI.Integration.API.Endpoint.SoulsNoKey",
@@ -179,9 +191,10 @@ bool FApiEndpointSoulsNoKeyTest::RunTest(const FString &Parameters) {
   return true;
 }
 
-// ---------------------------------------------------------------------------
-// Auth: getSouls with invalid key — expect 401
-// ---------------------------------------------------------------------------
+/**
+ * Auth: getSouls with invalid key — expect 401
+ * User Story: As a maintainer, I need this note so the surrounding code intent stays clear during maintenance and debugging.
+ */
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(
     FApiEndpointSoulsInvalidKeyTest,
     "ForbocAI.Integration.API.Endpoint.SoulsInvalidKey",
@@ -209,9 +222,10 @@ bool FApiEndpointSoulsInvalidKeyTest::RunTest(const FString &Parameters) {
   return true;
 }
 
-// ---------------------------------------------------------------------------
-// Error: 404 — nonexistent path
-// ---------------------------------------------------------------------------
+/**
+ * Error: 404 — nonexistent path
+ * User Story: As a maintainer, I need this note so the surrounding code intent stays clear during maintenance and debugging.
+ */
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(
     FApiEndpointNotFoundTest,
     "ForbocAI.Integration.API.Endpoint.NotFound",
@@ -237,9 +251,10 @@ bool FApiEndpointNotFoundTest::RunTest(const FString &Parameters) {
   return true;
 }
 
-// ---------------------------------------------------------------------------
-// postDirective — valid key, minimal request (may 400 if body invalid)
-// ---------------------------------------------------------------------------
+/**
+ * postDirective — valid key, minimal request (may 400 if body invalid)
+ * User Story: As a maintainer, I need this note so the surrounding code intent stays clear during maintenance and debugging.
+ */
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(
     FApiEndpointPostDirectiveTest,
     "ForbocAI.Integration.API.Endpoint.PostDirective",
@@ -270,7 +285,10 @@ bool FApiEndpointPostDirectiveTest::RunTest(const FString &Parameters) {
         TestTrue("Request completed", State->bDone);
         if (!State->bDone)
           return;
-        // 200 OK or 400/404 depending on NPC existence and body validity
+        /**
+         * 200 OK or 400/404 depending on NPC existence and body validity
+         * User Story: As a maintainer, I need this note so the surrounding code intent stays clear during maintenance and debugging.
+         */
         TestTrue("Got HTTP response",
                  State->HttpCode >= 200 && State->HttpCode < 600);
         if (State->bSuccess && State->Body.Len() > 0) {

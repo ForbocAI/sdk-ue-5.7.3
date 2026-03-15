@@ -1,11 +1,10 @@
 /**
  * LlamaFacade — Wraps llama.cpp C API for inference and embeddings
- *
  * When WITH_FORBOC_NATIVE=1: Requires real libllama.a and llama.cpp include
  * folder. API targets llama.cpp master (b5220+). Batch/sampler API may need
  * adjustment for your llama.cpp version.
- *
  * When WITH_FORBOC_NATIVE=0: Stub implementation returns nullptr/false.
+ * User Story: As a maintainer, I need this note so the surrounding API intent stays clear during maintenance and integration.
  */
 
 #include "LlamaFacade.h"
@@ -226,7 +225,10 @@ char *InferWithGrammar(llama_facade_context *Ctx, const char *PromptUtf8,
                        const char *GrammarUtf8) {
   if (!Ctx || !PromptUtf8 || Ctx->IsEmbedding) return nullptr;
 
-  // If no grammar provided, fall back to regular Infer
+  /**
+   * If no grammar provided, fall back to regular Infer
+   * User Story: As a maintainer, I need this note so the surrounding code intent stays clear during maintenance and debugging.
+   */
   if (!GrammarUtf8 || !*GrammarUtf8) {
     return Infer(Ctx, PromptUtf8, MaxTokens, Temperature);
   }
@@ -245,7 +247,10 @@ char *InferWithGrammar(llama_facade_context *Ctx, const char *PromptUtf8,
   llama_sampler_chain_add(Smpl, llama_sampler_init_top_k(40));
   llama_sampler_chain_add(Smpl, llama_sampler_init_top_p(0.9f, 1));
   llama_sampler_chain_add(Smpl, llama_sampler_init_temp(Temperature));
-  // G11: Add GBNF grammar sampler for constrained output
+  /**
+   * G11: Add GBNF grammar sampler for constrained output
+   * User Story: As a maintainer, I need this step note so I can follow the scenario progression and reason about the expected state changes.
+   */
   llama_sampler_chain_add(Smpl,
       llama_sampler_init_grammar(Vocab, GrammarUtf8, "root"));
   llama_sampler_chain_add(Smpl, llama_sampler_init_dist(LLAMA_DEFAULT_SEED));

@@ -7,9 +7,10 @@
 using namespace rtk;
 using namespace DirectiveSlice;
 
-// ---------------------------------------------------------------------------
-// Test: Full happy path — Started → Received → ContextComposed → Validated
-// ---------------------------------------------------------------------------
+/**
+ * Test: Full happy path — Started → Received → ContextComposed → Validated
+ * User Story: As a maintainer, I need this note so the surrounding code intent stays clear during maintenance and debugging.
+ */
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FDirectiveHappyPathTest,
                                  "ForbocAI.Slices.Directive.HappyPath",
                                  EAutomationTestFlags_ApplicationContextMask |
@@ -18,7 +19,10 @@ bool FDirectiveHappyPathTest::RunTest(const FString &Parameters) {
   Slice<FDirectiveSliceState> DirSlice = CreateDirectiveSlice();
   FDirectiveSliceState State;
 
-  // Step 1: Start directive
+  /**
+   * Step 1: Start directive
+   * User Story: As a maintainer, I need this step note so I can follow the scenario progression and reason about the expected state changes.
+   */
   State = DirSlice.Reducer(
       State,
       Actions::DirectiveRunStarted(TEXT("hp_1"), TEXT("npc_knight"),
@@ -37,7 +41,10 @@ bool FDirectiveHappyPathTest::RunTest(const FString &Parameters) {
   TestEqual("Active directive", State.ActiveDirectiveId,
             FString(TEXT("hp_1")));
 
-  // Step 2: Directive received (memory recall instruction)
+  /**
+   * Step 2: Directive received (memory recall instruction)
+   * User Story: As a maintainer, I need this note so the surrounding code intent stays clear during maintenance and debugging.
+   */
   FDirectiveResponse DirResponse;
   DirResponse.MemoryRecall.Query = TEXT("goblin encounters");
   DirResponse.MemoryRecall.Limit = 5;
@@ -54,7 +61,10 @@ bool FDirectiveHappyPathTest::RunTest(const FString &Parameters) {
     TestEqual("MemoryRecallLimit", Run.value.MemoryRecallLimit, 5);
   }
 
-  // Step 3: Context composed
+  /**
+   * Step 3: Context composed
+   * User Story: As a maintainer, I need this note so the surrounding code intent stays clear during maintenance and debugging.
+   */
   FCortexConfig Constraints;
   Constraints.MaxTokens = 256;
   Constraints.Temperature = 0.7f;
@@ -72,7 +82,10 @@ bool FDirectiveHappyPathTest::RunTest(const FString &Parameters) {
               FString(TEXT("You are a knight facing a goblin...")));
   }
 
-  // Step 4: Verdict validated (valid)
+  /**
+   * Step 4: Verdict validated (valid)
+   * User Story: As a maintainer, I need this note so the surrounding code intent stays clear during maintenance and debugging.
+   */
   FVerdictResponse Verdict;
   Verdict.bValid = true;
   Verdict.Dialogue = TEXT("You swing your sword at the goblin!");
@@ -100,9 +113,10 @@ bool FDirectiveHappyPathTest::RunTest(const FString &Parameters) {
   return true;
 }
 
-// ---------------------------------------------------------------------------
-// Test: Multiple concurrent directives maintain independent state
-// ---------------------------------------------------------------------------
+/**
+ * Test: Multiple concurrent directives maintain independent state
+ * User Story: As a maintainer, I need this note so the surrounding code intent stays clear during maintenance and debugging.
+ */
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FDirectiveMultipleTest,
                                  "ForbocAI.Slices.Directive.MultipleConcurrent",
                                  EAutomationTestFlags_ApplicationContextMask |
@@ -111,7 +125,10 @@ bool FDirectiveMultipleTest::RunTest(const FString &Parameters) {
   Slice<FDirectiveSliceState> DirSlice = CreateDirectiveSlice();
   FDirectiveSliceState State;
 
-  // Start two directives for different NPCs
+  /**
+   * Start two directives for different NPCs
+   * User Story: As a maintainer, I need this step note so I can follow the scenario progression and reason about the expected state changes.
+   */
   State = DirSlice.Reducer(
       State,
       Actions::DirectiveRunStarted(TEXT("d_a"), TEXT("npc_1"), TEXT("obs_a")));
@@ -123,7 +140,10 @@ bool FDirectiveMultipleTest::RunTest(const FString &Parameters) {
   TestEqual("Active is last started", State.ActiveDirectiveId,
             FString(TEXT("d_b")));
 
-  // Fail first, second stays running
+  /**
+   * Fail first, second stays running
+   * User Story: As a maintainer, I need this note so the surrounding code intent stays clear during maintenance and debugging.
+   */
   State = DirSlice.Reducer(
       State,
       Actions::DirectiveRunFailed(TEXT("d_a"), TEXT("API timeout")));
@@ -144,9 +164,10 @@ bool FDirectiveMultipleTest::RunTest(const FString &Parameters) {
   return true;
 }
 
-// ---------------------------------------------------------------------------
-// Test: ClearDirectivesForNpc removes only matching NPC directives
-// ---------------------------------------------------------------------------
+/**
+ * Test: ClearDirectivesForNpc removes only matching NPC directives
+ * User Story: As a maintainer, I need this note so the surrounding code intent stays clear during maintenance and debugging.
+ */
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FDirectiveClearForNpcTest,
                                  "ForbocAI.Slices.Directive.ClearForNpcSelective",
                                  EAutomationTestFlags_ApplicationContextMask |
@@ -167,7 +188,10 @@ bool FDirectiveClearForNpcTest::RunTest(const FString &Parameters) {
 
   TestEqual("Three directives", SelectAllDirectives(State).Num(), 3);
 
-  // Clear only npc_target directives
+  /**
+   * Clear only npc_target directives
+   * User Story: As a maintainer, I need this step note so I can follow the scenario progression and reason about the expected state changes.
+   */
   State = DirSlice.Reducer(
       State, Actions::ClearDirectivesForNpc(TEXT("npc_target")));
 

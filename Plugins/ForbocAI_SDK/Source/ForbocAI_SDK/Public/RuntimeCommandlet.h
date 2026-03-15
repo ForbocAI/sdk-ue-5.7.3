@@ -17,6 +17,8 @@ using func::make_right;
 
 /**
  * ForbocAI Commandlet.
+ * User Story: As Unreal command-line automation, I need one commandlet entry
+ * point so SDK operations can run from editor and CI command invocations.
  * Usage:
  *   ./UnrealEditorCmd -run=ForbocAI -Command=<CommandName> [Args...]
  *
@@ -34,23 +36,46 @@ class UForbocAICommandlet : public UCommandlet {
   GENERATED_BODY()
 
 public:
+  /**
+   * Constructs the ForbocAI commandlet with its metadata defaults.
+   * User Story: As editor command execution, I need the commandlet initialized
+   * with predictable defaults before parsing CLI input.
+   */
   UForbocAICommandlet();
 
-  //~ Begin UCommandlet Interface
+  /**
+   * Runs the requested CLI command from raw commandlet parameters.
+   * User Story: As commandlet execution, I need raw params translated into a
+   * command result so Unreal CLI entrypoints can drive SDK operations.
+   */
   virtual int32 Main(const FString &Params) override;
-  //~ End UCommandlet Interface
-
-  // Functional Core Type Aliases for Commandlet operations
+  /**
+   * Functional Core Type Aliases for Commandlet operations
+   * User Story: As a maintainer, I need this section note so related declarations and logic stay easy to locate.
+   */
   using CommandResult = CLITypes::TestResult<void>;
   using CommandExecution = CLITypes::AsyncResult<void>;
 
+  /**
+   * Executes one validated CLI command with parsed arguments.
+   * User Story: As command dispatch, I need a single execution entrypoint so
+   * validated commands can be run uniformly.
+   */
   CommandResult executeCommand(const FString &Command,
                                const TArray<FString> &Args);
 
-  // Command pipeline helpers
+  /**
+   * Builds the async execution pipeline for one CLI command.
+   * User Story: As command orchestration, I need an async pipeline wrapper so
+   * CLI handlers can compose work without blocking the calling code directly.
+   */
   CommandExecution createCommandPipeline(const FString &Command,
                                          const TArray<FString> &Args);
 
-  // Command validation helpers
+  /**
+   * Builds the validation pipeline for incoming CLI commands.
+   * User Story: As command parsing, I need validation staged before execution
+   * so invalid commands fail early with useful errors.
+   */
   CLITypes::ValidationPipeline<FString, FString> commandValidationPipeline();
 };

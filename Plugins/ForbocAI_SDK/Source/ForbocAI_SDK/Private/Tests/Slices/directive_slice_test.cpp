@@ -7,9 +7,10 @@
 using namespace rtk;
 using namespace DirectiveSlice;
 
-// ---------------------------------------------------------------------------
-// Test: DirectiveRunStarted creates run and sets ActiveDirectiveId
-// ---------------------------------------------------------------------------
+/**
+ * Test: DirectiveRunStarted creates run and sets ActiveDirectiveId
+ * User Story: As a maintainer, I need this note so the surrounding code intent stays clear during maintenance and debugging.
+ */
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FDirectiveSliceRunStartedTest,
                                  "ForbocAI.Slices.Directive.RunStarted",
                                  EAutomationTestFlags_ApplicationContextMask |
@@ -48,9 +49,10 @@ bool FDirectiveSliceRunStartedTest::RunTest(const FString &Parameters) {
   return true;
 }
 
-// ---------------------------------------------------------------------------
-// Test: DirectiveReceived updates run with memory recall
-// ---------------------------------------------------------------------------
+/**
+ * Test: DirectiveReceived updates run with memory recall
+ * User Story: As a maintainer, I need this note so the surrounding code intent stays clear during maintenance and debugging.
+ */
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FDirectiveSliceDirectiveReceivedTest,
                                  "ForbocAI.Slices.Directive.DirectiveReceived",
                                  EAutomationTestFlags_ApplicationContextMask |
@@ -85,9 +87,10 @@ bool FDirectiveSliceDirectiveReceivedTest::RunTest(const FString &Parameters) {
   return true;
 }
 
-// ---------------------------------------------------------------------------
-// Test: VerdictValidated completes run
-// ---------------------------------------------------------------------------
+/**
+ * Test: VerdictValidated completes run
+ * User Story: As a maintainer, I need this note so the surrounding code intent stays clear during maintenance and debugging.
+ */
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FDirectiveSliceVerdictValidatedTest,
                                  "ForbocAI.Slices.Directive.VerdictValidated",
                                  EAutomationTestFlags_ApplicationContextMask |
@@ -123,9 +126,10 @@ bool FDirectiveSliceVerdictValidatedTest::RunTest(const FString &Parameters) {
   return true;
 }
 
-// ---------------------------------------------------------------------------
-// Test: DirectiveRunFailed marks run as failed
-// ---------------------------------------------------------------------------
+/**
+ * Test: DirectiveRunFailed marks run as failed
+ * User Story: As a maintainer, I need this note so the surrounding code intent stays clear during maintenance and debugging.
+ */
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FDirectiveSliceRunFailedTest,
                                  "ForbocAI.Slices.Directive.RunFailed",
                                  EAutomationTestFlags_ApplicationContextMask |
@@ -155,9 +159,10 @@ bool FDirectiveSliceRunFailedTest::RunTest(const FString &Parameters) {
   return true;
 }
 
-// ---------------------------------------------------------------------------
-// Test: ClearDirectivesForNpc removes runs for given NPC
-// ---------------------------------------------------------------------------
+/**
+ * Test: ClearDirectivesForNpc removes runs for given NPC
+ * User Story: As a maintainer, I need this note so the surrounding code intent stays clear during maintenance and debugging.
+ */
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FDirectiveSliceClearForNpcTest,
                                  "ForbocAI.Slices.Directive.ClearForNpc",
                                  EAutomationTestFlags_ApplicationContextMask |
@@ -193,10 +198,11 @@ bool FDirectiveSliceClearForNpcTest::RunTest(const FString &Parameters) {
   return true;
 }
 
-// ---------------------------------------------------------------------------
-// Test: Selectors — SelectDirectiveById, SelectAllDirectives,
-// SelectActiveDirectiveId, SelectActiveDirective
-// ---------------------------------------------------------------------------
+/**
+ * Test: Selectors — SelectDirectiveById, SelectAllDirectives,
+ * SelectActiveDirectiveId, SelectActiveDirective
+ * User Story: As a maintainer, I need this section note so related declarations and logic stay easy to locate.
+ */
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FDirectiveSliceSelectorsTest,
                                  "ForbocAI.Slices.Directive.Selectors",
                                  EAutomationTestFlags_ApplicationContextMask |
@@ -205,7 +211,10 @@ bool FDirectiveSliceSelectorsTest::RunTest(const FString &Parameters) {
   Slice<FDirectiveSliceState> DirSlice = CreateDirectiveSlice();
   FDirectiveSliceState State;
 
-  // Empty state
+  /**
+   * Empty state
+   * User Story: As a maintainer, I need this note so the surrounding code intent stays clear during maintenance and debugging.
+   */
   TestFalse("No active directive on empty",
             SelectActiveDirective(State).hasValue);
   TestEqual("SelectActiveDirectiveId empty",
@@ -214,7 +223,10 @@ bool FDirectiveSliceSelectorsTest::RunTest(const FString &Parameters) {
   TestFalse("SelectDirectiveById returns nothing on empty",
             SelectDirectiveById(State, TEXT("ghost")).hasValue);
 
-  // Add runs
+  /**
+   * Add runs
+   * User Story: As a maintainer, I need this step note so I can follow the scenario progression and reason about the expected state changes.
+   */
   State = DirSlice.Reducer(
       State,
       Actions::DirectiveRunStarted(TEXT("sel_1"), TEXT("n1"), TEXT("A")));

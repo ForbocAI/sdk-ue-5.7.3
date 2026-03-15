@@ -12,12 +12,13 @@
 #include "Serialization/JsonWriter.h"
 #include "Serialization/JsonSerializer.h"
 
-// ==========================================
-// AGENT FACTORY — Pure construction functions
-// ==========================================
-
 namespace {
 
+/**
+ * Serializes NPC process context into the condensed JSON payload expected by the API.
+ * User Story: As NPC protocol calls, I need contextual key/value data encoded
+ * into JSON so remote processing receives the same context the game provided.
+ */
 FString SerializeContextMap(const TMap<FString, FString> &Context) {
   if (Context.IsEmpty()) {
     return TEXT("{}");
@@ -37,6 +38,11 @@ FString SerializeContextMap(const TMap<FString, FString> &Context) {
 
 } // namespace
 
+/**
+ * Creates a runtime agent from config, filling defaults where needed.
+ * User Story: As agent setup flows, I need configs normalized into runtime
+ * agents so callers do not reimplement default id and API resolution.
+ */
 FAgent AgentFactory::Create(const FAgentConfig &Config) {
   FAgent Agent;
   Agent.Id = Config.Id.IsEmpty() ? NPCId::GenerateNPCId() : Config.Id;
@@ -47,6 +53,11 @@ FAgent AgentFactory::Create(const FAgentConfig &Config) {
   return Agent;
 }
 
+/**
+ * Rehydrates a runtime agent from a soul snapshot and API override.
+ * User Story: As soul import flows, I need soul payloads converted back into
+ * live agents so runtime state can resume from portable exports.
+ */
 FAgent AgentFactory::FromSoul(const FSoul &Soul, const FString &ApiUrl) {
   FAgent Agent;
   Agent.Id = Soul.Id;
@@ -58,16 +69,22 @@ FAgent AgentFactory::FromSoul(const FSoul &Soul, const FString &ApiUrl) {
   return Agent;
 }
 
-// ==========================================
-// AGENT OPERATIONS — Pure free functions
-// ==========================================
-
+/**
+ * Returns a copy of the agent with updated state data.
+ * User Story: As immutable agent updates, I need state changes applied by copy
+ * so higher-level flows can treat agents as persistent values.
+ */
 FAgent AgentOps::WithState(const FAgent &Agent, const FAgentState &NewState) {
   FAgent Updated = Agent;
   Updated.State = NewState;
   return Updated;
 }
 
+/**
+ * Returns a copy of the agent with a replaced memory collection.
+ * User Story: As immutable agent updates, I need memory changes applied by
+ * copy so higher-level flows can preserve value semantics.
+ */
 FAgent AgentOps::WithMemories(const FAgent &Agent,
                               const TArray<FMemoryItem> &NewMemories) {
   FAgent Updated = Agent;
@@ -75,14 +92,15 @@ FAgent AgentOps::WithMemories(const FAgent &Agent,
   return Updated;
 }
 
+/**
+ * Merges incoming state updates using the API's full-state response contract.
+ * User Story: As agent update flows, I need API state payloads normalized so
+ * full-state responses replace stale local snapshots safely. Non-empty
+ * `Updates.JsonData` is treated as the full replacement state, while empty
+ * payloads preserve the current snapshot.
+ */
 FAgentState AgentOps::CalculateNewState(const FAgentState &Current,
                                         const FAgentState &Updates) {
-  // Generic State Update Strategy:
-  // Since we are using raw JSON, we can either replace or merge.
-  // For this FP implementation without a heavy JSON library dependency here,
-  // we will assume the API returns the FULL new state in Updates.JsonData.
-  // If Updates.JsonData is empty/invalid, keep Current.
-
   if (Updates.JsonData.IsEmpty() || Updates.JsonData == TEXT("{}")) {
     return Current;
   }
@@ -93,6 +111,11 @@ FAgentState AgentOps::CalculateNewState(const FAgentState &Current,
 #include "RuntimeStore.h"
 #include "Protocol/ProtocolThunks.h"
 
+/**
+ * Runs a protocol turn for the agent against a temporary store instance.
+ * User Story: As standalone agent processing, I need a temporary store-backed
+ * protocol run so agent calls can reuse the full runtime loop off-store.
+ */
 AgentTypes::AsyncResult<FAgentResponse>
 AgentOps::Process(const FAgent &Agent, const FString &Input,
                   const TMap<FString, FString> &Context) {
@@ -114,6 +137,11 @@ AgentOps::Process(const FAgent &Agent, const FString &Input,
       });
 }
 
+/**
+ * Exports the agent into the portable soul representation used by the SDK.
+ * User Story: As soul export flows, I need live agents converted into portable
+ * soul payloads so they can be saved or transferred across runtimes.
+ */
 FSoul AgentOps::Export(const FAgent &Agent) {
   return TypeFactory::Soul(Agent.Id, TEXT("1.0.0"), TEXT("NPC"),
                            Agent.Persona, Agent.State, Agent.Memories);
