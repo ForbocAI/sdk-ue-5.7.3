@@ -1,6 +1,6 @@
 // API endpoint integration tests — uses SDKConfig resolution (localhost:8080 default, FORBOCAI_API_URL override)
 // I.5 — Auth, response normalization, representative endpoints, error handling
-// Requires FORBOCAI_API_KEY for auth tests. Set FORBOCAI_API_URL=https://api.forboc.ai for production.
+// Requires FORBOCAI_API_KEY for auth tests. Default URL is http://localhost:8080.
 
 #include "API/APICodecs.h"
 #include "API/APIEndpoints.h"

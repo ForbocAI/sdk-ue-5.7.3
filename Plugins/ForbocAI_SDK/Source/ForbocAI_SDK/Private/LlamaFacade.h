@@ -30,6 +30,12 @@ typedef void (*TokenCallback)(const char *TokenUtf8, int Len, void *UserData);
 int InferStream(llama_facade_context *Ctx, const char *PromptUtf8, int MaxTokens,
                 float Temperature, TokenCallback OnToken, void *UserData);
 
+/** G11: Generate text with GBNF grammar constraint. Returns allocated UTF-8 string; caller must free.
+ *  GrammarUtf8 is a GBNF grammar string. If null or empty, behaves like Infer(). */
+char *InferWithGrammar(llama_facade_context *Ctx, const char *PromptUtf8,
+                       int MaxTokens, float Temperature,
+                       const char *GrammarUtf8);
+
 /** Generate 384-dim normalized embedding. Caller provides Out[384]. */
 bool Embed(llama_facade_context *Ctx, const char *TextUtf8, float *Out, int Dims);
 

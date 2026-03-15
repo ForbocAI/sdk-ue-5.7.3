@@ -221,6 +221,77 @@ int InferStream(llama_facade_context *Ctx, const char *PromptUtf8, int MaxTokens
   return Generated;
 }
 
+char *InferWithGrammar(llama_facade_context *Ctx, const char *PromptUtf8,
+                       int MaxTokens, float Temperature,
+                       const char *GrammarUtf8) {
+  if (!Ctx || !PromptUtf8 || Ctx->IsEmbedding) return nullptr;
+
+  // If no grammar provided, fall back to regular Infer
+  if (!GrammarUtf8 || !*GrammarUtf8) {
+    return Infer(Ctx, PromptUtf8, MaxTokens, Temperature);
+  }
+
+  const llama_vocab *Vocab = llama_model_get_vocab(Ctx->Model);
+  const int32_t CtxSize = llama_n_ctx(Ctx->Ctx);
+
+  std::vector<llama_token> Tokens(CtxSize, 0);
+  int32_t N = llama_tokenize(Vocab, PromptUtf8, -1, Tokens.data(),
+                             static_cast<int32_t>(Tokens.size()), true, false);
+  if (N < 0) return nullptr;
+  Tokens.resize(static_cast<size_t>(N));
+
+  llama_sampler_chain_params SParams = llama_sampler_chain_default_params();
+  llama_sampler *Smpl = llama_sampler_chain_init(SParams);
+  llama_sampler_chain_add(Smpl, llama_sampler_init_top_k(40));
+  llama_sampler_chain_add(Smpl, llama_sampler_init_top_p(0.9f, 1));
+  llama_sampler_chain_add(Smpl, llama_sampler_init_temp(Temperature));
+  // G11: Add GBNF grammar sampler for constrained output
+  llama_sampler_chain_add(Smpl,
+      llama_sampler_init_grammar(Vocab, GrammarUtf8, "root"));
+  llama_sampler_chain_add(Smpl, llama_sampler_init_dist(LLAMA_DEFAULT_SEED));
+
+  llama_batch Batch = llama_batch_init(512, 0, 1);
+
+  int32_t Pos = 0;
+  for (size_t i = 0; i < Tokens.size(); ++i) {
+    llama_batch_add(Batch, Tokens[i], Pos, {0}, true);
+    ++Pos;
+  }
+  if (llama_decode(Ctx->Ctx, Batch) != 0) {
+    llama_batch_free(Batch);
+    llama_sampler_free(Smpl);
+    return nullptr;
+  }
+
+  std::string Output;
+  int Generated = 0;
+  while (Generated < MaxTokens) {
+    llama_token Next =
+        llama_sampler_sample(Smpl, Ctx->Ctx, -1);
+    if (Next == llama_vocab_eos(Vocab)) break;
+
+    char Buf[256];
+    int Len = llama_token_to_piece(Vocab, Next, Buf, sizeof(Buf), 0, false);
+    if (Len > 0) {
+      Output.append(Buf, static_cast<size_t>(Len));
+    }
+    llama_batch_clear(Batch);
+    llama_batch_add(Batch, Next, Pos, {0}, true);
+    ++Pos;
+    ++Generated;
+    if (llama_decode(Ctx->Ctx, Batch) != 0) break;
+  }
+
+  llama_batch_free(Batch);
+  llama_sampler_free(Smpl);
+
+  char *Result = static_cast<char *>(malloc(Output.size() + 1));
+  if (Result) {
+    memcpy(Result, Output.c_str(), Output.size() + 1);
+  }
+  return Result;
+}
+
 bool Embed(llama_facade_context *Ctx, const char *TextUtf8, float *Out,
            int Dims) {
   if (!Ctx || !TextUtf8 || !Out || Dims < 1 || !Ctx->IsEmbedding) return false;
@@ -269,6 +340,7 @@ llama_facade_context *LoadInferenceModel(const char *) { return nullptr; }
 llama_facade_context *LoadEmbeddingModel(const char *) { return nullptr; }
 void FreeContext(llama_facade_context *) {}
 char *Infer(llama_facade_context *, const char *, int, float) { return nullptr; }
+char *InferWithGrammar(llama_facade_context *, const char *, int, float, const char *) { return nullptr; }
 int InferStream(llama_facade_context *, const char *, int, float, TokenCallback, void *) { return 0; }
 bool Embed(llama_facade_context *, const char *, float *, int) { return false; }
 

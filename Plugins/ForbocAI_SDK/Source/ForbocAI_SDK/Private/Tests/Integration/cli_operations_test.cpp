@@ -94,7 +94,7 @@ bool FOpsConfigTest::RunTest(const FString &Parameters) {
   SDKConfig::SetConfigFilePathOverride(TempConfigPath);
   SDKConfig::ReloadConfig();
 
-  TestEqual("Default runtime API URL is localhost dev server",
+  TestEqual("Default runtime API URL is localhost:8080",
             SDKConfig::GetApiUrl(), FString(SDKConfig::DEFAULT_API_URL));
   TestTrue("Unset persisted apiUrl is empty",
            Ops::ConfigGet(TEXT("apiUrl")).IsEmpty());

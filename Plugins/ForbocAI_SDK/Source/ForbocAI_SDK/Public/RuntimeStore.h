@@ -20,6 +20,13 @@ struct FStoreState {
   SoulSlice::FSoulSliceState Soul;
   GhostSlice::FGhostSliceState Ghost;
   APISlice::FAPIState API;
+
+  /**
+   * G8: Generic state bag for game-specific slices.
+   * Games can store serialized state keyed by slice name.
+   * Extra reducers operate on this map alongside SDK reducers.
+   */
+  TMap<FString, FString> Extra;
 };
 
 namespace StoreInternal {
@@ -75,6 +82,24 @@ inline const rtk::Slice<APISlice::FAPIState> &GetAPISlice() {
 
 } // namespace StoreInternal
 
+/**
+ * G8: Extra reducer type for game slices.
+ * Receives current state + action, returns updated state.
+ * Only the Extra map should be modified; SDK slice state is managed
+ * by SDK reducers and must not be overwritten.
+ */
+using ExtraReducerFn =
+    std::function<FStoreState(const FStoreState &, const rtk::AnyAction &)>;
+
+namespace StoreInternal {
+
+inline std::vector<ExtraReducerFn> &ExtraReducers() {
+  static std::vector<ExtraReducerFn> Reducers;
+  return Reducers;
+}
+
+} // namespace StoreInternal (extension)
+
 inline FStoreState StoreReducer(const FStoreState &State,
                                 const rtk::AnyAction &Action) {
   FStoreState Next = State;
@@ -87,6 +112,12 @@ inline FStoreState StoreReducer(const FStoreState &State,
   Next.Soul = StoreInternal::GetSoulSlice().Reducer(State.Soul, Action);
   Next.Ghost = StoreInternal::GetGhostSlice().Reducer(State.Ghost, Action);
   Next.API = StoreInternal::GetAPISlice().Reducer(State.API, Action);
+
+  // G8: Run extra reducers (game slices)
+  for (const auto &Reducer : StoreInternal::ExtraReducers()) {
+    Next = Reducer(Next, Action);
+  }
+
   return Next;
 }
 
@@ -121,11 +152,34 @@ inline rtk::Middleware<FStoreState> createNpcRemovalListener() {
   };
 }
 
+/**
+ * G8: Register an extra reducer before store creation.
+ * Game slices call this to mount their reducers alongside SDK slices.
+ *
+ * Example:
+ *   addExtraReducer([](const FStoreState &S, const rtk::AnyAction &A) {
+ *       FStoreState Next = S;
+ *       if (A.Type == TEXT("game/setScore")) {
+ *           Next.Extra.Add(TEXT("score"), A.Type);
+ *       }
+ *       return Next;
+ *   });
+ */
+inline void addExtraReducer(const ExtraReducerFn &Reducer) {
+  StoreInternal::ExtraReducers().push_back(Reducer);
+}
+
 inline rtk::EnhancedStore<FStoreState>
 createStore(func::Maybe<FStoreState> PreloadedState =
-                func::nothing<FStoreState>()) {
+                func::nothing<FStoreState>(),
+            std::vector<rtk::Middleware<FStoreState>> ExtraMiddlewares = {}) {
   std::vector<rtk::Middleware<FStoreState>> Middlewares;
   Middlewares.push_back(createNpcRemovalListener());
+
+  // G8: Append game-provided middleware
+  for (const auto &MW : ExtraMiddlewares) {
+    Middlewares.push_back(MW);
+  }
 
   return rtk::configureStore<FStoreState>(
       &StoreReducer,

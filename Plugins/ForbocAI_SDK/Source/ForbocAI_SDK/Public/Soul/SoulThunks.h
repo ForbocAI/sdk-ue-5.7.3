@@ -191,6 +191,30 @@ localExportSoulThunk(const FString &NpcId = TEXT("")) {
   };
 }
 
+/**
+ * Imports a Soul from a local JSON representation (no network).
+ * Sets NPC info from the soul data and dispatches ImportSoulSuccess.
+ * Mirrors TS localImportSoulThunk in soulSlice.ts.
+ */
+inline ThunkAction<FSoul, FStoreState>
+localImportSoulThunk(const FSoul &Soul) {
+  return [Soul](std::function<AnyAction(const AnyAction &)> Dispatch,
+                std::function<FStoreState()> GetState)
+             -> func::AsyncResult<FSoul> {
+    if (Soul.Id.IsEmpty()) {
+      return detail::RejectAsync<FSoul>(TEXT("Soul ID is required"));
+    }
+
+    FNPCInternalState Npc;
+    Npc.Id = Soul.NpcId.IsEmpty() ? Soul.Id : Soul.NpcId;
+    Npc.Persona = Soul.Persona;
+    Npc.State = Soul.State;
+    Dispatch(NPCSlice::Actions::SetNPCInfo(Npc));
+    Dispatch(SoulSlice::Actions::ImportSoulSuccess(Soul));
+    return detail::ResolveAsync(Soul);
+  };
+}
+
 inline ThunkAction<FSoulExportResult, FStoreState>
 remoteExportSoulThunk(const FString &NpcId = TEXT("")) {
   return [NpcId](std::function<AnyAction(const AnyAction &)> Dispatch,

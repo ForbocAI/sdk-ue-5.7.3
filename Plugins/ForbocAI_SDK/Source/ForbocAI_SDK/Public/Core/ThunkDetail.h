@@ -125,13 +125,17 @@ inline FString SerializeQueryVectorResult(const TArray<FMemoryItem> &Memories) {
 // Node memory helpers
 // ---------------------------------------------------------------------------
 
+inline FString GetLocalInfrastructureDir() {
+  return FPaths::ProjectDir() + TEXT("local_infrastructure/");
+}
+
 inline FString DefaultNodeMemoryPath() {
-  return FPaths::ProjectSavedDir() +
-         TEXT("ForbocAI/vectors/forbocai_vectors.db");
+  return GetLocalInfrastructureDir() +
+         TEXT("vectors/forbocai_vectors.db");
 }
 
 inline FString DefaultEmbeddingModelPath() {
-  return FPaths::ProjectSavedDir() + TEXT("ForbocAI/models/all-MiniLM-L6-v2-Q4_K_M.gguf");
+  return GetLocalInfrastructureDir() + TEXT("models/all-MiniLM-L6-v2-Q4_K_M.gguf");
 }
 
 inline FString &NodeMemoryPathStorage() {

@@ -64,5 +64,10 @@ HandlerResult HandleVector(rtk::EnhancedStore<FStoreState> &Store,
                           const FString &CommandKey,
                           const TArray<FString> &Args);
 
+/** Setup: setup, setup_deps, setup_check, setup_verify, setup_build_llama */
+HandlerResult HandleSetup(rtk::EnhancedStore<FStoreState> &Store,
+                         const FString &CommandKey,
+                         const TArray<FString> &Args);
+
 } // namespace Handlers
 } // namespace CLIOps

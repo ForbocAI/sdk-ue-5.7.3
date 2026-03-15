@@ -169,5 +169,91 @@ Delete(const FString &Url, const FString &ApiKey = TEXT("")) {
   return detail::CreateRequest<T>(TEXT("DELETE"), Url, ApiKey);
 }
 
+// ---------------------------------------------------------------------------
+// G10: Request deduplication — prevents duplicate in-flight GET requests.
+// If a GET for the same URL is already in-flight, callers receive the
+// same result instead of firing a second HTTP request.
+// ---------------------------------------------------------------------------
+
+namespace Dedup {
+
+namespace detail {
+
+struct InFlightEntry {
+  std::vector<std::function<void(const FString &, HttpStatusCode)>> Callbacks;
+  bool bCompleted;
+  FString ResponseBody;
+  HttpStatusCode StatusCode;
+
+  InFlightEntry() : bCompleted(false), StatusCode(0) {}
+};
+
+inline TMap<FString, TSharedPtr<InFlightEntry>> &InFlightRequests() {
+  static TMap<FString, TSharedPtr<InFlightEntry>> Map;
+  return Map;
+}
+
+} // namespace detail
+
+template <typename T>
+func::AsyncResult<func::HttpResult<T>>
+GetDeduped(const FString &Url, const FString &ApiKey = TEXT("")) {
+  const FString Key = Url;
+
+  auto &Map = detail::InFlightRequests();
+  if (Map.Contains(Key)) {
+    TSharedPtr<detail::InFlightEntry> Existing = Map[Key];
+    if (!Existing->bCompleted) {
+      // Already in-flight — piggyback on existing request
+      return func::AsyncResult<func::HttpResult<T>>::create(
+          [Existing](std::function<void(func::HttpResult<T>)> Resolve,
+                     std::function<void(std::string)>) {
+            Existing->Callbacks.push_back(
+                [Resolve](const FString &Body, HttpStatusCode Code) {
+                  if (Code >= 200 && Code < 300) {
+                    T Payload;
+                    if (AsyncHttp::detail::JsonDeserializer<T>::Deserialize(
+                            Body, Payload)) {
+                      Resolve(func::HttpResult<T>::Success(Payload, Code));
+                    } else {
+                      Resolve(func::HttpResult<T>::Failure(
+                          "JSON deserialization failed", Code));
+                    }
+                  } else {
+                    Resolve(func::HttpResult<T>::Failure(
+                        TCHAR_TO_UTF8(*Body), Code));
+                  }
+                });
+          });
+    }
+  }
+
+  // First request for this URL — create entry and fire
+  TSharedPtr<detail::InFlightEntry> Entry =
+      MakeShareable(new detail::InFlightEntry());
+  Map.Add(Key, Entry);
+
+  return func::AsyncChain::then<func::HttpResult<T>, func::HttpResult<T>>(
+      AsyncHttp::Get<T>(Url, ApiKey),
+      [Key, Entry](const func::HttpResult<T> &Result) {
+        auto &Map = detail::InFlightRequests();
+        Entry->bCompleted = true;
+
+        // Notify piggybacked callers
+        const FString Body =
+            Result.bSuccess ? TEXT("") : FString(UTF8_TO_TCHAR(Result.Error.c_str()));
+        for (auto &CB : Entry->Callbacks) {
+          CB(Body, Result.StatusCode);
+        }
+
+        Map.Remove(Key);
+        return func::AsyncResult<func::HttpResult<T>>::create(
+            [Result](std::function<void(func::HttpResult<T>)> Resolve,
+                     std::function<void(std::string)>) { Resolve(Result); });
+      });
+}
+
+} // namespace Dedup
+
 } // namespace AsyncHttp
 } // namespace func

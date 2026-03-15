@@ -149,9 +149,16 @@ struct FCortexConfig {
   TArray<FString> Stop;
 
   // JSON-encoded schema payload used when a caller needs schema-constrained
-  // output.
+  // output (remote API path).
   UPROPERTY(BlueprintReadOnly, Category = "Cortex")
   FString JsonSchemaJson;
+
+  // G11: GBNF grammar string for constrained sampling (local llama.cpp path).
+  // When non-empty, llama.cpp uses grammar-constrained token selection.
+  // Either provide GbnfGrammar directly, or JsonSchemaJson which is
+  // converted to GBNF by the SDK before inference.
+  UPROPERTY(BlueprintReadOnly, Category = "Cortex")
+  FString GbnfGrammar;
 
   FCortexConfig()
       : Model(TEXT("smollm2-135m")), UseGPU(false), MaxTokens(512),

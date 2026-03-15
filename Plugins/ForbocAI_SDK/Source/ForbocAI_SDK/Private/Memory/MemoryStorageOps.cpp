@@ -95,7 +95,7 @@ FString GetDatabasePath(const FMemoryConfig &Config) {
   }
 
   if (FPaths::IsRelative(Config.DatabasePath)) {
-    return FPaths::Combine(FPaths::ProjectContentDir(), TEXT("ForbocAI"),
+    return FPaths::Combine(FPaths::ProjectDir(), TEXT("local_infrastructure"),
                            Config.DatabasePath);
   }
 

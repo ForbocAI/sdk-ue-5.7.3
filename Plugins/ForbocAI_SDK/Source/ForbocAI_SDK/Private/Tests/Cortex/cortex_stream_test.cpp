@@ -1,4 +1,4 @@
-// Tests for G7 streaming completions — CortexSlice actions + NativeEngine mock
+// Tests for G7 streaming completions — CortexSlice actions + NativeEngine
 
 #include "Cortex/CortexSlice.h"
 #include "Core/functional_core.hpp"
@@ -88,41 +88,31 @@ bool FCortexStreamCompleteTest::RunTest(const FString &Parameters) {
 }
 
 // ---------------------------------------------------------------------------
-// Test: Mock InferStream delivers tokens via callback
+// Test: LoadModel returns nullptr for non-existent model path
 // ---------------------------------------------------------------------------
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(
-    FMockInferStreamTest,
-    "ForbocAI.Cortex.Stream.MockInferStream",
+    FLoadModelNonExistentTest,
+    "ForbocAI.Cortex.Stream.LoadModelNonExistent",
     EAutomationTestFlags_ApplicationContextMask |
         EAutomationTestFlags::EngineFilter)
-bool FMockInferStreamTest::RunTest(const FString &Parameters) {
-  // Load a mock model (non-native build returns simulated context)
+bool FLoadModelNonExistentTest::RunTest(const FString &Parameters) {
   Native::Llama::Context Ctx =
-      Native::Llama::LoadModel(TEXT("test_model.bin"));
+      Native::Llama::LoadModel(TEXT("non_existent_model.bin"));
+
+  TestTrue("LoadModel returns nullptr for non-existent file", Ctx == nullptr);
 
   FCortexConfig Config;
   Config.MaxTokens = 64;
 
   TArray<FString> ReceivedTokens;
-  FString FullText = Native::Llama::InferStream(
+  FString Result = Native::Llama::InferStream(
       Ctx, TEXT("Hello NPC"), Config,
       [&ReceivedTokens](const FString &Token) {
         ReceivedTokens.Add(Token);
       });
 
-  TestTrue("At least one token received", ReceivedTokens.Num() > 0);
-  TestFalse("Full text is non-empty", FullText.IsEmpty());
-
-  // Verify tokens concatenate to full text
-  FString Concatenated;
-  for (const FString &Token : ReceivedTokens) {
-    Concatenated += Token;
-  }
-  TestEqual("Concatenated tokens match full text", Concatenated, FullText);
-
-  if (Ctx) {
-    Native::Llama::FreeModel(Ctx);
-  }
+  TestEqual("No tokens received for null context", ReceivedTokens.Num(), 0);
+  TestTrue("Returns error string", Result.Contains(TEXT("Error")));
 
   return true;
 }

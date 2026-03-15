@@ -28,7 +28,7 @@ func::TestResult<void> DispatchCommand(const FString &CommandKey,
   // Phase 3.4: Handler chain — first match wins
   static const std::vector<Handler> Handlers = {
       HandleSystem, HandleNpc,    HandleMemory, HandleCortex, HandleGhost,
-      HandleBridge, HandleSoul,   HandleConfig, HandleVector,
+      HandleBridge, HandleSoul,   HandleConfig, HandleVector, HandleSetup,
   };
 
   try {

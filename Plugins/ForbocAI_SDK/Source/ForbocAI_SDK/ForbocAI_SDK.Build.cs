@@ -39,6 +39,36 @@ public class ForbocAI_SDK : ModuleRules
 		{
 			PublicIncludePaths.Add(LlamaIncludePath);
 			PublicAdditionalLibraries.Add(LlamaLibraryPath);
+
+			// Link ggml dependency libraries (llama.cpp depends on these)
+			string LlamaLibDir = System.IO.Path.GetDirectoryName(LlamaLibraryPath);
+			string[] GgmlLibs = { "libggml.a", "libggml-base.a", "libggml-cpu.a" };
+			foreach (string GgmlLib in GgmlLibs)
+			{
+				string GgmlLibPath = System.IO.Path.Combine(LlamaLibDir, GgmlLib);
+				if (System.IO.File.Exists(GgmlLibPath))
+				{
+					PublicAdditionalLibraries.Add(GgmlLibPath);
+				}
+			}
+
+			// Metal backend (macOS GPU acceleration)
+			if (Target.Platform == UnrealTargetPlatform.Mac)
+			{
+				string MetalLib = System.IO.Path.Combine(LlamaLibDir, "libggml-metal.a");
+				if (System.IO.File.Exists(MetalLib))
+				{
+					PublicAdditionalLibraries.Add(MetalLib);
+					PublicFrameworks.AddRange(new string[] { "Metal", "MetalKit", "Foundation" });
+				}
+
+				string BlasLib = System.IO.Path.Combine(LlamaLibDir, "libggml-blas.a");
+				if (System.IO.File.Exists(BlasLib))
+				{
+					PublicAdditionalLibraries.Add(BlasLib);
+					PublicFrameworks.Add("Accelerate");
+				}
+			}
 		}
 
 		if (bHasSqliteHeaders)

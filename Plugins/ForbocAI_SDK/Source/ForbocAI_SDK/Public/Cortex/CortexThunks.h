@@ -59,7 +59,7 @@ initNodeCortexThunk(const FString &ModelPath) {
           }
 
           const FString ModelsDir =
-              FPaths::ProjectSavedDir() + TEXT("ForbocAI/models/");
+              detail::GetLocalInfrastructureDir() + TEXT("models/");
           const FString FileName =
               Url.IsEmpty() ? EffectiveModel : FPaths::GetCleanFilename(Url);
           const FString LocalPath =

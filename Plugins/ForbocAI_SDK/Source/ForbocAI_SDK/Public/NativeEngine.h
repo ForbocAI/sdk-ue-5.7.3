@@ -8,8 +8,8 @@
 /**
  * Native Engine Wrappers
  *
- * Isolates 3rd-party library (llama.cpp, sqlite-vss) mechanics from the SDK
- * logic. Supports a "mock" mode for CI environments without native binaries.
+ * Isolates 3rd-party library (llama.cpp, sqlite-vec) mechanics from the SDK
+ * logic. Requires native binaries — returns errors when unavailable.
  */
 namespace Native {
 namespace Llama {
@@ -42,7 +42,7 @@ FORBOCAI_SDK_API FString InferStream(Context Ctx, const FString &Prompt,
                                      const FCortexConfig &Config,
                                      const TokenCallback &OnToken);
 
-/** Generates a deterministic embedding vector for text. */
+/** Generates an embedding vector for text using the loaded embedding model. */
 FORBOCAI_SDK_API TArray<float> Embed(Context Ctx, const FString &Text);
 
 } // namespace Llama

@@ -45,6 +45,9 @@ xcuserdata/
 __pycache__/
 *.py[cod]
 
+# Runtime assets (downloaded on first use, not committed)
+local_infrastructure/
+
 # Other
 *.log
 *.tmp

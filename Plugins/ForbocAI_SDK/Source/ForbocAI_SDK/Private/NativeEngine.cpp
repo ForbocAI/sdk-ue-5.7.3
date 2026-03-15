@@ -1,10 +1,7 @@
 #include "NativeEngine.h"
 #include "LlamaFacade.h"
-#include "HAL/CriticalSection.h"
-#include "HAL/PlatformProcess.h"
 #include "Misc/FileHelper.h"
 #include "Misc/Paths.h"
-#include "Misc/ScopeLock.h"
 
 #if WITH_FORBOC_SQLITE_VEC
 extern "C" {
@@ -18,19 +15,7 @@ extern "C" {
 
 namespace {
 
-constexpr int32 FallbackEmbeddingDimensions = 384;
-
-struct FMockLlamaContext {
-  FString ModelPath;
-  int32 Dimensions = FallbackEmbeddingDimensions;
-};
-
-struct FMockSqliteHandle {
-  FString Path;
-};
-
-FCriticalSection GMockSqliteMutex;
-TMap<FString, TMap<FString, FMemoryItem>> GMockSqliteRowsByPath;
+constexpr int32 EmbeddingDimensions = 384;
 
 uint64 StableHashString(const FString &Value) {
   uint64 Hash = 1469598103934665603ull;
@@ -40,108 +25,6 @@ uint64 StableHashString(const FString &Value) {
     Hash *= 1099511628211ull;
   }
   return Hash;
-}
-
-TArray<FString> TokenizeLowercase(const FString &Text) {
-  const FString LowerText = Text.ToLower();
-  TArray<FString> Tokens;
-  FString Current;
-
-  for (int32 Index = 0; Index < LowerText.Len(); ++Index) {
-    const TCHAR Ch = LowerText[Index];
-    if (FChar::IsAlnum(Ch)) {
-      Current.AppendChar(Ch);
-      continue;
-    }
-
-    if (!Current.IsEmpty()) {
-      Tokens.Add(Current);
-      Current.Empty();
-    }
-  }
-
-  if (!Current.IsEmpty()) {
-    Tokens.Add(Current);
-  }
-
-  if (Tokens.Num() == 0 && !LowerText.IsEmpty()) {
-    Tokens.Add(LowerText);
-  }
-
-  return Tokens;
-}
-
-void NormalizeVector(TArray<float> &Vector) {
-  float MagnitudeSquared = 0.0f;
-  for (float Value : Vector) {
-    MagnitudeSquared += Value * Value;
-  }
-
-  if (MagnitudeSquared <= KINDA_SMALL_NUMBER) {
-    return;
-  }
-
-  const float InverseMagnitude = 1.0f / FMath::Sqrt(MagnitudeSquared);
-  for (float &Value : Vector) {
-    Value *= InverseMagnitude;
-  }
-}
-
-TArray<float>
-BuildDeterministicEmbedding(const FString &Text,
-                            int32 Dimensions = FallbackEmbeddingDimensions) {
-  TArray<float> Vector;
-  Vector.Init(0.0f, Dimensions);
-
-  if (Text.IsEmpty() || Dimensions <= 0) {
-    return Vector;
-  }
-
-  const TArray<FString> Tokens = TokenizeLowercase(Text);
-  for (int32 TokenIndex = 0; TokenIndex < Tokens.Num(); ++TokenIndex) {
-    const FString &Token = Tokens[TokenIndex];
-    const uint64 TokenHash = StableHashString(Token);
-    const int32 SlotA =
-        static_cast<int32>(TokenHash % static_cast<uint64>(Dimensions));
-    const int32 SlotB = static_cast<int32>(((TokenHash >> 32) ^ TokenHash) %
-                                           static_cast<uint64>(Dimensions));
-    const float Weight = 1.0f + (static_cast<float>(TokenIndex % 5) * 0.1f);
-
-    Vector[SlotA] += Weight;
-    if (SlotB != SlotA) {
-      Vector[SlotB] += Weight * 0.5f;
-    }
-  }
-
-  const int32 WholeTextSlot = static_cast<int32>(
-      StableHashString(Text) % static_cast<uint64>(Dimensions));
-  Vector[WholeTextSlot] += 0.25f;
-
-  NormalizeVector(Vector);
-  return Vector;
-}
-
-float CosineSimilarity(const TArray<float> &A, const TArray<float> &B) {
-  const int32 Count = FMath::Min(A.Num(), B.Num());
-  if (Count <= 0) {
-    return 0.0f;
-  }
-
-  float Dot = 0.0f;
-  float NormA = 0.0f;
-  float NormB = 0.0f;
-
-  for (int32 Index = 0; Index < Count; ++Index) {
-    Dot += A[Index] * B[Index];
-    NormA += A[Index] * A[Index];
-    NormB += B[Index] * B[Index];
-  }
-
-  if (NormA <= KINDA_SMALL_NUMBER || NormB <= KINDA_SMALL_NUMBER) {
-    return 0.0f;
-  }
-
-  return Dot / FMath::Sqrt(NormA * NormB);
 }
 
 FString MakeStableMemoryId(const FMemoryItem &Item) {
@@ -170,19 +53,11 @@ FString ApplyStopTokens(const FString &Value,
   return EarliestStop == INDEX_NONE ? Value : Value.Left(EarliestStop);
 }
 
-FMockSqliteHandle *AsMockSqliteHandle(Native::Sqlite::DB Database) {
-  return reinterpret_cast<FMockSqliteHandle *>(Database);
-}
-
 FMemoryItem PrepareStoredItem(const FMemoryItem &Item) {
   FMemoryItem StoredItem = Item;
 
   if (StoredItem.Id.IsEmpty()) {
     StoredItem.Id = MakeStableMemoryId(StoredItem);
-  }
-
-  if (StoredItem.Embedding.IsEmpty()) {
-    StoredItem.Embedding = BuildDeterministicEmbedding(StoredItem.Text);
   }
 
   StoredItem.Similarity = 0.0f;
@@ -200,14 +75,7 @@ Context LoadModel(const FString &Path) {
   return reinterpret_cast<Context>(
       LlamaFacade::LoadInferenceModel(Utf8Path.Get()));
 #else
-  if (Path.IsEmpty()) {
-    return nullptr;
-  }
-
-  if (FPaths::FileExists(Path) || Path.Contains(TEXT("test_model.bin"))) {
-    return reinterpret_cast<Context>(new FMockLlamaContext{Path});
-  }
-
+  UE_LOG(LogTemp, Error, TEXT("ForbocAI: LoadModel requires WITH_FORBOC_NATIVE=1. Native libs not available."));
   return nullptr;
 #endif
 }
@@ -231,8 +99,6 @@ void FreeModel(Context Ctx) {
 #if WITH_FORBOC_NATIVE
   LlamaFacade::FreeContext(
       reinterpret_cast<struct llama_facade_context *>(Ctx));
-#else
-  delete reinterpret_cast<FMockLlamaContext *>(Ctx);
 #endif
 }
 
@@ -240,16 +106,17 @@ TArray<float> Embed(Context Ctx, const FString &Text) {
 #if WITH_FORBOC_NATIVE
   if (Ctx) {
     TArray<float> Out;
-    Out.SetNum(FallbackEmbeddingDimensions);
+    Out.SetNum(EmbeddingDimensions);
     auto Utf8 = StringCast<UTF8CHAR>(*Text);
     if (LlamaFacade::Embed(
             reinterpret_cast<struct llama_facade_context *>(Ctx),
-            Utf8.Get(), Out.GetData(), FallbackEmbeddingDimensions)) {
+            Utf8.Get(), Out.GetData(), EmbeddingDimensions)) {
       return Out;
     }
   }
 #endif
-  return BuildDeterministicEmbedding(Text, FallbackEmbeddingDimensions);
+  UE_LOG(LogTemp, Error, TEXT("ForbocAI: Embed failed — native embedding model required."));
+  return TArray<float>();
 }
 
 FString Infer(Context Ctx, const FString &Prompt, int32 MaxTokens) {
@@ -269,13 +136,35 @@ FString Infer(Context Ctx, const FString &Prompt, int32 MaxTokens) {
   }
   return TEXT("Error: Inference failed");
 #else
-  FPlatformProcess::Sleep(0.1f);
-  return FString::Printf(TEXT("Simulated local response for: %s"),
-                         *Prompt.Left(30));
+  UE_LOG(LogTemp, Error, TEXT("ForbocAI: Infer requires WITH_FORBOC_NATIVE=1. Native libs not available."));
+  return TEXT("Error: Native inference not available");
 #endif
 }
 
 FString Infer(Context Ctx, const FString &Prompt, const FCortexConfig &Config) {
+  // G11: If GBNF grammar is provided, use grammar-constrained inference
+  if (!Config.GbnfGrammar.IsEmpty()) {
+#if WITH_FORBOC_NATIVE
+    if (!Ctx) {
+      return TEXT("Error: Model not loaded");
+    }
+    auto Utf8Prompt = StringCast<UTF8CHAR>(*Prompt);
+    auto Utf8Grammar = StringCast<UTF8CHAR>(*Config.GbnfGrammar);
+    char *Result = LlamaFacade::InferWithGrammar(
+        reinterpret_cast<struct llama_facade_context *>(Ctx), Utf8Prompt.Get(),
+        Config.MaxTokens, Config.Temperature > 0.0f ? Config.Temperature : 0.8f,
+        Utf8Grammar.Get());
+    if (Result) {
+      FString Out(UTF8_TO_TCHAR(Result));
+      free(Result);
+      return ApplyStopTokens(Out, Config.Stop);
+    }
+    return TEXT("Error: Grammar-constrained inference failed");
+#else
+    UE_LOG(LogTemp, Error, TEXT("ForbocAI: Grammar-constrained inference requires WITH_FORBOC_NATIVE=1."));
+    return TEXT("Error: Native inference not available");
+#endif
+  }
   return ApplyStopTokens(Infer(Ctx, Prompt, Config.MaxTokens), Config.Stop);
 }
 
@@ -320,16 +209,8 @@ FString InferStream(Context Ctx, const FString &Prompt,
 
   return ApplyStopTokens(State.Accumulated, Config.Stop);
 #else
-  // Mock: simulate streaming by splitting the simulated response into words
-  FString Full = FString::Printf(TEXT("Simulated local response for: %s"),
-                                 *Prompt.Left(30));
-  TArray<FString> Words;
-  Full.ParseIntoArray(Words, TEXT(" "), true);
-  for (int32 i = 0; i < Words.Num(); ++i) {
-    FString Token = (i > 0 ? TEXT(" ") : TEXT("")) + Words[i];
-    OnToken(Token);
-  }
-  return Full;
+  UE_LOG(LogTemp, Error, TEXT("ForbocAI: InferStream requires WITH_FORBOC_NATIVE=1. Native libs not available."));
+  return TEXT("Error: Native inference not available");
 #endif
 }
 
@@ -433,12 +314,8 @@ DB Open(const FString &Path) {
   FSqliteHandle *Handle = new FSqliteHandle{Db, NormalizedPath};
   return reinterpret_cast<DB>(Handle);
 #else
-  {
-    FScopeLock Lock(&GMockSqliteMutex);
-    GMockSqliteRowsByPath.FindOrAdd(NormalizedPath);
-  }
-
-  return reinterpret_cast<DB>(new FMockSqliteHandle{NormalizedPath});
+  UE_LOG(LogTemp, Error, TEXT("ForbocAI: Sqlite::Open requires WITH_FORBOC_SQLITE_VEC=1. Native libs not available."));
+  return nullptr;
 #endif
 }
 
@@ -459,7 +336,7 @@ void Close(DB Database) {
   }
   delete Handle;
 #else
-  delete AsMockSqliteHandle(Database);
+  (void)Database;
 #endif
 }
 
@@ -477,14 +354,7 @@ void Clear(DB Database) {
   sqlite3_exec(Handle->Db, "DELETE FROM memories;", nullptr, nullptr,
                nullptr);
 #else
-  const FMockSqliteHandle *Handle = AsMockSqliteHandle(Database);
-  if (!Handle) {
-    return;
-  }
-
-  FScopeLock Lock(&GMockSqliteMutex);
-  GMockSqliteRowsByPath.Remove(Handle->Path);
-  GMockSqliteRowsByPath.FindOrAdd(Handle->Path);
+  (void)Database;
 #endif
 }
 
@@ -506,9 +376,7 @@ void ClearPath(const FString &Path) {
   // layers (clearNodeMemoryThunk).
   static_cast<void>(NormalizedPath);
 #else
-  FScopeLock Lock(&GMockSqliteMutex);
-  GMockSqliteRowsByPath.Remove(NormalizedPath);
-  GMockSqliteRowsByPath.FindOrAdd(NormalizedPath);
+  (void)NormalizedPath;
 #endif
 }
 
@@ -577,41 +445,9 @@ TArray<FMemoryItem> SearchRows(DB Database, const TArray<float> &Vector,
 
   return Results;
 #else
-  const FMockSqliteHandle *Handle = AsMockSqliteHandle(Database);
-  if (!Handle) {
-    return Results;
-  }
-
-  {
-    FScopeLock Lock(&GMockSqliteMutex);
-    if (const TMap<FString, FMemoryItem> *Rows =
-            GMockSqliteRowsByPath.Find(Handle->Path)) {
-      Results.Reserve(Rows->Num());
-      for (const TPair<FString, FMemoryItem> &Entry : *Rows) {
-        FMemoryItem Item = Entry.Value;
-        if (Item.Embedding.IsEmpty()) {
-          Item.Embedding = BuildDeterministicEmbedding(Item.Text);
-        }
-        Item.Similarity = CosineSimilarity(Vector, Item.Embedding);
-        Results.Add(MoveTemp(Item));
-      }
-    }
-  }
-
-  Results.Sort([](const FMemoryItem &A, const FMemoryItem &B) {
-    if (!FMath::IsNearlyEqual(A.Similarity, B.Similarity)) {
-      return A.Similarity > B.Similarity;
-    }
-    if (!FMath::IsNearlyEqual(A.Importance, B.Importance)) {
-      return A.Importance > B.Importance;
-    }
-    return A.Id < B.Id;
-  });
-
-  if (TopK > 0 && Results.Num() > TopK) {
-    Results.SetNum(TopK, EAllowShrinking::No);
-  }
-
+  (void)Database;
+  (void)Vector;
+  (void)TopK;
   return Results;
 #endif
 }
@@ -621,17 +457,9 @@ bool Upsert(DB Database, const FMemoryItem &Item) {
   // When no explicit embedding is provided, rely on Item.Embedding.
   return Upsert(Database, Item, Item.Embedding);
 #else
-  FMockSqliteHandle *Handle = AsMockSqliteHandle(Database);
-  if (!Handle) {
-    return false;
-  }
-
-  FMemoryItem StoredItem = PrepareStoredItem(Item);
-
-  FScopeLock Lock(&GMockSqliteMutex);
-  GMockSqliteRowsByPath.FindOrAdd(Handle->Path).FindOrAdd(StoredItem.Id) =
-      MoveTemp(StoredItem);
-  return true;
+  (void)Database;
+  (void)Item;
+  return false;
 #endif
 }
 
@@ -695,9 +523,10 @@ bool Upsert(DB Database, const FMemoryItem &Item, const TArray<float> &Vector) {
   sqlite3_finalize(Stmt);
   return bOk;
 #else
-  FMemoryItem StoredItem = Item;
-  StoredItem.Embedding = Vector;
-  return Upsert(Database, StoredItem);
+  (void)Database;
+  (void)Item;
+  (void)Vector;
+  return false;
 #endif
 }
 

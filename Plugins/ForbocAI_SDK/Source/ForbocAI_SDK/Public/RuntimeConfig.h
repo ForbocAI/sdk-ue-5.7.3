@@ -19,7 +19,7 @@
  */
 namespace SDKConfig {
 
-/** Dev default: localhost. Production: api.forboc.ai (set via env or config). */
+/** Default: localhost for dev. Override via FORBOCAI_API_URL env var or config file. */
 inline constexpr TCHAR DEFAULT_API_URL[] = TEXT("http://localhost:8080");
 inline constexpr TCHAR PRODUCTION_API_URL[] = TEXT("https://api.forboc.ai");
 inline constexpr int32 DEFAULT_VECTOR_DIMENSION = 384;
@@ -129,7 +129,7 @@ inline int32 GetMaxRecallResults() {
   return MaxRecallResultsStorage();
 }
 
-inline FString GetSdkVersion() { return TEXT("0.6.1"); }
+inline FString GetSdkVersion() { return TEXT("0.6.3"); }
 
 // ---------------------------------------------------------------------------
 // Setters
