@@ -5,6 +5,7 @@
 
 using namespace rtk;
 using namespace GhostSlice;
+namespace Actions = GhostSlice::Actions;
 
 /**
  * Test: GhostSessionStarted sets session and status

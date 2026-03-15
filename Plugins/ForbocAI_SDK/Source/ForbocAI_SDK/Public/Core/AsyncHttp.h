@@ -10,11 +10,12 @@
 #include "Serialization/JsonReader.h"
 #include "Serialization/JsonSerializer.h"
 #include "functional_core.hpp"
-#include <type_traits>
 
 namespace func {
 namespace AsyncHttp {
 namespace detail {
+
+template <typename T, typename Enable = void> struct JsonDeserializer;
 
 template <typename JsonValueT>
 bool DeserializeStringArrayRecursive(
@@ -33,25 +34,25 @@ template <typename T, typename JsonValueT>
 bool DeserializeStructArrayRecursive(
     const TArray<TSharedPtr<JsonValueT>> &JsonValues, int32 Index,
     TArray<T> &OutValue) {
+  const TSharedPtr<FJsonObject> JsonObject =
+      Index == JsonValues.Num()
+          ? TSharedPtr<FJsonObject>()
+          : (JsonValues[Index].IsValid() ? JsonValues[Index]->AsObject()
+                                         : TSharedPtr<FJsonObject>());
+  T Item;
   return Index == JsonValues.Num()
              ? true
              : !JsonValues[Index].IsValid()
                    ? false
-                   : !JsonValues[Index]->AsObject().IsValid()
+                   : !JsonObject.IsValid()
                          ? false
-                         : []() { return true; }(),
-               [&]() -> bool {
-                 T Item;
-                 const TSharedPtr<FJsonObject> JsonObject =
-                     JsonValues[Index]->AsObject();
-                 return !FJsonObjectConverter::JsonObjectToUStruct(
-                            JsonObject.ToSharedRef(), T::StaticStruct(), &Item,
-                            0, 0)
-                            ? false
-                            : (OutValue.Add(Item),
-                               DeserializeStructArrayRecursive<T>(
-                                   JsonValues, Index + 1, OutValue));
-               }();
+                         : !FJsonObjectConverter::JsonObjectToUStruct(
+                               JsonObject.ToSharedRef(), T::StaticStruct(),
+                               &Item, 0, 0)
+                               ? false
+                               : (OutValue.Add(Item),
+                                  DeserializeStructArrayRecursive<T>(
+                                      JsonValues, Index + 1, OutValue));
 }
 
 template <typename CallbackT>
@@ -64,12 +65,60 @@ void NotifyCallbacksRecursive(const std::vector<CallbackT> &Callbacks,
          NotifyCallbacksRecursive(Callbacks, Index + 1, Body, Code));
 }
 
+inline bool IsWriteVerb(const FString &Verb) {
+  return Verb == TEXT("POST") || Verb == TEXT("PUT") || Verb == TEXT("PATCH");
+}
+
+inline bool ApplyPayload(IHttpRequest &Request, const FString &Verb,
+                         const FString &Payload) {
+  return IsWriteVerb(Verb)
+             ? (Request.SetHeader(TEXT("Content-Type"),
+                                  TEXT("application/json; charset=utf-8")),
+                Request.SetContentAsString(Payload), true)
+             : true;
+}
+
+inline bool ApplyAuthorization(IHttpRequest &Request, const FString &ApiKey) {
+  return ApiKey.IsEmpty()
+             ? true
+             : (Request.SetHeader(TEXT("Authorization"),
+                                  FString::Printf(TEXT("Bearer %s"), *ApiKey)),
+                true);
+}
+
+template <typename T>
+func::HttpResult<T> DecodeContentResult(const FString &Content,
+                                        HttpStatusCode Code) {
+  T ResultPayload;
+  return Content.IsEmpty()
+             ? func::HttpResult<T>::Success(ResultPayload, Code)
+             : JsonDeserializer<T>::Deserialize(Content, ResultPayload)
+                   ? func::HttpResult<T>::Success(ResultPayload, Code)
+                   : func::HttpResult<T>::Failure(
+                         "JSON deserialization failed", Code);
+}
+
+template <typename T>
+void ResolveRequestCompletion(
+    const std::function<void(func::HttpResult<T>)> &Resolve,
+    FHttpResponsePtr Res, bool bWasSuccessful) {
+  const HttpStatusCode Code = Res.IsValid() ? Res->GetResponseCode() : 0;
+  const FString Content = Res.IsValid() ? Res->GetContentAsString() : TEXT("");
+
+  Resolve((!bWasSuccessful || !Res.IsValid())
+              ? func::HttpResult<T>::Failure("Network failure", 0)
+              : (Code < 200 || Code >= 300)
+                    ? func::HttpResult<T>::Failure(TCHAR_TO_UTF8(*Content),
+                                                   Code)
+                    : DecodeContentResult<T>(Content, Code));
+}
+
 /**
  * Deserializes an HTTP payload into a UStruct-backed value.
  * User Story: As generic HTTP decoding, I need a default deserializer so API
  * responses can hydrate SDK structs without endpoint-specific code.
  */
-template <typename T, typename Enable = void> struct JsonDeserializer {
+template <typename T, typename Enable> struct JsonDeserializer {
   static bool Deserialize(const FString &Content, T &OutValue) {
     return FJsonObjectConverter::JsonObjectStringToUStruct(Content, &OutValue, 0,
                                                            0);
@@ -109,12 +158,10 @@ template <> struct JsonDeserializer<TArray<FString>, void> {
   static bool Deserialize(const FString &Content, TArray<FString> &OutValue) {
     TSharedRef<TJsonReader<>> Reader = TJsonReaderFactory<>::Create(Content);
     TArray<TSharedPtr<FJsonValue>> JsonValues;
-    if (!FJsonSerializer::Deserialize(Reader, JsonValues)) {
-      return false;
-    }
-
-    OutValue.Empty(JsonValues.Num());
-    return DeserializeStringArrayRecursive(JsonValues, 0, OutValue);
+    return !FJsonSerializer::Deserialize(Reader, JsonValues)
+               ? false
+               : (OutValue.Empty(JsonValues.Num()),
+                  DeserializeStringArrayRecursive(JsonValues, 0, OutValue));
   }
 };
 
@@ -127,12 +174,10 @@ template <typename T> struct JsonDeserializer<TArray<T>, void> {
   static bool Deserialize(const FString &Content, TArray<T> &OutValue) {
     TSharedRef<TJsonReader<>> Reader = TJsonReaderFactory<>::Create(Content);
     TArray<TSharedPtr<FJsonValue>> JsonValues;
-    if (!FJsonSerializer::Deserialize(Reader, JsonValues)) {
-      return false;
-    }
-
-    OutValue.Empty(JsonValues.Num());
-    return DeserializeStructArrayRecursive<T>(JsonValues, 0, OutValue);
+    return !FJsonSerializer::Deserialize(Reader, JsonValues)
+               ? false
+               : (OutValue.Empty(JsonValues.Num()),
+                  DeserializeStructArrayRecursive<T>(JsonValues, 0, OutValue));
   }
 };
 
@@ -146,7 +191,7 @@ func::AsyncResult<func::HttpResult<T>>
 CreateRequest(const FString &Verb, const FString &Url,
               const FString &ApiKey = TEXT(""),
               const FString &Payload = TEXT("")) {
-  return func::AsyncResult<func::HttpResult<T>>::create(
+  return func::createAsyncResult<func::HttpResult<T>>(
       [Verb, Url, ApiKey, Payload](std::function<void(func::HttpResult<T>)> Resolve,
                                    std::function<void(std::string)> Reject) {
         TSharedRef<IHttpRequest, ESPMode::ThreadSafe> Request =
@@ -154,47 +199,15 @@ CreateRequest(const FString &Verb, const FString &Url,
         Request->SetURL(Url);
         Request->SetVerb(Verb);
         Request->SetHeader(TEXT("Accept"), TEXT("application/json"));
-
-        if (Verb == TEXT("POST") || Verb == TEXT("PUT") || Verb == TEXT("PATCH")) {
-          Request->SetHeader(TEXT("Content-Type"),
-                             TEXT("application/json; charset=utf-8"));
-          Request->SetContentAsString(Payload);
-        }
-
-        if (!ApiKey.IsEmpty()) {
-          Request->SetHeader(TEXT("Authorization"),
-                             FString::Printf(TEXT("Bearer %s"), *ApiKey));
-        }
+        (void)Reject;
+        (void)ApplyPayload(*Request, Verb, Payload);
+        (void)ApplyAuthorization(*Request, ApiKey);
 
         Request->OnProcessRequestComplete().BindLambda(
             [Resolve](FHttpRequestPtr Req, FHttpResponsePtr Res,
                       bool bWasSuccessful) {
-              if (!bWasSuccessful || !Res.IsValid()) {
-                Resolve(func::HttpResult<T>::Failure("Network failure", 0));
-                return;
-              }
-
-              const HttpStatusCode Code = Res->GetResponseCode();
-              const FString Content = Res->GetContentAsString();
-
-              if (Code < 200 || Code >= 300) {
-                Resolve(func::HttpResult<T>::Failure(TCHAR_TO_UTF8(*Content),
-                                                     Code));
-                return;
-              }
-
-              T ResultPayload;
-              if (Content.IsEmpty()) {
-                Resolve(func::HttpResult<T>::Success(ResultPayload, Code));
-                return;
-              }
-
-              if (JsonDeserializer<T>::Deserialize(Content, ResultPayload)) {
-                Resolve(func::HttpResult<T>::Success(ResultPayload, Code));
-              } else {
-                Resolve(func::HttpResult<T>::Failure("JSON deserialization failed",
-                                                     Code));
-              }
+              (void)Req;
+              ResolveRequestCompletion<T>(Resolve, Res, bWasSuccessful);
             });
 
         Request->ProcessRequest();
@@ -262,6 +275,75 @@ inline TMap<FString, TSharedPtr<InFlightEntry>> &InFlightRequests() {
   return Map;
 }
 
+inline TSharedPtr<InFlightEntry>
+GetPendingEntry(TMap<FString, TSharedPtr<InFlightEntry>> &Map,
+                const FString &Key) {
+  const TSharedPtr<InFlightEntry> Existing =
+      Map.Contains(Key) ? Map[Key] : TSharedPtr<InFlightEntry>();
+  return Existing.IsValid() && !Existing->bCompleted
+             ? Existing
+             : TSharedPtr<InFlightEntry>();
+}
+
+template <typename T>
+func::HttpResult<T> DecodeDedupedResult(const FString &Body,
+                                        HttpStatusCode Code) {
+  return Code >= 200 && Code < 300
+             ? DecodeContentResult<T>(Body, Code)
+             : func::HttpResult<T>::Failure(TCHAR_TO_UTF8(*Body), Code);
+}
+
+template <typename T>
+func::HttpResult<T> DecodeRawResult(
+    const func::HttpResult<FString> &RawResult) {
+  return RawResult.bSuccess
+             ? DecodeContentResult<T>(RawResult.data, RawResult.ResponseCode)
+             : func::HttpResult<T>::Failure(RawResult.error,
+                                            RawResult.ResponseCode);
+}
+
+template <typename T>
+func::AsyncResult<func::HttpResult<T>>
+CreatePiggybackRequest(const TSharedPtr<InFlightEntry> &Existing) {
+  return func::createAsyncResult<func::HttpResult<T>>(
+      [Existing](std::function<void(func::HttpResult<T>)> Resolve,
+                 std::function<void(std::string)> Reject) {
+        (void)Reject;
+        Existing->Callbacks.push_back(
+            [Resolve](const FString &Body, HttpStatusCode Code) {
+              Resolve(DecodeDedupedResult<T>(Body, Code));
+            });
+      });
+}
+
+template <typename T>
+func::AsyncResult<func::HttpResult<T>>
+CreateFreshDedupedRequest(const FString &Key, const FString &Url,
+                          const FString &ApiKey) {
+  TSharedPtr<InFlightEntry> Entry = MakeShared<InFlightEntry>();
+  InFlightRequests().Add(Key, Entry);
+
+  return func::AsyncChain::then<func::HttpResult<FString>, func::HttpResult<T>>(
+      AsyncHttp::Get<FString>(Url, ApiKey),
+      [Key, Entry](const func::HttpResult<FString> &RawResult) {
+        func::HttpResult<T> DecodedResult = DecodeRawResult<T>(RawResult);
+        Entry->bCompleted = true;
+        Entry->ResponseBody =
+            RawResult.bSuccess ? RawResult.data
+                               : FString(UTF8_TO_TCHAR(RawResult.error.c_str()));
+        Entry->StatusCode = RawResult.ResponseCode;
+        AsyncHttp::detail::NotifyCallbacksRecursive(
+            Entry->Callbacks, 0, Entry->ResponseBody, Entry->StatusCode);
+        InFlightRequests().Remove(Key);
+        return func::createAsyncResult<func::HttpResult<T>>(
+            [DecodedResult](std::function<void(func::HttpResult<T>)> Resolve,
+                            std::function<void(std::string)> Reject) {
+              (void)Reject;
+              Resolve(DecodedResult);
+            });
+      });
+}
+
 } // namespace detail
 
 /**
@@ -275,64 +357,12 @@ GetDeduped(const FString &Url, const FString &ApiKey = TEXT("")) {
   const FString Key = Url;
 
   auto &Map = detail::InFlightRequests();
-  if (Map.Contains(Key)) {
-    TSharedPtr<detail::InFlightEntry> Existing = Map[Key];
-    if (!Existing->bCompleted) {
-      /**
-       * Already in-flight — piggyback on existing request
-       * User Story: As a maintainer, I need this note so the surrounding code intent stays clear during maintenance and debugging.
-       */
-      return func::AsyncResult<func::HttpResult<T>>::create(
-          [Existing](std::function<void(func::HttpResult<T>)> Resolve,
-                     std::function<void(std::string)>) {
-            Existing->Callbacks.push_back(
-                [Resolve](const FString &Body, HttpStatusCode Code) {
-                  if (Code >= 200 && Code < 300) {
-                    T Payload;
-                    if (AsyncHttp::detail::JsonDeserializer<T>::Deserialize(
-                            Body, Payload)) {
-                      Resolve(func::HttpResult<T>::Success(Payload, Code));
-                    } else {
-                      Resolve(func::HttpResult<T>::Failure(
-                          "JSON deserialization failed", Code));
-                    }
-                  } else {
-                    Resolve(func::HttpResult<T>::Failure(
-                        TCHAR_TO_UTF8(*Body), Code));
-                  }
-                });
-          });
-    }
-  }
+  const TSharedPtr<detail::InFlightEntry> Existing =
+      detail::GetPendingEntry(Map, Key);
 
-  /**
-   * First request for this URL — create entry and fire
-   * User Story: As a maintainer, I need this step note so I can follow the scenario progression and reason about the expected state changes.
-   */
-  TSharedPtr<detail::InFlightEntry> Entry =
-      MakeShared<detail::InFlightEntry>();
-  Map.Add(Key, Entry);
-
-  return func::AsyncChain::then<func::HttpResult<T>, func::HttpResult<T>>(
-      AsyncHttp::Get<T>(Url, ApiKey),
-      [Key, Entry](const func::HttpResult<T> &Result) {
-        auto &Map = detail::InFlightRequests();
-        Entry->bCompleted = true;
-
-        /**
-         * Notify piggybacked callers
-         * User Story: As a maintainer, I need this note so the surrounding code intent stays clear during maintenance and debugging.
-         */
-        const FString Body =
-            Result.bSuccess ? TEXT("") : FString(UTF8_TO_TCHAR(Result.Error.c_str()));
-        detail::NotifyCallbacksRecursive(Entry->Callbacks, 0, Body,
-                                         Result.StatusCode);
-
-        Map.Remove(Key);
-        return func::AsyncResult<func::HttpResult<T>>::create(
-            [Result](std::function<void(func::HttpResult<T>)> Resolve,
-                     std::function<void(std::string)>) { Resolve(Result); });
-      });
+  return Existing.IsValid()
+             ? detail::CreatePiggybackRequest<T>(Existing)
+             : detail::CreateFreshDedupedRequest<T>(Key, Url, ApiKey);
 }
 
 } // namespace Dedup

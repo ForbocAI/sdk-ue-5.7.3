@@ -38,7 +38,7 @@ fi
 RAW_NEW="$(rg -n '\bnew [A-Z]|\bdelete [A-Za-z]' \
   "$SRC/Private" \
   --glob '!**/Tests/**' \
-  --glob '!**/Native/SqliteAmalgamation.cpp' \
+  --glob '!**/Native/SqliteAmalgamation.c' \
   2>/dev/null || true)"
 if [ -n "$RAW_NEW" ]; then
   echo "[warn] raw new/delete found in first-party runtime code (tracked for remediation):"
@@ -72,6 +72,17 @@ if [ -n "$CORE_CLASSES" ]; then
   echo "$CORE_CLASSES"
 else
   echo "[ok] No class declarations in core FP zone"
+fi
+
+# 4b) AsyncHttp helper stays expression-style in the public FP helper surface.
+ASYNC_HTTP_IMPERATIVE="$(rg -n '\bif \(|\bfor \(|\bwhile \(' \
+  "$SRC/Public/Core/AsyncHttp.h" \
+  2>/dev/null || true)"
+if [ -n "$ASYNC_HTTP_IMPERATIVE" ]; then
+  echo "[warn] Imperative control flow remains in AsyncHttp.h (tracked for remediation):"
+  echo "$ASYNC_HTTP_IMPERATIVE"
+else
+  echo "[ok] AsyncHttp.h stays expression-style"
 fi
 
 # 5) No FPlatformProcess::CreateProc outside approved CLI/setup code.

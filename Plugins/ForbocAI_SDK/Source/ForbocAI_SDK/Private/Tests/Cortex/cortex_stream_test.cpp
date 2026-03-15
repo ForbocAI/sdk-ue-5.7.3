@@ -20,7 +20,7 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(
         EAutomationTestFlags::EngineFilter)
 bool FCortexStreamStartTest::RunTest(const FString &Parameters) {
   auto Slice = CortexSlice::CreateCortexSlice();
-  auto State = Slice.initialState;
+  CortexSlice::FCortexSliceState State;
 
   /**
    * Simulate some prior state
@@ -30,7 +30,7 @@ bool FCortexStreamStartTest::RunTest(const FString &Parameters) {
   State.Error = TEXT("old error");
 
   auto Action = CortexSlice::Actions::CortexStreamStart(TEXT("test prompt"));
-  State = Slice.reducer(State, Action);
+  State = Slice.Reducer(State, Action);
 
   TestTrue("bIsStreaming is true after StreamStart", State.bIsStreaming);
   TestTrue("StreamAccumulated is empty", State.StreamAccumulated.IsEmpty());
@@ -51,25 +51,25 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(
         EAutomationTestFlags::EngineFilter)
 bool FCortexStreamTokenTest::RunTest(const FString &Parameters) {
   auto Slice = CortexSlice::CreateCortexSlice();
-  auto State = Slice.initialState;
+  CortexSlice::FCortexSliceState State;
 
   /**
    * Start streaming
    * User Story: As a maintainer, I need this step note so I can follow the scenario progression and reason about the expected state changes.
    */
-  State = Slice.reducer(State, CortexSlice::Actions::CortexStreamStart(TEXT("p")));
+  State = Slice.Reducer(State, CortexSlice::Actions::CortexStreamStart(TEXT("p")));
 
   /**
    * Send tokens
    * User Story: As a maintainer, I need this note so the surrounding code intent stays clear during maintenance and debugging.
    */
-  State = Slice.reducer(State, CortexSlice::Actions::CortexStreamToken(TEXT("Hello")));
+  State = Slice.Reducer(State, CortexSlice::Actions::CortexStreamToken(TEXT("Hello")));
   TestEqual("First token accumulated", State.StreamAccumulated, TEXT("Hello"));
 
-  State = Slice.reducer(State, CortexSlice::Actions::CortexStreamToken(TEXT(" world")));
+  State = Slice.Reducer(State, CortexSlice::Actions::CortexStreamToken(TEXT(" world")));
   TestEqual("Second token accumulated", State.StreamAccumulated, TEXT("Hello world"));
 
-  State = Slice.reducer(State, CortexSlice::Actions::CortexStreamToken(TEXT("!")));
+  State = Slice.Reducer(State, CortexSlice::Actions::CortexStreamToken(TEXT("!")));
   TestEqual("Third token accumulated", State.StreamAccumulated, TEXT("Hello world!"));
 
   TestTrue("Still streaming", State.bIsStreaming);
@@ -88,15 +88,15 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(
         EAutomationTestFlags::EngineFilter)
 bool FCortexStreamCompleteTest::RunTest(const FString &Parameters) {
   auto Slice = CortexSlice::CreateCortexSlice();
-  auto State = Slice.initialState;
+  CortexSlice::FCortexSliceState State;
 
   /**
    * Start + tokens + complete
    * User Story: As a maintainer, I need this step note so I can follow the scenario progression and reason about the expected state changes.
    */
-  State = Slice.reducer(State, CortexSlice::Actions::CortexStreamStart(TEXT("p")));
-  State = Slice.reducer(State, CortexSlice::Actions::CortexStreamToken(TEXT("Hello")));
-  State = Slice.reducer(State, CortexSlice::Actions::CortexStreamComplete(TEXT("Hello world")));
+  State = Slice.Reducer(State, CortexSlice::Actions::CortexStreamStart(TEXT("p")));
+  State = Slice.Reducer(State, CortexSlice::Actions::CortexStreamToken(TEXT("Hello")));
+  State = Slice.Reducer(State, CortexSlice::Actions::CortexStreamComplete(TEXT("Hello world")));
 
   TestFalse("bIsStreaming is false after complete", State.bIsStreaming);
   TestEqual("LastResponseText set to full text", State.LastResponseText, TEXT("Hello world"));

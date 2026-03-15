@@ -5,6 +5,7 @@
 
 using namespace rtk;
 using namespace GhostSlice;
+namespace Actions = GhostSlice::Actions;
 
 /**
  * Test: Progress update for wrong session is a no-op
@@ -19,7 +20,8 @@ bool FGhostProgressWrongSessionTest::RunTest(const FString &Parameters) {
   FGhostSliceState State;
 
   State = GSlice.Reducer(
-      State, Actions::GhostSessionStarted(TEXT("sess_active"), TEXT("running")));
+      State, GhostSlice::Actions::GhostSessionStarted(TEXT("sess_active"),
+                                                      TEXT("running")));
 
   /**
    * Progress for a different session
@@ -27,7 +29,8 @@ bool FGhostProgressWrongSessionTest::RunTest(const FString &Parameters) {
    */
   State = GSlice.Reducer(
       State,
-      Actions::GhostSessionProgress(TEXT("sess_wrong"), TEXT("running"), 0.75f));
+      GhostSlice::Actions::GhostSessionProgress(TEXT("sess_wrong"),
+                                                TEXT("running"), 0.75f));
 
   TestEqual("Progress unchanged (0.0)", State.Progress, 0.0f);
   TestEqual("Session unchanged", State.ActiveSessionId,
@@ -49,11 +52,14 @@ bool FGhostFailedWrongSessionTest::RunTest(const FString &Parameters) {
   FGhostSliceState State;
 
   State = GSlice.Reducer(
-      State, Actions::GhostSessionStarted(TEXT("sess_ok"), TEXT("running")));
+      State,
+      GhostSlice::Actions::GhostSessionStarted(TEXT("sess_ok"),
+                                               TEXT("running")));
 
   State = GSlice.Reducer(
       State,
-      Actions::GhostSessionFailed(TEXT("sess_other"), TEXT("Some error")));
+      GhostSlice::Actions::GhostSessionFailed(TEXT("sess_other"),
+                                              TEXT("Some error")));
 
   TestEqual("Status still running", State.Status, FString(TEXT("running")));
   TestTrue("No error", State.Error.IsEmpty());
@@ -74,7 +80,8 @@ bool FGhostCompletedZeroResultsTest::RunTest(const FString &Parameters) {
   FGhostSliceState State;
 
   State = GSlice.Reducer(
-      State, Actions::GhostSessionStarted(TEXT("empty_sess"), TEXT("running")));
+      State, GhostSlice::Actions::GhostSessionStarted(TEXT("empty_sess"),
+                                                      TEXT("running")));
 
   FGhostTestReport EmptyReport;
   /**
@@ -82,7 +89,9 @@ bool FGhostCompletedZeroResultsTest::RunTest(const FString &Parameters) {
    * User Story: As a maintainer, I need this note so the surrounding code intent stays clear during maintenance and debugging.
    */
 
-  State = GSlice.Reducer(State, Actions::GhostSessionCompleted(EmptyReport));
+  State = GSlice.Reducer(State,
+                         GhostSlice::Actions::GhostSessionCompleted(
+                             EmptyReport));
 
   TestEqual("Status completed", State.Status, FString(TEXT("completed")));
   TestEqual("Progress 1.0", State.Progress, 1.0f);
@@ -109,13 +118,16 @@ bool FGhostSessionRestartTest::RunTest(const FString &Parameters) {
    * User Story: As a maintainer, I need this step note so I can follow the scenario progression and reason about the expected state changes.
    */
   State = GSlice.Reducer(
-      State, Actions::GhostSessionStarted(TEXT("sess_1"), TEXT("running")));
+      State,
+      GhostSlice::Actions::GhostSessionStarted(TEXT("sess_1"),
+                                               TEXT("running")));
   FGhostTestReport Report;
   FGhostTestResult Result;
   Result.Scenario = TEXT("test");
   Result.bPassed = true;
   Report.Results.Add(Result);
-  State = GSlice.Reducer(State, Actions::GhostSessionCompleted(Report));
+  State = GSlice.Reducer(State,
+                         GhostSlice::Actions::GhostSessionCompleted(Report));
   TestEqual("Status completed", State.Status, FString(TEXT("completed")));
 
   /**
@@ -123,7 +135,9 @@ bool FGhostSessionRestartTest::RunTest(const FString &Parameters) {
    * User Story: As a maintainer, I need this step note so I can follow the scenario progression and reason about the expected state changes.
    */
   State = GSlice.Reducer(
-      State, Actions::GhostSessionStarted(TEXT("sess_2"), TEXT("running")));
+      State,
+      GhostSlice::Actions::GhostSessionStarted(TEXT("sess_2"),
+                                               TEXT("running")));
 
   TestEqual("New session id", State.ActiveSessionId,
             FString(TEXT("sess_2")));
@@ -154,7 +168,8 @@ bool FGhostHistoryReplacementTest::RunTest(const FString &Parameters) {
   FGhostHistoryEntry Entry1;
   Entry1.SessionId = TEXT("old");
   History1.Add(Entry1);
-  State = GSlice.Reducer(State, Actions::GhostHistoryLoaded(History1));
+  State = GSlice.Reducer(State,
+                         GhostSlice::Actions::GhostHistoryLoaded(History1));
   TestEqual("First history", State.History.Num(), 1);
 
   /**
@@ -168,7 +183,8 @@ bool FGhostHistoryReplacementTest::RunTest(const FString &Parameters) {
   Entry2b.SessionId = TEXT("new_b");
   History2.Add(Entry2a);
   History2.Add(Entry2b);
-  State = GSlice.Reducer(State, Actions::GhostHistoryLoaded(History2));
+  State = GSlice.Reducer(State,
+                         GhostSlice::Actions::GhostHistoryLoaded(History2));
   TestEqual("History replaced", State.History.Num(), 2);
   TestEqual("First entry", State.History[0].SessionId,
             FString(TEXT("new_a")));

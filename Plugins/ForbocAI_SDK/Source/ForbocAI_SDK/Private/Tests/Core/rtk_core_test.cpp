@@ -17,7 +17,7 @@ bool FRtkStoreAndSliceTest::RunTest(const FString &Parameters) {
   SliceBuilder<FNpcMockState> Builder =
       sliceBuilder<FNpcMockState>(TEXT("npc"), FNpcMockState{TEXT(""), 100});
 
-  auto SetInfoAction = createCase<FNpcMockState>(
+  auto SetInfoAction = createCase<FNpcMockState, FNpcMockState>(
       Builder,
       TEXT("setInfo"),
       [](const FNpcMockState &State, const Action<FNpcMockState> &Action) {

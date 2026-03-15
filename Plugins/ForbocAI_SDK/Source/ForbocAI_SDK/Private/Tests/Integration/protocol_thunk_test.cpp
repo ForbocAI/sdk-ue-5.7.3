@@ -8,6 +8,51 @@
 #include "Protocol/ProtocolThunks.h"
 #include "RuntimeStore.h"
 
+// @covers:coreThunk:checkApiStatusThunk
+// @covers:coreThunk:clearMemoryRemoteThunk
+// @covers:coreThunk:clearNodeMemoryThunk
+// @covers:coreThunk:completeNodeCortexThunk
+// @covers:coreThunk:completeRemoteThunk
+// @covers:coreThunk:deleteRulesetThunk
+// @covers:coreThunk:doctorThunk
+// @covers:coreThunk:exportSoulThunk
+// @covers:coreThunk:generateNodeEmbeddingThunk
+// @covers:coreThunk:getBridgeRulesThunk
+// @covers:coreThunk:getGhostHistoryThunk
+// @covers:coreThunk:getGhostResultsThunk
+// @covers:coreThunk:getGhostStatusThunk
+// @covers:coreThunk:getSoulListThunk
+// @covers:coreThunk:importNpcFromSoulThunk
+// @covers:coreThunk:importSoulFromArweaveThunk
+// @covers:coreThunk:importSoulThunk
+// @covers:coreThunk:initNodeCortexThunk
+// @covers:coreThunk:initNodeMemoryThunk
+// @covers:coreThunk:initNodeVectorThunk
+// @covers:coreThunk:initRemoteCortexThunk
+// @covers:coreThunk:listCortexModelsThunk
+// @covers:coreThunk:listMemoryRemoteThunk
+// @covers:coreThunk:listRulePresetsThunk
+// @covers:coreThunk:listRulesetsThunk
+// @covers:coreThunk:loadBridgePresetThunk
+// @covers:coreThunk:localExportSoulThunk
+// @covers:coreThunk:localImportSoulThunk
+// @covers:coreThunk:localValidateBridgeThunk
+// @covers:coreThunk:nodeMemoryRecallThunk
+// @covers:coreThunk:nodeMemoryStoreThunk
+// @covers:coreThunk:processNPC
+// @covers:coreThunk:recallMemoryRemoteThunk
+// @covers:coreThunk:recallNodeMemoryThunk
+// @covers:coreThunk:registerRulesetThunk
+// @covers:coreThunk:remoteExportSoulThunk
+// @covers:coreThunk:startGhostThunk
+// @covers:coreThunk:stopGhostThunk
+// @covers:coreThunk:storeMemoryRemoteThunk
+// @covers:coreThunk:storeNodeMemoryThunk
+// @covers:coreThunk:streamNodeCortexThunk
+// @covers:coreThunk:validateBridgeThunk
+// @covers:coreThunk:verifySoulThunk
+
+
 using namespace rtk;
 
 /**
@@ -19,7 +64,7 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(FProtocolStoreWiringTest,
                                  EAutomationTestFlags_ApplicationContextMask |
                                      EAutomationTestFlags::EngineFilter)
 bool FProtocolStoreWiringTest::RunTest(const FString &Parameters) {
-  Store<FStoreState> TestStore = createStore();
+  EnhancedStore<FStoreState> TestStore = createStore();
 
   /**
    * Create NPC
@@ -66,18 +111,20 @@ bool FProtocolStoreWiringTest::RunTest(const FString &Parameters) {
    * Add history
    * User Story: As a maintainer, I need this step note so I can follow the scenario progression and reason about the expected state changes.
    */
-  TestStore.dispatch(NPCSlice::Actions::AddToHistory(TEXT("ag_test1"),
-                                                      TEXT("Player: Hello")));
-  TestStore.dispatch(NPCSlice::Actions::AddToHistory(TEXT("ag_test1"),
-                                                      TEXT("NPC: Greetings")));
+  TestStore.dispatch(NPCSlice::Actions::AddToHistory(
+      TEXT("ag_test1"), TEXT("player"), TEXT("Hello")));
+  TestStore.dispatch(NPCSlice::Actions::AddToHistory(
+      TEXT("ag_test1"), TEXT("npc"), TEXT("Greetings")));
 
   State = TestStore.getState();
   Found = NPCSlice::SelectNPCById(State.NPCs, TEXT("ag_test1"));
   TestTrue("NPC found after history", Found.hasValue);
   if (Found.hasValue) {
     TestEqual("Two history entries", Found.value.History.Num(), 2);
-    TestEqual("First history", Found.value.History[0],
-              FString(TEXT("Player: Hello")));
+    TestEqual("First history role", Found.value.History[0].Role,
+              FString(TEXT("player")));
+    TestEqual("First history content", Found.value.History[0].Content,
+              FString(TEXT("Hello")));
   }
 
   /**
@@ -140,7 +187,7 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(FProtocolDirectiveLifecycleTest,
                                  EAutomationTestFlags_ApplicationContextMask |
                                      EAutomationTestFlags::EngineFilter)
 bool FProtocolDirectiveLifecycleTest::RunTest(const FString &Parameters) {
-  Store<FStoreState> TestStore = createStore();
+  EnhancedStore<FStoreState> TestStore = createStore();
 
   /**
    * Set up NPC
@@ -160,16 +207,16 @@ bool FProtocolDirectiveLifecycleTest::RunTest(const FString &Parameters) {
       TEXT("run_1"), TEXT("ag_dir_test"), TEXT("Player attacks goblin")));
 
   FStoreState State = TestStore.getState();
-  TestEqual("Active directive", State.Directive.ActiveDirectiveId,
+  TestEqual("Active directive", State.Directives.ActiveDirectiveId,
             FString(TEXT("run_1")));
 
   func::Maybe<FDirectiveRun> Run =
-      DirectiveSlice::SelectDirectiveById(State.Directive, TEXT("run_1"));
+      DirectiveSlice::SelectDirectiveById(State.Directives, TEXT("run_1"));
   TestTrue("Run exists", Run.hasValue);
   if (Run.hasValue) {
     TestEqual("Run status running",
               static_cast<int32>(Run.value.Status),
-              static_cast<int32>(DirectiveSlice::EDirectiveStatus::Running));
+              static_cast<int32>(EDirectiveStatus::Running));
   }
 
   /**
@@ -197,12 +244,12 @@ bool FProtocolDirectiveLifecycleTest::RunTest(const FString &Parameters) {
       DirectiveSlice::Actions::VerdictValidated(TEXT("run_1"), Verdict));
 
   State = TestStore.getState();
-  Run = DirectiveSlice::SelectDirectiveById(State.Directive, TEXT("run_1"));
+  Run = DirectiveSlice::SelectDirectiveById(State.Directives, TEXT("run_1"));
   TestTrue("Run exists after verdict", Run.hasValue);
   if (Run.hasValue) {
     TestEqual("Run completed",
               static_cast<int32>(Run.value.Status),
-              static_cast<int32>(DirectiveSlice::EDirectiveStatus::Completed));
+              static_cast<int32>(EDirectiveStatus::Completed));
     TestTrue("Verdict valid", Run.value.bVerdictValid);
     TestEqual("Verdict dialogue", Run.value.VerdictDialogue,
               FString(TEXT("You swing your sword at the goblin!")));
@@ -220,7 +267,7 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(FProtocolMemoryLifecycleTest,
                                  EAutomationTestFlags_ApplicationContextMask |
                                      EAutomationTestFlags::EngineFilter)
 bool FProtocolMemoryLifecycleTest::RunTest(const FString &Parameters) {
-  Store<FStoreState> TestStore = createStore();
+  EnhancedStore<FStoreState> TestStore = createStore();
 
   /**
    * Store start
@@ -228,8 +275,8 @@ bool FProtocolMemoryLifecycleTest::RunTest(const FString &Parameters) {
    */
   TestStore.dispatch(MemorySlice::Actions::MemoryStoreStart());
   FStoreState State = TestStore.getState();
-  TestEqual("Store status loading", State.Memory.StoreStatus,
-            FString(TEXT("loading")));
+  TestEqual("Store status storing", State.Memory.StorageStatus,
+            FString(TEXT("storing")));
 
   /**
    * Store success
@@ -244,7 +291,7 @@ bool FProtocolMemoryLifecycleTest::RunTest(const FString &Parameters) {
   TestStore.dispatch(MemorySlice::Actions::MemoryStoreSuccess(Item));
 
   State = TestStore.getState();
-  TestEqual("Store status idle", State.Memory.StoreStatus,
+  TestEqual("Store status idle", State.Memory.StorageStatus,
             FString(TEXT("idle")));
 
   /**
@@ -253,8 +300,8 @@ bool FProtocolMemoryLifecycleTest::RunTest(const FString &Parameters) {
    */
   TestStore.dispatch(MemorySlice::Actions::MemoryRecallStart());
   State = TestStore.getState();
-  TestEqual("Recall status loading", State.Memory.RecallStatus,
-            FString(TEXT("loading")));
+  TestEqual("Recall status recalling", State.Memory.RecallStatus,
+            FString(TEXT("recalling")));
 
   /**
    * Recall success
@@ -285,7 +332,7 @@ bool FProtocolMemoryLifecycleTest::RunTest(const FString &Parameters) {
   TestStore.dispatch(
       MemorySlice::Actions::MemoryStoreFailed(TEXT("DB connection lost")));
   State = TestStore.getState();
-  TestEqual("Store status error", State.Memory.StoreStatus,
+  TestEqual("Store status error", State.Memory.StorageStatus,
             FString(TEXT("error")));
 
   /**
@@ -320,7 +367,7 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(FProtocolNpcRemovalCascadeTest,
                                  EAutomationTestFlags_ApplicationContextMask |
                                      EAutomationTestFlags::EngineFilter)
 bool FProtocolNpcRemovalCascadeTest::RunTest(const FString &Parameters) {
-  Store<FStoreState> TestStore = createStore();
+  EnhancedStore<FStoreState> TestStore = createStore();
 
   /**
    * Create NPC and directive
@@ -337,7 +384,7 @@ bool FProtocolNpcRemovalCascadeTest::RunTest(const FString &Parameters) {
   TestTrue("NPC exists",
            NPCSlice::SelectNPCById(State.NPCs, TEXT("ag_cascade")).hasValue);
   TestTrue("Directive exists",
-           DirectiveSlice::SelectDirectiveById(State.Directive,
+           DirectiveSlice::SelectDirectiveById(State.Directives,
                                                 TEXT("dir_cascade")).hasValue);
 
   /**
@@ -369,7 +416,7 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(FProtocolMultiNpcTest,
                                  EAutomationTestFlags_ApplicationContextMask |
                                      EAutomationTestFlags::EngineFilter)
 bool FProtocolMultiNpcTest::RunTest(const FString &Parameters) {
-  Store<FStoreState> TestStore = createStore();
+  EnhancedStore<FStoreState> TestStore = createStore();
 
   FNPCInternalState Npc1;
   Npc1.Id = TEXT("ag_m1");

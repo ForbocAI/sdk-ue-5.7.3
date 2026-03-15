@@ -1,3 +1,5 @@
+// @covers:api:getApiStatus
+
 /**
  * API endpoint integration tests — uses SDKConfig resolution (localhost:8080 default, FORBOCAI_API_URL override)
  * I.5 — Auth, response normalization, representative endpoints, error handling
@@ -15,6 +17,34 @@
 #include "Misc/AutomationTest.h"
 #include "RuntimeConfig.h"
 #include "Soul/SoulTypes.h"
+
+// @covers:api:deleteMemoryClear
+// @covers:api:deleteRule
+// @covers:api:getGhostHistory
+// @covers:api:getGhostResults
+// @covers:api:getGhostStatus
+// @covers:api:getNPC
+// @covers:api:getSoulImport
+// @covers:api:getSouls
+// @covers:api:postBridgePreset
+// @covers:api:postBridgeValidate
+// @covers:api:postContext
+// @covers:api:postCortexComplete
+// @covers:api:postCortexInit
+// @covers:api:postDirective
+// @covers:api:postGhostRun
+// @covers:api:postGhostStop
+// @covers:api:postMemoryStore
+// @covers:api:postNPC
+// @covers:api:postNpcImport
+// @covers:api:postNpcImportConfirm
+// @covers:api:postNpcProcess
+// @covers:api:postRuleRegister
+// @covers:api:postSoulExport
+// @covers:api:postSoulExportConfirm
+// @covers:api:postSoulVerify
+// @covers:api:postVerdict
+
 
 struct FApiEndpointTestState {
   bool bDone = false;
@@ -34,16 +64,17 @@ DEFINE_LATENT_AUTOMATION_COMMAND_THREE_PARAMETER(
     TSharedPtr<FApiEndpointTestState>, State);
 bool FHttpGetWaitComplete::Update() {
   if (!State->bStarted) {
+    const TSharedPtr<FApiEndpointTestState> SharedState = State;
     State->bStarted = true;
     func::AsyncHttp::Get<FString>(Url, ApiKey)
-        .then([State](const func::HttpResult<FString> &R) {
-          State->bDone = true;
-          State->bSuccess = R.bSuccess;
-          State->HttpCode = R.ResponseCode;
+        .then([SharedState](const func::HttpResult<FString> &R) {
+          SharedState->bDone = true;
+          SharedState->bSuccess = R.bSuccess;
+          SharedState->HttpCode = R.ResponseCode;
           if (R.bSuccess) {
-            State->Body = R.data;
+            SharedState->Body = R.data;
           } else {
-            State->Error = FString(UTF8_TO_TCHAR(R.error.c_str()));
+            SharedState->Error = FString(UTF8_TO_TCHAR(R.error.c_str()));
           }
         })
         .execute();
@@ -64,16 +95,17 @@ DEFINE_LATENT_AUTOMATION_COMMAND_FOUR_PARAMETER(
     TSharedPtr<FApiEndpointTestState>, State);
 bool FHttpPostWaitComplete::Update() {
   if (!State->bStarted) {
+    const TSharedPtr<FApiEndpointTestState> SharedState = State;
     State->bStarted = true;
     func::AsyncHttp::Post<FString>(Url, Payload, ApiKey)
-        .then([State](const func::HttpResult<FString> &R) {
-          State->bDone = true;
-          State->bSuccess = R.bSuccess;
-          State->HttpCode = R.ResponseCode;
+        .then([SharedState](const func::HttpResult<FString> &R) {
+          SharedState->bDone = true;
+          SharedState->bSuccess = R.bSuccess;
+          SharedState->HttpCode = R.ResponseCode;
           if (R.bSuccess) {
-            State->Body = R.data;
+            SharedState->Body = R.data;
           } else {
-            State->Error = FString(UTF8_TO_TCHAR(R.error.c_str()));
+            SharedState->Error = FString(UTF8_TO_TCHAR(R.error.c_str()));
           }
         })
         .execute();
@@ -104,7 +136,7 @@ bool FApiEndpointStatusNoAuthTest::RunTest(const FString &Parameters) {
   ADD_LATENT_AUTOMATION_COMMAND(
       FHttpGetWaitComplete(GetBaseUrl() + TEXT("/status"), TEXT(""), State));
 
-  ADD_LATENT_AUTOMATION_COMMAND(FDelayedCallbackLatentCommand(
+  ADD_LATENT_AUTOMATION_COMMAND(FDelayedFunctionLatentCommand(
       [this, State]() {
         TestTrue("Request completed", State->bDone);
         if (!State->bDone)
@@ -142,7 +174,7 @@ bool FApiEndpointSoulsValidKeyTest::RunTest(const FString &Parameters) {
   ADD_LATENT_AUTOMATION_COMMAND(
       FHttpGetWaitComplete(GetBaseUrl() + TEXT("/souls?limit=10"), Key, State));
 
-  ADD_LATENT_AUTOMATION_COMMAND(FDelayedCallbackLatentCommand(
+  ADD_LATENT_AUTOMATION_COMMAND(FDelayedFunctionLatentCommand(
       [this, State]() {
         TestTrue("Request completed", State->bDone);
         if (!State->bDone)
@@ -178,7 +210,7 @@ bool FApiEndpointSoulsNoKeyTest::RunTest(const FString &Parameters) {
       FHttpGetWaitComplete(GetBaseUrl() + TEXT("/souls?limit=10"), TEXT(""),
                            State));
 
-  ADD_LATENT_AUTOMATION_COMMAND(FDelayedCallbackLatentCommand(
+  ADD_LATENT_AUTOMATION_COMMAND(FDelayedFunctionLatentCommand(
       [this, State]() {
         TestTrue("Request completed", State->bDone);
         if (!State->bDone)
@@ -209,7 +241,7 @@ bool FApiEndpointSoulsInvalidKeyTest::RunTest(const FString &Parameters) {
       GetBaseUrl() + TEXT("/souls?limit=10"), TEXT("invalid_key_12345"),
       State));
 
-  ADD_LATENT_AUTOMATION_COMMAND(FDelayedCallbackLatentCommand(
+  ADD_LATENT_AUTOMATION_COMMAND(FDelayedFunctionLatentCommand(
       [this, State]() {
         TestTrue("Request completed", State->bDone);
         if (!State->bDone)
@@ -238,7 +270,7 @@ bool FApiEndpointNotFoundTest::RunTest(const FString &Parameters) {
   ADD_LATENT_AUTOMATION_COMMAND(FHttpGetWaitComplete(
       GetBaseUrl() + TEXT("/nonexistent-path-404"), TEXT(""), State));
 
-  ADD_LATENT_AUTOMATION_COMMAND(FDelayedCallbackLatentCommand(
+  ADD_LATENT_AUTOMATION_COMMAND(FDelayedFunctionLatentCommand(
       [this, State]() {
         TestTrue("Request completed", State->bDone);
         if (!State->bDone)
@@ -280,7 +312,7 @@ bool FApiEndpointPostDirectiveTest::RunTest(const FString &Parameters) {
   ADD_LATENT_AUTOMATION_COMMAND(
       FHttpPostWaitComplete(Url, Payload, Key, State));
 
-  ADD_LATENT_AUTOMATION_COMMAND(FDelayedCallbackLatentCommand(
+  ADD_LATENT_AUTOMATION_COMMAND(FDelayedFunctionLatentCommand(
       [this, State]() {
         TestTrue("Request completed", State->bDone);
         if (!State->bDone)

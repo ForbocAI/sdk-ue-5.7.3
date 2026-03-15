@@ -45,19 +45,20 @@ bool FProcessNPCWaitComplete::Update() {
   const int32 MaxPolls = 300;  // ~15s at 50ms
 
   if (!State->Store.IsValid()) {
+    const TSharedPtr<FProcessNPCTestState> SharedState = State;
     State->Store = MakeShared<rtk::EnhancedStore<FStoreState>>(createStore());
     State->Store->dispatch(rtk::processNPC(
         Params.NpcId, Params.Input, TEXT("{}"), Params.Persona, FAgentState(),
         rtk::LocalProtocolRuntime()))
-        .then([State](const FAgentResponse &R) {
-          State->bCompleted = true;
-          State->bSuccess = true;
-          State->Response = R;
+        .then([SharedState](const FAgentResponse &R) {
+          SharedState->bCompleted = true;
+          SharedState->bSuccess = true;
+          SharedState->Response = R;
         })
-        .catch_([State](std::string E) {
-          State->bCompleted = true;
-          State->bSuccess = false;
-          State->Error = FString(UTF8_TO_TCHAR(E.c_str()));
+        .catch_([SharedState](std::string E) {
+          SharedState->bCompleted = true;
+          SharedState->bSuccess = false;
+          SharedState->Error = FString(UTF8_TO_TCHAR(E.c_str()));
         })
         .execute();
     return false;
@@ -94,7 +95,7 @@ bool FProcessNPCMockFinalizeValidTest::RunTest(const FString &Parameters) {
                                TEXT("A friendly merchant")},
       0));
 
-  ADD_LATENT_AUTOMATION_COMMAND(FDelayedCallbackLatentCommand(
+  ADD_LATENT_AUTOMATION_COMMAND(FDelayedFunctionLatentCommand(
       [this, State]() {
         TestTrue("processNPC completed", State->bCompleted);
         if (!State->bCompleted)
@@ -114,7 +115,7 @@ bool FProcessNPCMockFinalizeValidTest::RunTest(const FString &Parameters) {
           TestEqual("Run completed",
                     static_cast<int32>(Run.value.Status),
                     static_cast<int32>(
-                        DirectiveSlice::EDirectiveStatus::Completed));
+                        EDirectiveStatus::Completed));
         }
 
         auto Npc =
@@ -152,7 +153,7 @@ bool FProcessNPCMockFinalizeInvalidTest::RunTest(const FString &Parameters) {
                                TEXT("A village guard")},
       0));
 
-  ADD_LATENT_AUTOMATION_COMMAND(FDelayedCallbackLatentCommand(
+  ADD_LATENT_AUTOMATION_COMMAND(FDelayedFunctionLatentCommand(
       [this, State]() {
         TestTrue("processNPC completed", State->bCompleted);
         if (!State->bCompleted)
@@ -196,7 +197,7 @@ bool FProcessNPCDirectiveLifecycleTest::RunTest(const FString &Parameters) {
                                TEXT("Test merchant")},
       0));
 
-  ADD_LATENT_AUTOMATION_COMMAND(FDelayedCallbackLatentCommand(
+  ADD_LATENT_AUTOMATION_COMMAND(FDelayedFunctionLatentCommand(
       [this, State]() {
         TestTrue("Completed", State->bCompleted);
         if (!State->bCompleted)
@@ -218,7 +219,7 @@ bool FProcessNPCDirectiveLifecycleTest::RunTest(const FString &Parameters) {
           TestEqual("Status completed",
                     static_cast<int32>(Run.value.Status),
                     static_cast<int32>(
-                        DirectiveSlice::EDirectiveStatus::Completed));
+                        EDirectiveStatus::Completed));
         }
       },
       0.01f));

@@ -18,6 +18,8 @@ namespace APISlice {
 
 using namespace rtk;
 
+extern rtk::ApiSlice<FStoreState> ForbocAiApi;
+
 namespace Detail {
 
 /**

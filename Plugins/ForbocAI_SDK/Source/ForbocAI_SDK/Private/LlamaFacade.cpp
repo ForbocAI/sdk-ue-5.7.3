@@ -8,6 +8,7 @@
  */
 
 #include "LlamaFacade.h"
+#include <cmath>
 #include <cstdlib>
 #include <cstring>
 #include <memory>
@@ -34,6 +35,18 @@ static void NormalizeVector(float *Data, int N) {
   for (int i = 0; i < N; ++i) {
     Data[i] *= InvNorm;
   }
+}
+
+static void ClearBatch(llama_batch &Batch) { Batch.n_tokens = 0; }
+
+static void AddBatchToken(llama_batch &Batch, llama_token Token, llama_pos Pos,
+                          bool bLogits) {
+  const int32_t Index = Batch.n_tokens++;
+  Batch.token[Index] = Token;
+  Batch.pos[Index] = Pos;
+  Batch.n_seq_id[Index] = 1;
+  Batch.seq_id[Index][0] = 0;
+  Batch.logits[Index] = bLogits ? 1 : 0;
 }
 
 namespace LlamaFacade {
@@ -131,7 +144,7 @@ char *Infer(llama_facade_context *Ctx, const char *PromptUtf8, int MaxTokens,
 
   int32_t Pos = 0;
   for (size_t i = 0; i < Tokens.size(); ++i) {
-    llama_batch_add(Batch, Tokens[i], Pos, {0}, true);
+    AddBatchToken(Batch, Tokens[i], Pos, true);
     ++Pos;
   }
   if (llama_decode(Ctx->Ctx, Batch) != 0) {
@@ -152,8 +165,8 @@ char *Infer(llama_facade_context *Ctx, const char *PromptUtf8, int MaxTokens,
     if (Len > 0) {
       Output.append(Buf, static_cast<size_t>(Len));
     }
-    llama_batch_clear(Batch);
-    llama_batch_add(Batch, Next, Pos, {0}, true);
+    ClearBatch(Batch);
+    AddBatchToken(Batch, Next, Pos, true);
     ++Pos;
     ++Generated;
     if (llama_decode(Ctx->Ctx, Batch) != 0) break;
@@ -193,7 +206,7 @@ int InferStream(llama_facade_context *Ctx, const char *PromptUtf8, int MaxTokens
 
   int32_t Pos = 0;
   for (size_t i = 0; i < Tokens.size(); ++i) {
-    llama_batch_add(Batch, Tokens[i], Pos, {0}, true);
+    AddBatchToken(Batch, Tokens[i], Pos, true);
     ++Pos;
   }
   if (llama_decode(Ctx->Ctx, Batch) != 0) {
@@ -212,8 +225,8 @@ int InferStream(llama_facade_context *Ctx, const char *PromptUtf8, int MaxTokens
     if (Len > 0) {
       OnToken(Buf, Len, UserData);
     }
-    llama_batch_clear(Batch);
-    llama_batch_add(Batch, Next, Pos, {0}, true);
+    ClearBatch(Batch);
+    AddBatchToken(Batch, Next, Pos, true);
     ++Pos;
     ++Generated;
     if (llama_decode(Ctx->Ctx, Batch) != 0) break;
@@ -263,7 +276,7 @@ char *InferWithGrammar(llama_facade_context *Ctx, const char *PromptUtf8,
 
   int32_t Pos = 0;
   for (size_t i = 0; i < Tokens.size(); ++i) {
-    llama_batch_add(Batch, Tokens[i], Pos, {0}, true);
+    AddBatchToken(Batch, Tokens[i], Pos, true);
     ++Pos;
   }
   if (llama_decode(Ctx->Ctx, Batch) != 0) {
@@ -284,8 +297,8 @@ char *InferWithGrammar(llama_facade_context *Ctx, const char *PromptUtf8,
     if (Len > 0) {
       Output.append(Buf, static_cast<size_t>(Len));
     }
-    llama_batch_clear(Batch);
-    llama_batch_add(Batch, Next, Pos, {0}, true);
+    ClearBatch(Batch);
+    AddBatchToken(Batch, Next, Pos, true);
     ++Pos;
     ++Generated;
     if (llama_decode(Ctx->Ctx, Batch) != 0) break;
@@ -314,7 +327,7 @@ bool Embed(llama_facade_context *Ctx, const char *TextUtf8, float *Out,
 
   llama_batch Batch = llama_batch_init(512, 0, 1);
   for (size_t i = 0; i < Tokens.size(); ++i) {
-    llama_batch_add(Batch, Tokens[i], static_cast<int32_t>(i), {0}, true);
+    AddBatchToken(Batch, Tokens[i], static_cast<int32_t>(i), true);
   }
 
   llama_memory_clear(llama_get_memory(Ctx->Ctx), true);

@@ -153,13 +153,24 @@ Result VerifyThirdParty() {
   const FString ThirdPartyDir = PluginDir / TEXT("ThirdParty");
 
   const FString LlamaInclude = ThirdPartyDir / TEXT("llama.cpp/include");
+  const FString LlamaHeader = LlamaInclude / TEXT("llama.h");
+  const FString GgmlHeader = LlamaInclude / TEXT("ggml.h");
+  const FString GgmlAllocHeader = LlamaInclude / TEXT("ggml-alloc.h");
+  const FString GgmlBackendHeader = LlamaInclude / TEXT("ggml-backend.h");
+  const FString GgmlCpuHeader = LlamaInclude / TEXT("ggml-cpu.h");
+  const FString GgmlOptHeader = LlamaInclude / TEXT("ggml-opt.h");
   const FString SqliteInclude = ThirdPartyDir / TEXT("sqlite-vss/include");
   const FString SqliteSrc = ThirdPartyDir / TEXT("sqlite-vss/src");
 
   IPlatformFile &PF = FPlatformFileManager::Get().GetPlatformFile();
 
   const bool bLlamaHeaders = PF.DirectoryExists(*LlamaInclude) &&
-                             PF.FileExists(*(LlamaInclude / TEXT("llama.h")));
+                             PF.FileExists(*LlamaHeader) &&
+                             PF.FileExists(*GgmlHeader) &&
+                             PF.FileExists(*GgmlAllocHeader) &&
+                             PF.FileExists(*GgmlBackendHeader) &&
+                             PF.FileExists(*GgmlCpuHeader) &&
+                             PF.FileExists(*GgmlOptHeader);
 
 #if PLATFORM_MAC
   const FString LlamaLib =
@@ -219,6 +230,7 @@ Result VerifyThirdParty() {
   UE_LOG(LogTemp, Display, TEXT(""));
   UE_LOG(LogTemp, Display, TEXT("  [%s] llama.cpp headers     (%s)"),
          bLlamaHeaders ? TEXT("OK") : TEXT("--"), *LlamaInclude);
+  UE_LOG(LogTemp, Display, TEXT("       required headers      (llama.h, ggml.h, ggml-alloc.h, ggml-backend.h, ggml-cpu.h, ggml-opt.h)"));
   UE_LOG(LogTemp, Display, TEXT("  [%s] llama.cpp library     (%s)"),
          bLlamaLib ? TEXT("OK") : TEXT("--"), *LlamaLib);
   UE_LOG(LogTemp, Display, TEXT("  [%s] ggml core libs        (ggml, ggml-base, ggml-cpu)"),
@@ -486,6 +498,10 @@ Result SetupThirdPartyDeps(rtk::EnhancedStore<FStoreState> &Store,
                 LlamaIncDir / TEXT("ggml-alloc.h"));
     DownloadOne(LlamaBase / TEXT("ggml/include/ggml-backend.h"),
                 LlamaIncDir / TEXT("ggml-backend.h"));
+    DownloadOne(LlamaBase / TEXT("ggml/include/ggml-cpu.h"),
+                LlamaIncDir / TEXT("ggml-cpu.h"));
+    DownloadOne(LlamaBase / TEXT("ggml/include/ggml-opt.h"),
+                LlamaIncDir / TEXT("ggml-opt.h"));
 
     UE_LOG(LogTemp, Display, TEXT(""));
     UE_LOG(LogTemp, Display, TEXT(

@@ -6,6 +6,7 @@
 
 using namespace rtk;
 using namespace DirectiveSlice;
+namespace Actions = DirectiveSlice::Actions;
 
 /**
  * Test: RunFailed on a non-existent directive is a no-op
@@ -21,7 +22,8 @@ bool FDirectiveFailNonExistentTest::RunTest(const FString &Parameters) {
 
   State = DirSlice.Reducer(
       State,
-      Actions::DirectiveRunFailed(TEXT("does_not_exist"), TEXT("phantom error")));
+      DirectiveSlice::Actions::DirectiveRunFailed(TEXT("does_not_exist"),
+                                                  TEXT("phantom error")));
 
   TestEqual("No directives created", SelectAllDirectives(State).Num(), 0);
   TestFalse("Non-existent id still not found",
@@ -48,7 +50,7 @@ bool FDirectiveVerdictNonExistentTest::RunTest(const FString &Parameters) {
 
   State = DirSlice.Reducer(
       State,
-      Actions::VerdictValidated(TEXT("ghost_id"), Verdict));
+      DirectiveSlice::Actions::VerdictValidated(TEXT("ghost_id"), Verdict));
 
   TestEqual("No directives created", SelectAllDirectives(State).Num(), 0);
   return true;
@@ -70,7 +72,8 @@ bool FDirectiveReceivedNonExistentTest::RunTest(const FString &Parameters) {
   Response.MemoryRecall.Query = TEXT("lost context");
 
   State = DirSlice.Reducer(
-      State, Actions::DirectiveReceived(TEXT("missing_id"), Response));
+      State,
+      DirectiveSlice::Actions::DirectiveReceived(TEXT("missing_id"), Response));
 
   TestEqual("No directives created", SelectAllDirectives(State).Num(), 0);
   return true;
@@ -90,10 +93,12 @@ bool FDirectiveDuplicateStartTest::RunTest(const FString &Parameters) {
 
   State = DirSlice.Reducer(
       State,
-      Actions::DirectiveRunStarted(TEXT("dup"), TEXT("npc1"), TEXT("First")));
+      DirectiveSlice::Actions::DirectiveRunStarted(TEXT("dup"), TEXT("npc1"),
+                                                   TEXT("First")));
   State = DirSlice.Reducer(
       State,
-      Actions::DirectiveRunStarted(TEXT("dup"), TEXT("npc2"), TEXT("Second")));
+      DirectiveSlice::Actions::DirectiveRunStarted(TEXT("dup"), TEXT("npc2"),
+                                                   TEXT("Second")));
 
   func::Maybe<FDirectiveRun> Found = SelectDirectiveById(State, TEXT("dup"));
   TestTrue("Directive exists", Found.hasValue);
@@ -123,10 +128,12 @@ bool FDirectiveFailThenRestartTest::RunTest(const FString &Parameters) {
 
   State = DirSlice.Reducer(
       State,
-      Actions::DirectiveRunStarted(TEXT("r1"), TEXT("npc_a"), TEXT("Try 1")));
+      DirectiveSlice::Actions::DirectiveRunStarted(TEXT("r1"), TEXT("npc_a"),
+                                                   TEXT("Try 1")));
   State = DirSlice.Reducer(
       State,
-      Actions::DirectiveRunFailed(TEXT("r1"), TEXT("Timeout")));
+      DirectiveSlice::Actions::DirectiveRunFailed(TEXT("r1"),
+                                                  TEXT("Timeout")));
 
   func::Maybe<FDirectiveRun> Failed = SelectDirectiveById(State, TEXT("r1"));
   TestTrue("Failed exists", Failed.hasValue);
@@ -142,7 +149,8 @@ bool FDirectiveFailThenRestartTest::RunTest(const FString &Parameters) {
    */
   State = DirSlice.Reducer(
       State,
-      Actions::DirectiveRunStarted(TEXT("r1"), TEXT("npc_a"), TEXT("Try 2")));
+      DirectiveSlice::Actions::DirectiveRunStarted(TEXT("r1"), TEXT("npc_a"),
+                                                   TEXT("Try 2")));
 
   func::Maybe<FDirectiveRun> Restarted = SelectDirectiveById(State, TEXT("r1"));
   TestTrue("Restarted exists", Restarted.hasValue);
@@ -172,10 +180,12 @@ bool FDirectiveClearNoMatchTest::RunTest(const FString &Parameters) {
 
   State = DirSlice.Reducer(
       State,
-      Actions::DirectiveRunStarted(TEXT("d1"), TEXT("npc_a"), TEXT("obs")));
+      DirectiveSlice::Actions::DirectiveRunStarted(TEXT("d1"), TEXT("npc_a"),
+                                                   TEXT("obs")));
 
   State = DirSlice.Reducer(
-      State, Actions::ClearDirectivesForNpc(TEXT("npc_nonexistent")));
+      State, DirectiveSlice::Actions::ClearDirectivesForNpc(
+                 TEXT("npc_nonexistent")));
 
   TestEqual("Original directive remains", SelectAllDirectives(State).Num(), 1);
   TestTrue("d1 still found", SelectDirectiveById(State, TEXT("d1")).hasValue);
@@ -197,7 +207,8 @@ bool FDirectiveInvalidVerdictTest::RunTest(const FString &Parameters) {
 
   State = DirSlice.Reducer(
       State,
-      Actions::DirectiveRunStarted(TEXT("iv"), TEXT("npc1"), TEXT("obs")));
+      DirectiveSlice::Actions::DirectiveRunStarted(TEXT("iv"), TEXT("npc1"),
+                                                   TEXT("obs")));
 
   FVerdictResponse Verdict;
   Verdict.bValid = false;
@@ -207,7 +218,7 @@ bool FDirectiveInvalidVerdictTest::RunTest(const FString &Parameters) {
   Verdict.Action.Target = TEXT("civilian");
 
   State = DirSlice.Reducer(
-      State, Actions::VerdictValidated(TEXT("iv"), Verdict));
+      State, DirectiveSlice::Actions::VerdictValidated(TEXT("iv"), Verdict));
 
   func::Maybe<FDirectiveRun> Found = SelectDirectiveById(State, TEXT("iv"));
   TestTrue("Run exists", Found.hasValue);

@@ -6,6 +6,7 @@
 
 using namespace rtk;
 using namespace DirectiveSlice;
+namespace Actions = DirectiveSlice::Actions;
 
 /**
  * Test: Full happy path — Started → Received → ContextComposed → Validated
@@ -25,8 +26,8 @@ bool FDirectiveHappyPathTest::RunTest(const FString &Parameters) {
    */
   State = DirSlice.Reducer(
       State,
-      Actions::DirectiveRunStarted(TEXT("hp_1"), TEXT("npc_knight"),
-                                   TEXT("Player attacks goblin")));
+      DirectiveSlice::Actions::DirectiveRunStarted(
+          TEXT("hp_1"), TEXT("npc_knight"), TEXT("Player attacks goblin")));
 
   func::Maybe<FDirectiveRun> Run = SelectDirectiveById(State, TEXT("hp_1"));
   TestTrue("Run created", Run.hasValue);
@@ -51,7 +52,8 @@ bool FDirectiveHappyPathTest::RunTest(const FString &Parameters) {
   DirResponse.MemoryRecall.Threshold = 0.6f;
 
   State = DirSlice.Reducer(
-      State, Actions::DirectiveReceived(TEXT("hp_1"), DirResponse));
+      State,
+      DirectiveSlice::Actions::DirectiveReceived(TEXT("hp_1"), DirResponse));
 
   Run = SelectDirectiveById(State, TEXT("hp_1"));
   TestTrue("Run still exists", Run.hasValue);
@@ -71,9 +73,9 @@ bool FDirectiveHappyPathTest::RunTest(const FString &Parameters) {
 
   State = DirSlice.Reducer(
       State,
-      Actions::ContextComposed(TEXT("hp_1"),
-                               TEXT("You are a knight facing a goblin..."),
-                               Constraints));
+      DirectiveSlice::Actions::ContextComposed(
+          TEXT("hp_1"), TEXT("You are a knight facing a goblin..."),
+          Constraints));
 
   Run = SelectDirectiveById(State, TEXT("hp_1"));
   TestTrue("Run exists after context", Run.hasValue);
@@ -95,7 +97,7 @@ bool FDirectiveHappyPathTest::RunTest(const FString &Parameters) {
   Verdict.Action.Reason = TEXT("Combat engagement");
 
   State = DirSlice.Reducer(
-      State, Actions::VerdictValidated(TEXT("hp_1"), Verdict));
+      State, DirectiveSlice::Actions::VerdictValidated(TEXT("hp_1"), Verdict));
 
   Run = SelectDirectiveById(State, TEXT("hp_1"));
   TestTrue("Run exists after verdict", Run.hasValue);
@@ -131,10 +133,12 @@ bool FDirectiveMultipleTest::RunTest(const FString &Parameters) {
    */
   State = DirSlice.Reducer(
       State,
-      Actions::DirectiveRunStarted(TEXT("d_a"), TEXT("npc_1"), TEXT("obs_a")));
+      DirectiveSlice::Actions::DirectiveRunStarted(TEXT("d_a"), TEXT("npc_1"),
+                                                   TEXT("obs_a")));
   State = DirSlice.Reducer(
       State,
-      Actions::DirectiveRunStarted(TEXT("d_b"), TEXT("npc_2"), TEXT("obs_b")));
+      DirectiveSlice::Actions::DirectiveRunStarted(TEXT("d_b"), TEXT("npc_2"),
+                                                   TEXT("obs_b")));
 
   TestEqual("Two directives", SelectAllDirectives(State).Num(), 2);
   TestEqual("Active is last started", State.ActiveDirectiveId,
@@ -146,7 +150,8 @@ bool FDirectiveMultipleTest::RunTest(const FString &Parameters) {
    */
   State = DirSlice.Reducer(
       State,
-      Actions::DirectiveRunFailed(TEXT("d_a"), TEXT("API timeout")));
+      DirectiveSlice::Actions::DirectiveRunFailed(TEXT("d_a"),
+                                                  TEXT("API timeout")));
 
   auto A = SelectDirectiveById(State, TEXT("d_a"));
   auto B = SelectDirectiveById(State, TEXT("d_b"));
@@ -178,13 +183,19 @@ bool FDirectiveClearForNpcTest::RunTest(const FString &Parameters) {
 
   State = DirSlice.Reducer(
       State,
-      Actions::DirectiveRunStarted(TEXT("d1"), TEXT("npc_target"), TEXT("obs1")));
+      DirectiveSlice::Actions::DirectiveRunStarted(TEXT("d1"),
+                                                   TEXT("npc_target"),
+                                                   TEXT("obs1")));
   State = DirSlice.Reducer(
       State,
-      Actions::DirectiveRunStarted(TEXT("d2"), TEXT("npc_keep"), TEXT("obs2")));
+      DirectiveSlice::Actions::DirectiveRunStarted(TEXT("d2"),
+                                                   TEXT("npc_keep"),
+                                                   TEXT("obs2")));
   State = DirSlice.Reducer(
       State,
-      Actions::DirectiveRunStarted(TEXT("d3"), TEXT("npc_target"), TEXT("obs3")));
+      DirectiveSlice::Actions::DirectiveRunStarted(TEXT("d3"),
+                                                   TEXT("npc_target"),
+                                                   TEXT("obs3")));
 
   TestEqual("Three directives", SelectAllDirectives(State).Num(), 3);
 
@@ -193,7 +204,7 @@ bool FDirectiveClearForNpcTest::RunTest(const FString &Parameters) {
    * User Story: As a maintainer, I need this step note so I can follow the scenario progression and reason about the expected state changes.
    */
   State = DirSlice.Reducer(
-      State, Actions::ClearDirectivesForNpc(TEXT("npc_target")));
+      State, DirectiveSlice::Actions::ClearDirectivesForNpc(TEXT("npc_target")));
 
   TestEqual("One directive remains", SelectAllDirectives(State).Num(), 1);
   TestFalse("d1 removed", SelectDirectiveById(State, TEXT("d1")).hasValue);

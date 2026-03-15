@@ -16,6 +16,12 @@ public class ForbocAI_SDK : ModuleRules
 		string LlamaIncludePath = System.IO.Path.Combine(ThirdPartyPath, "llama.cpp/include");
 		string SqliteIncludePath = System.IO.Path.Combine(ThirdPartyPath, "sqlite-vss/include");
 		string LlamaLibraryPath = null;
+		string LlamaHeaderPath = System.IO.Path.Combine(LlamaIncludePath, "llama.h");
+		string GgmlHeaderPath = System.IO.Path.Combine(LlamaIncludePath, "ggml.h");
+		string GgmlAllocHeaderPath = System.IO.Path.Combine(LlamaIncludePath, "ggml-alloc.h");
+		string GgmlBackendHeaderPath = System.IO.Path.Combine(LlamaIncludePath, "ggml-backend.h");
+		string GgmlCpuHeaderPath = System.IO.Path.Combine(LlamaIncludePath, "ggml-cpu.h");
+		string GgmlOptHeaderPath = System.IO.Path.Combine(LlamaIncludePath, "ggml-opt.h");
 
 		if (Target.Platform == UnrealTargetPlatform.Win64)
 		{
@@ -27,6 +33,12 @@ public class ForbocAI_SDK : ModuleRules
 		}
 
 		bool bHasNativeLlama = System.IO.Directory.Exists(LlamaIncludePath)
+			&& System.IO.File.Exists(LlamaHeaderPath)
+			&& System.IO.File.Exists(GgmlHeaderPath)
+			&& System.IO.File.Exists(GgmlAllocHeaderPath)
+			&& System.IO.File.Exists(GgmlBackendHeaderPath)
+			&& System.IO.File.Exists(GgmlCpuHeaderPath)
+			&& System.IO.File.Exists(GgmlOptHeaderPath)
 			&& !string.IsNullOrEmpty(LlamaLibraryPath)
 			&& System.IO.File.Exists(LlamaLibraryPath);
 		bool bHasSqliteHeaders = System.IO.Directory.Exists(SqliteIncludePath);

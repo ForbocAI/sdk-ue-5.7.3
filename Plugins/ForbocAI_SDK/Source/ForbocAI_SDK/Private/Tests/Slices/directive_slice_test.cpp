@@ -6,6 +6,7 @@
 
 using namespace rtk;
 using namespace DirectiveSlice;
+namespace Actions = DirectiveSlice::Actions;
 
 /**
  * Test: DirectiveRunStarted creates run and sets ActiveDirectiveId
@@ -21,8 +22,8 @@ bool FDirectiveSliceRunStartedTest::RunTest(const FString &Parameters) {
 
   State = DirSlice.Reducer(
       State,
-      Actions::DirectiveRunStarted(TEXT("dir_1"), TEXT("npc_a"),
-                                   TEXT("Player said hello")));
+      DirectiveSlice::Actions::DirectiveRunStarted(
+          TEXT("dir_1"), TEXT("npc_a"), TEXT("Player said hello")));
 
   TestEqual("ActiveDirectiveId set", State.ActiveDirectiveId,
             FString(TEXT("dir_1")));
@@ -63,16 +64,17 @@ bool FDirectiveSliceDirectiveReceivedTest::RunTest(const FString &Parameters) {
 
   State = DirSlice.Reducer(
       State,
-      Actions::DirectiveRunStarted(TEXT("dir_recv"), TEXT("npc_b"),
-                                   TEXT("Where is the key?")));
+      DirectiveSlice::Actions::DirectiveRunStarted(
+          TEXT("dir_recv"), TEXT("npc_b"), TEXT("Where is the key?")));
 
   FDirectiveResponse Response;
   Response.MemoryRecall.Query = TEXT("key location");
   Response.MemoryRecall.Limit = 5;
   Response.MemoryRecall.Threshold = 0.8f;
 
-  State = DirSlice.Reducer(State,
-                           Actions::DirectiveReceived(TEXT("dir_recv"), Response));
+  State = DirSlice.Reducer(
+      State, DirectiveSlice::Actions::DirectiveReceived(TEXT("dir_recv"),
+                                                        Response));
 
   func::Maybe<FDirectiveRun> Found =
       SelectDirectiveById(State, TEXT("dir_recv"));
@@ -101,16 +103,17 @@ bool FDirectiveSliceVerdictValidatedTest::RunTest(const FString &Parameters) {
 
   State = DirSlice.Reducer(
       State,
-      Actions::DirectiveRunStarted(TEXT("dir_v"), TEXT("npc_c"),
-                                   TEXT("Greet the player")));
+      DirectiveSlice::Actions::DirectiveRunStarted(
+          TEXT("dir_v"), TEXT("npc_c"), TEXT("Greet the player")));
 
   FVerdictResponse Verdict;
   Verdict.bValid = true;
   Verdict.Dialogue = TEXT("Hello, traveler!");
   Verdict.bHasAction = false;
 
-  State = DirSlice.Reducer(State,
-                           Actions::VerdictValidated(TEXT("dir_v"), Verdict));
+  State = DirSlice.Reducer(
+      State, DirectiveSlice::Actions::VerdictValidated(TEXT("dir_v"),
+                                                       Verdict));
 
   func::Maybe<FDirectiveRun> Found = SelectDirectiveById(State, TEXT("dir_v"));
   TestTrue("Run exists", Found.hasValue);
@@ -140,11 +143,12 @@ bool FDirectiveSliceRunFailedTest::RunTest(const FString &Parameters) {
 
   State = DirSlice.Reducer(
       State,
-      Actions::DirectiveRunStarted(TEXT("dir_fail"), TEXT("npc_d"),
-                                   TEXT("Do something")));
+      DirectiveSlice::Actions::DirectiveRunStarted(
+          TEXT("dir_fail"), TEXT("npc_d"), TEXT("Do something")));
   State = DirSlice.Reducer(
       State,
-      Actions::DirectiveRunFailed(TEXT("dir_fail"), TEXT("API timeout")));
+      DirectiveSlice::Actions::DirectiveRunFailed(TEXT("dir_fail"),
+                                                  TEXT("API timeout")));
 
   func::Maybe<FDirectiveRun> Found =
       SelectDirectiveById(State, TEXT("dir_fail"));
@@ -173,21 +177,23 @@ bool FDirectiveSliceClearForNpcTest::RunTest(const FString &Parameters) {
 
   State = DirSlice.Reducer(
       State,
-      Actions::DirectiveRunStarted(TEXT("d1"), TEXT("npc_x"),
-                                   TEXT("Obs 1")));
+      DirectiveSlice::Actions::DirectiveRunStarted(TEXT("d1"), TEXT("npc_x"),
+                                                   TEXT("Obs 1")));
   State = DirSlice.Reducer(
       State,
-      Actions::DirectiveRunStarted(TEXT("d2"), TEXT("npc_y"), TEXT("Obs 2")));
+      DirectiveSlice::Actions::DirectiveRunStarted(TEXT("d2"), TEXT("npc_y"),
+                                                   TEXT("Obs 2")));
   State = DirSlice.Reducer(
       State,
-      Actions::DirectiveRunStarted(TEXT("d3"), TEXT("npc_x"),
-                                   TEXT("Obs 3")));
+      DirectiveSlice::Actions::DirectiveRunStarted(TEXT("d3"), TEXT("npc_x"),
+                                                   TEXT("Obs 3")));
 
   TestEqual("Three directives", SelectAllDirectives(State).Num(), 3);
   TestEqual("Active is d3", SelectActiveDirectiveId(State),
             FString(TEXT("d3")));
 
-  State = DirSlice.Reducer(State, Actions::ClearDirectivesForNpc(TEXT("npc_x")));
+  State = DirSlice.Reducer(
+      State, DirectiveSlice::Actions::ClearDirectivesForNpc(TEXT("npc_x")));
 
   TArray<FDirectiveRun> Remaining = SelectAllDirectives(State);
   TestEqual("One directive remains", Remaining.Num(), 1);
@@ -229,10 +235,12 @@ bool FDirectiveSliceSelectorsTest::RunTest(const FString &Parameters) {
    */
   State = DirSlice.Reducer(
       State,
-      Actions::DirectiveRunStarted(TEXT("sel_1"), TEXT("n1"), TEXT("A")));
+      DirectiveSlice::Actions::DirectiveRunStarted(TEXT("sel_1"), TEXT("n1"),
+                                                   TEXT("A")));
   State = DirSlice.Reducer(
       State,
-      Actions::DirectiveRunStarted(TEXT("sel_2"), TEXT("n2"), TEXT("B")));
+      DirectiveSlice::Actions::DirectiveRunStarted(TEXT("sel_2"), TEXT("n2"),
+                                                   TEXT("B")));
 
   func::Maybe<FDirectiveRun> Active = SelectActiveDirective(State);
   TestTrue("Active exists", Active.hasValue);

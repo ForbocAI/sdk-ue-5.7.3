@@ -5,6 +5,7 @@
 
 using namespace rtk;
 using namespace BridgeSlice;
+namespace Actions = BridgeSlice::Actions;
 
 /**
  * Test: BridgeValidationPending / Success / Failure lifecycle

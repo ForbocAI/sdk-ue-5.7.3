@@ -6,6 +6,7 @@
 
 using namespace rtk;
 using namespace NPCSlice;
+namespace Actions = NPCSlice::Actions;
 
 /**
  * Test: SetNPCInfo dispatches and updates state

@@ -5,6 +5,7 @@
 
 using namespace rtk;
 using namespace CortexSlice;
+namespace Actions = CortexSlice::Actions;
 
 /**
  * Test: CortexInit Pending / Success / Failed lifecycle

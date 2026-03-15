@@ -5,6 +5,7 @@
 
 using namespace rtk;
 using namespace SoulSlice;
+namespace Actions = SoulSlice::Actions;
 
 /**
  * Test: Import failure followed by successful retry recovers state

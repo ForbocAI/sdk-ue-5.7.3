@@ -6,6 +6,7 @@
 
 using namespace rtk;
 using namespace DirectiveSlice;
+namespace Actions = DirectiveSlice::Actions;
 
 /**
  * Test: Rapid sequential failures on different directives
@@ -27,7 +28,8 @@ bool FDirectiveRapidFailuresTest::RunTest(const FString &Parameters) {
     const FString Id = FString::Printf(TEXT("rapid_%d"), i);
     State = DirSlice.Reducer(
         State,
-        Actions::DirectiveRunStarted(Id, TEXT("npc_stress"), TEXT("obs")));
+        DirectiveSlice::Actions::DirectiveRunStarted(Id, TEXT("npc_stress"),
+                                                     TEXT("obs")));
   }
   TestEqual("Five directives", SelectAllDirectives(State).Num(), 5);
 
@@ -39,7 +41,8 @@ bool FDirectiveRapidFailuresTest::RunTest(const FString &Parameters) {
     const FString Id = FString::Printf(TEXT("rapid_%d"), i);
     const FString Error =
         FString::Printf(TEXT("Timeout after %d ms"), (i + 1) * 1000);
-    State = DirSlice.Reducer(State, Actions::DirectiveRunFailed(Id, Error));
+    State = DirSlice.Reducer(
+        State, DirectiveSlice::Actions::DirectiveRunFailed(Id, Error));
   }
 
   /**
@@ -78,9 +81,11 @@ bool FDirectiveContextAfterFailTest::RunTest(const FString &Parameters) {
 
   State = DirSlice.Reducer(
       State,
-      Actions::DirectiveRunStarted(TEXT("cf"), TEXT("npc1"), TEXT("obs")));
+      DirectiveSlice::Actions::DirectiveRunStarted(TEXT("cf"), TEXT("npc1"),
+                                                   TEXT("obs")));
   State = DirSlice.Reducer(
-      State, Actions::DirectiveRunFailed(TEXT("cf"), TEXT("API timeout")));
+      State, DirectiveSlice::Actions::DirectiveRunFailed(
+                 TEXT("cf"), TEXT("API timeout")));
 
   /**
    * Try to compose context on a failed directive
@@ -90,7 +95,8 @@ bool FDirectiveContextAfterFailTest::RunTest(const FString &Parameters) {
   Constraints.MaxTokens = 256;
   State = DirSlice.Reducer(
       State,
-      Actions::ContextComposed(TEXT("cf"), TEXT("Late context"), Constraints));
+      DirectiveSlice::Actions::ContextComposed(TEXT("cf"), TEXT("Late context"),
+                                               Constraints));
 
   auto Run = SelectDirectiveById(State, TEXT("cf"));
   TestTrue("Run exists", Run.hasValue);
@@ -124,10 +130,13 @@ bool FDirectiveClearActiveLostTest::RunTest(const FString &Parameters) {
 
   State = DirSlice.Reducer(
       State,
-      Actions::DirectiveRunStarted(TEXT("keep"), TEXT("npc_a"), TEXT("obs1")));
+      DirectiveSlice::Actions::DirectiveRunStarted(TEXT("keep"), TEXT("npc_a"),
+                                                   TEXT("obs1")));
   State = DirSlice.Reducer(
       State,
-      Actions::DirectiveRunStarted(TEXT("remove"), TEXT("npc_b"), TEXT("obs2")));
+      DirectiveSlice::Actions::DirectiveRunStarted(TEXT("remove"),
+                                                   TEXT("npc_b"),
+                                                   TEXT("obs2")));
 
   /**
    * Active is the last started
@@ -140,8 +149,8 @@ bool FDirectiveClearActiveLostTest::RunTest(const FString &Parameters) {
    * Clear npc_b directives — should clear ActiveDirectiveId
    * User Story: As a maintainer, I need this step note so I can follow the scenario progression and reason about the expected state changes.
    */
-  State = DirSlice.Reducer(State,
-                           Actions::ClearDirectivesForNpc(TEXT("npc_b")));
+  State = DirSlice.Reducer(
+      State, DirectiveSlice::Actions::ClearDirectivesForNpc(TEXT("npc_b")));
 
   TestTrue("ActiveDirectiveId cleared", State.ActiveDirectiveId.IsEmpty());
   TestEqual("One directive remains", SelectAllDirectives(State).Num(), 1);
@@ -164,10 +173,14 @@ bool FDirectiveClearActivePreservedTest::RunTest(const FString &Parameters) {
 
   State = DirSlice.Reducer(
       State,
-      Actions::DirectiveRunStarted(TEXT("other"), TEXT("npc_x"), TEXT("obs1")));
+      DirectiveSlice::Actions::DirectiveRunStarted(TEXT("other"),
+                                                   TEXT("npc_x"),
+                                                   TEXT("obs1")));
   State = DirSlice.Reducer(
       State,
-      Actions::DirectiveRunStarted(TEXT("active"), TEXT("npc_y"), TEXT("obs2")));
+      DirectiveSlice::Actions::DirectiveRunStarted(TEXT("active"),
+                                                   TEXT("npc_y"),
+                                                   TEXT("obs2")));
 
   TestEqual("Active is active", State.ActiveDirectiveId,
             FString(TEXT("active")));
@@ -176,8 +189,8 @@ bool FDirectiveClearActivePreservedTest::RunTest(const FString &Parameters) {
    * Clear npc_x — active should stay
    * User Story: As a maintainer, I need this step note so I can follow the scenario progression and reason about the expected state changes.
    */
-  State = DirSlice.Reducer(State,
-                           Actions::ClearDirectivesForNpc(TEXT("npc_x")));
+  State = DirSlice.Reducer(
+      State, DirectiveSlice::Actions::ClearDirectivesForNpc(TEXT("npc_x")));
 
   TestEqual("Active preserved", State.ActiveDirectiveId,
             FString(TEXT("active")));
@@ -200,15 +213,16 @@ bool FDirectiveVerdictDialogueOnlyTest::RunTest(const FString &Parameters) {
 
   State = DirSlice.Reducer(
       State,
-      Actions::DirectiveRunStarted(TEXT("dg"), TEXT("npc1"), TEXT("obs")));
+      DirectiveSlice::Actions::DirectiveRunStarted(TEXT("dg"), TEXT("npc1"),
+                                                   TEXT("obs")));
 
   FVerdictResponse Verdict;
   Verdict.bValid = true;
   Verdict.Dialogue = TEXT("I greet you warmly, traveler.");
   Verdict.bHasAction = false;
 
-  State = DirSlice.Reducer(State,
-                           Actions::VerdictValidated(TEXT("dg"), Verdict));
+  State = DirSlice.Reducer(
+      State, DirectiveSlice::Actions::VerdictValidated(TEXT("dg"), Verdict));
 
   auto Run = SelectDirectiveById(State, TEXT("dg"));
   TestTrue("Run exists", Run.hasValue);

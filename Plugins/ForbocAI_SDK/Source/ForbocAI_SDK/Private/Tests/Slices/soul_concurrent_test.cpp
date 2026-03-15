@@ -5,6 +5,7 @@
 
 using namespace rtk;
 using namespace SoulSlice;
+namespace Actions = SoulSlice::Actions;
 
 /**
  * Test: Concurrent export and import — export pending then import pending
