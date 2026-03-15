@@ -49,6 +49,9 @@ void UForbocAISubsystem::Deinitialize() {
  * config so gameplay code can point the runtime at the right backend.
  */
 void UForbocAISubsystem::Init(FString ApiKey, FString ApiUrl) {
+  if (ApiUrl.IsEmpty()) {
+    ApiUrl = SDKConfig::DEFAULT_API_URL;
+  }
   SDKConfig::SetApiConfig(ApiUrl, ApiKey);
 }
 

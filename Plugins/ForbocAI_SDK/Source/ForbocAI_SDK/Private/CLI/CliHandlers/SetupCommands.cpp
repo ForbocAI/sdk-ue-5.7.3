@@ -13,7 +13,7 @@ namespace Handlers {
 namespace {
 
 /**
- * Version constants (single source of truth — mirrors vendor_thirdparty.sh)
+ * Version constants (single source of truth for ThirdParty setup)
  * User Story: As a maintainer, I need this note so the surrounding code intent stays clear during maintenance and debugging.
  */
 static const TCHAR *SQLITE_VERSION = TEXT("3460100");
@@ -173,6 +173,31 @@ Result VerifyThirdParty() {
   const bool bLlamaLib =
       !LlamaLib.IsEmpty() && PF.FileExists(*LlamaLib);
 
+#if PLATFORM_MAC
+  const FString LlamaLibDir = ThirdPartyDir / TEXT("llama.cpp/lib/Mac");
+  const bool bGgmlCore =
+      PF.FileExists(*(LlamaLibDir / TEXT("libggml.a"))) &&
+      PF.FileExists(*(LlamaLibDir / TEXT("libggml-base.a"))) &&
+      PF.FileExists(*(LlamaLibDir / TEXT("libggml-cpu.a")));
+  const bool bGgmlMetal =
+      PF.FileExists(*(LlamaLibDir / TEXT("libggml-metal.a")));
+  const bool bGgmlBlas =
+      PF.FileExists(*(LlamaLibDir / TEXT("libggml-blas.a")));
+#elif PLATFORM_WINDOWS
+  const FString LlamaLibDir = ThirdPartyDir / TEXT("llama.cpp/lib/Win64");
+  const bool bGgmlCore =
+      PF.FileExists(*(LlamaLibDir / TEXT("ggml.lib"))) &&
+      PF.FileExists(*(LlamaLibDir / TEXT("ggml-base.lib"))) &&
+      PF.FileExists(*(LlamaLibDir / TEXT("ggml-cpu.lib")));
+  const bool bGgmlMetal = false;
+  const bool bGgmlBlas = false;
+#else
+  const FString LlamaLibDir = TEXT("");
+  const bool bGgmlCore = false;
+  const bool bGgmlMetal = false;
+  const bool bGgmlBlas = false;
+#endif
+
   const bool bSqliteHeaders = PF.DirectoryExists(*SqliteInclude) &&
                               PF.FileExists(*(SqliteInclude / TEXT("sqlite3.h")));
   const bool bSqliteAmalgamation =
@@ -196,6 +221,16 @@ Result VerifyThirdParty() {
          bLlamaHeaders ? TEXT("OK") : TEXT("--"), *LlamaInclude);
   UE_LOG(LogTemp, Display, TEXT("  [%s] llama.cpp library     (%s)"),
          bLlamaLib ? TEXT("OK") : TEXT("--"), *LlamaLib);
+  UE_LOG(LogTemp, Display, TEXT("  [%s] ggml core libs        (ggml, ggml-base, ggml-cpu)"),
+         bGgmlCore ? TEXT("OK") : TEXT("--"));
+#if PLATFORM_MAC
+  UE_LOG(LogTemp, Display, TEXT("  [%s] ggml-metal            (%s)"),
+         bGgmlMetal ? TEXT("OK") : TEXT("--"),
+         *(LlamaLibDir / TEXT("libggml-metal.a")));
+  UE_LOG(LogTemp, Display, TEXT("  [%s] ggml-blas             (%s)"),
+         bGgmlBlas ? TEXT("OK") : TEXT("--"),
+         *(LlamaLibDir / TEXT("libggml-blas.a")));
+#endif
   UE_LOG(LogTemp, Display, TEXT("  [%s] sqlite3 headers       (%s)"),
          bSqliteHeaders ? TEXT("OK") : TEXT("--"), *SqliteInclude);
   UE_LOG(LogTemp, Display, TEXT("  [%s] sqlite3 amalgamation  (%s)"),
@@ -230,8 +265,8 @@ Result VerifyThirdParty() {
         "  Models download automatically on first cortex_init."));
   }
 
-  const bool bAllBuild = bLlamaHeaders && bLlamaLib && bSqliteHeaders &&
-                         bSqliteAmalgamation && bVec0;
+  const bool bAllBuild = bLlamaHeaders && bLlamaLib && bGgmlCore &&
+                         bSqliteHeaders && bSqliteAmalgamation && bVec0;
   return bAllBuild ? Result::Success("All build-time dependencies present")
                    : Result::Failure("Some build-time dependencies missing");
 }
@@ -440,7 +475,7 @@ Result SetupThirdPartyDeps(rtk::EnhancedStore<FStoreState> &Store,
     UE_LOG(LogTemp, Display, TEXT("  --- llama.cpp headers (%s) ---"), LLAMA_CPP_TAG);
 
     const FString LlamaBase = FString::Printf(
-        TEXT("https://raw.githubusercontent.com/ggerganov/llama.cpp/%s"),
+        TEXT("https://raw.githubusercontent.com/ggml-org/llama.cpp/%s"),
         LLAMA_CPP_TAG);
 
     DownloadOne(LlamaBase / TEXT("include/llama.h"),
@@ -556,11 +591,16 @@ Result BuildLlama(const TArray<FString> &Args) {
   const FString BuildDir = CloneDir / TEXT("build");
 
 #if PLATFORM_MAC || PLATFORM_LINUX
-  const FString CmakeExe = TEXT("/usr/local/bin/cmake");
   /**
-   * Try /usr/local/bin first, fallback to PATH
+   * Try Homebrew paths first (Apple Silicon then Intel), fallback to PATH
    * User Story: As a maintainer, I need this note so the surrounding code intent stays clear during maintenance and debugging.
    */
+  const FString CmakeExe =
+      PF.FileExists(TEXT("/opt/homebrew/bin/cmake"))
+          ? FString(TEXT("/opt/homebrew/bin/cmake"))
+          : (PF.FileExists(TEXT("/usr/local/bin/cmake"))
+                 ? FString(TEXT("/usr/local/bin/cmake"))
+                 : FString(TEXT("cmake")));
   const FString CmakeExeAlt = TEXT("cmake");
 #elif PLATFORM_WINDOWS
   const FString CmakeExe = TEXT("cmake.exe");
@@ -603,7 +643,7 @@ Result BuildLlama(const TArray<FString> &Args) {
   }
 
   /**
-   * Copy library to ThirdParty
+   * Copy llama + ggml libraries to ThirdParty
    * User Story: As a maintainer, I need this note so the surrounding code intent stays clear during maintenance and debugging.
    */
 #if PLATFORM_MAC
@@ -622,6 +662,55 @@ Result BuildLlama(const TArray<FString> &Args) {
     UE_LOG(LogTemp, Warning, TEXT("  [FAIL] Built library not found at %s"),
            *BuiltLib);
     return Result::Failure("Build succeeded but library not found");
+  }
+
+  /**
+   * Copy ggml dependency libraries (Build.cs links these alongside libllama)
+   * User Story: As build setup, I need ggml libs copied so UE linking succeeds.
+   */
+  {
+    const FString LibDestDir = FPaths::GetPath(LibDest);
+    IFileManager &FM = IFileManager::Get();
+    int32 GgmlCopied = 0;
+
+#if PLATFORM_MAC
+    struct GgmlEntry {
+      const TCHAR *BuildSubPath;
+      const TCHAR *DestName;
+    };
+    const GgmlEntry GgmlLibs[] = {
+        {TEXT("ggml/src/libggml.a"), TEXT("libggml.a")},
+        {TEXT("ggml/src/libggml-base.a"), TEXT("libggml-base.a")},
+        {TEXT("ggml/src/ggml-cpu/libggml-cpu.a"), TEXT("libggml-cpu.a")},
+        {TEXT("ggml/src/ggml-metal/libggml-metal.a"), TEXT("libggml-metal.a")},
+        {TEXT("ggml/src/ggml-blas/libggml-blas.a"), TEXT("libggml-blas.a")},
+    };
+#elif PLATFORM_WINDOWS
+    struct GgmlEntry {
+      const TCHAR *BuildSubPath;
+      const TCHAR *DestName;
+    };
+    const GgmlEntry GgmlLibs[] = {
+        {TEXT("ggml/src/Release/ggml.lib"), TEXT("ggml.lib")},
+        {TEXT("ggml/src/Release/ggml-base.lib"), TEXT("ggml-base.lib")},
+        {TEXT("ggml/src/ggml-cpu/Release/ggml-cpu.lib"), TEXT("ggml-cpu.lib")},
+    };
+#endif
+
+    for (const GgmlEntry &Entry : GgmlLibs) {
+      const FString Src = BuildDir / Entry.BuildSubPath;
+      const FString Dst = LibDestDir / Entry.DestName;
+      if (PF.FileExists(*Src)) {
+        FM.Copy(*Dst, *Src);
+        UE_LOG(LogTemp, Display, TEXT("  [OK] %s"), Entry.DestName);
+        ++GgmlCopied;
+      } else {
+        UE_LOG(LogTemp, Warning, TEXT("  [--] %s not found at %s"),
+               Entry.DestName, *Src);
+      }
+    }
+
+    UE_LOG(LogTemp, Display, TEXT("  Copied %d ggml libraries"), GgmlCopied);
   }
 
   /**

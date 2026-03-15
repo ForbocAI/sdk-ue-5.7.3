@@ -97,11 +97,17 @@ public class ForbocAI_SDK : ModuleRules
 			PrivateIncludePaths.Add(SqliteAmalgamationPath);
 
 			/**
-			 * The amalgamation compiles as C; UE treats .c files as C automatically
+			 * Compile sqlite3 + sqlite-vec amalgamation as C source
 			 * User Story: As a maintainer, I need this note so the surrounding code intent stays clear during maintenance and debugging.
 			 */
 			string Sqlite3Source = System.IO.Path.Combine(SqliteAmalgamationPath, "sqlite3.c");
 			string Vec0Source = System.IO.Path.Combine(SqliteAmalgamationPath, "vec0.c");
+
+			if (System.IO.File.Exists(Sqlite3Source))
+			{
+				PrivateDefinitions.Add("SQLITE_CORE=1");
+				PrivateDefinitions.Add("SQLITE_THREADSAFE=1");
+			}
 
 			/**
 			 * Suppress warnings in third-party C code

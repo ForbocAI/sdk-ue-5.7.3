@@ -49,7 +49,7 @@ public:
    * access can be set up before NPC operations begin.
    */
   UFUNCTION(BlueprintCallable, Category = "Forboc AI|SDK")
-  void Init(FString ApiKey, FString ApiUrl = SDKConfig::DEFAULT_API_URL);
+  void Init(FString ApiKey, FString ApiUrl = TEXT(""));
 
   /**
    * Triggers the recursive protocol loop for an NPC.
