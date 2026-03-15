@@ -40,7 +40,7 @@ extern rtk::ApiSlice<FStoreState> ForbocAiApi;
 namespace APISlice {
 
 inline Slice<FAPIState> CreateAPISlice() {
-  return SliceBuilder<FAPIState>(TEXT("forbocApi"), FAPIState()).build();
+  return buildSlice(sliceBuilder<FAPIState>(TEXT("forbocApi"), FAPIState()));
 }
 
 } // namespace APISlice

@@ -58,7 +58,8 @@ SoulTypes::SoulValidationResult SoulOps::Validate(const FSoul &Soul) {
    * Use the functional validation pipeline from helpers
    * User Story: As a maintainer, I need this section note so related declarations and logic stay easy to locate.
    */
-  auto result = SoulHelpers::soulValidationPipeline().run(Soul);
+  auto result =
+      func::runValidation(SoulHelpers::soulValidationPipeline(), Soul);
 
   if (result.isLeft) {
     return SoulTypes::make_left(result.left, FSoul{});

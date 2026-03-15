@@ -209,7 +209,7 @@ localImportSoulThunk(const FSoul &Soul) {
     }
 
     FNPCInternalState Npc;
-    Npc.Id = Soul.NpcId.IsEmpty() ? Soul.Id : Soul.NpcId;
+    Npc.Id = Soul.Id;
     Npc.Persona = Soul.Persona;
     Npc.State = Soul.State;
     Dispatch(NPCSlice::Actions::SetNPCInfo(Npc));

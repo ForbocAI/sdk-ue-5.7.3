@@ -215,9 +215,9 @@ inline AnyAction ClearDirectivesForNpc(const FString &NpcId) {
  * directive lifecycle actions share a consistent reducer.
  */
 inline Slice<FDirectiveSliceState> CreateDirectiveSlice() {
-  return SliceBuilder<FDirectiveSliceState>(TEXT("directive"),
-                                            FDirectiveSliceState())
-      .addExtraCase(Actions::DirectiveRunStartedActionCreator(),
+  return buildSlice(sliceBuilder<FDirectiveSliceState>(TEXT("directive"),
+                                                       FDirectiveSliceState()) |
+                    addExtraCase(Actions::DirectiveRunStartedActionCreator(),
                     [](const FDirectiveSliceState &State,
                        const Action<FDirectiveRunStartedPayload> &Action)
                         -> FDirectiveSliceState {
@@ -232,8 +232,8 @@ inline Slice<FDirectiveSliceState> CreateDirectiveSlice() {
                           GetDirectiveAdapter().upsertOne(Next.Entities, Run);
                       Next.ActiveDirectiveId = Run.Id;
                       return Next;
-                    })
-      .addExtraCase(Actions::DirectiveReceivedActionCreator(),
+                    }) |
+                    addExtraCase(Actions::DirectiveReceivedActionCreator(),
                     [](const FDirectiveSliceState &State,
                        const Action<FDirectiveReceivedPayload> &Action)
                         -> FDirectiveSliceState {
@@ -253,8 +253,8 @@ inline Slice<FDirectiveSliceState> CreateDirectiveSlice() {
                             return Updated;
                           });
                       return Next;
-                    })
-      .addExtraCase(Actions::ContextComposedActionCreator(),
+                    }) |
+                    addExtraCase(Actions::ContextComposedActionCreator(),
                     [](const FDirectiveSliceState &State,
                        const Action<FContextComposedPayload> &Action)
                         -> FDirectiveSliceState {
@@ -270,8 +270,8 @@ inline Slice<FDirectiveSliceState> CreateDirectiveSlice() {
                             return Updated;
                           });
                       return Next;
-                    })
-      .addExtraCase(
+                    }) |
+                    addExtraCase(
           Actions::VerdictValidatedActionCreator(),
           [](const FDirectiveSliceState &State,
              const Action<FVerdictValidatedPayload> &Action)
@@ -292,8 +292,8 @@ inline Slice<FDirectiveSliceState> CreateDirectiveSlice() {
                   return Updated;
                 });
             return Next;
-          })
-      .addExtraCase(Actions::DirectiveRunFailedActionCreator(),
+          }) |
+                    addExtraCase(Actions::DirectiveRunFailedActionCreator(),
                     [](const FDirectiveSliceState &State,
                        const Action<FDirectiveRunFailedPayload> &Action)
                         -> FDirectiveSliceState {
@@ -311,8 +311,8 @@ inline Slice<FDirectiveSliceState> CreateDirectiveSlice() {
                             return Updated;
                           });
                       return Next;
-                    })
-      .addExtraCase(
+                    }) |
+                    addExtraCase(
           Actions::ClearDirectivesForNpcActionCreator(),
           [](const FDirectiveSliceState &State,
              const Action<FString> &Action) -> FDirectiveSliceState {
@@ -331,8 +331,7 @@ inline Slice<FDirectiveSliceState> CreateDirectiveSlice() {
               Next.ActiveDirectiveId.Empty();
             }
             return Next;
-          })
-      .build();
+          }));
 }
 
 /**

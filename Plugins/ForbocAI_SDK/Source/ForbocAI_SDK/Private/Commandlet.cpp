@@ -3,7 +3,6 @@
 #include "Core/functional_core.hpp"
 #include "Misc/Parse.h"
 #include "RuntimeConfig.h"
-#include <type_traits>
 
 namespace {
 
@@ -272,18 +271,18 @@ UForbocAICommandlet::createCommandPipeline(const FString &Command,
   return UForbocAICommandlet::CommandExecution::create(
       [this, Command, Args](std::function<void()> Resolve,
                             std::function<void(std::string)> Reject) {
-        const auto RejectMessage = [&Reject](const auto &Error) {
-          using ErrorType = std::decay_t<decltype(Error)>;
-          if constexpr (std::is_same_v<ErrorType, FString>) {
-            Reject(TCHAR_TO_UTF8(*Error));
-          } else {
-            Reject(Error);
-          }
+        auto RejectFString = [&Reject](const FString &Error) {
+          Reject(TCHAR_TO_UTF8(*Error));
         };
+        auto RejectStd = [&Reject](const std::string &Error) {
+          Reject(Error);
+        };
+        (void)RejectStd; // Available for std::string call sites
 
-        const auto Validation = commandValidationPipeline().run(Command);
+        const auto Validation =
+            func::runValidation(commandValidationPipeline(), Command);
         if (Validation.isLeft) {
-          RejectMessage(Validation.left);
+          RejectFString(Validation.left);
           return;
         }
 
@@ -297,7 +296,7 @@ UForbocAICommandlet::createCommandPipeline(const FString &Command,
             Result.message.empty()
                 ? FString()
                 : FString(UTF8_TO_TCHAR(Result.message.c_str()));
-        RejectMessage(ResultMessage.IsEmpty()
+        RejectFString(ResultMessage.IsEmpty()
                           ? FString::Printf(TEXT("Command failed: %s"), *Command)
                           : ResultMessage);
       });
@@ -305,15 +304,14 @@ UForbocAICommandlet::createCommandPipeline(const FString &Command,
 
 CLITypes::ValidationPipeline<FString, FString>
 UForbocAICommandlet::commandValidationPipeline() {
-  return CLITypes::ValidationPipeline<FString, FString>()
-      .add([](const FString &Command) -> CLITypes::Either<FString, FString> {
-        if (Command.IsEmpty()) {
-          return CLITypes::make_left(FString(TEXT("Command cannot be empty")),
-                                     FString());
-        }
-        return CLITypes::make_right(FString(), Command);
-      })
-      .add([](const FString &Command) -> CLITypes::Either<FString, FString> {
+  return func::validationPipeline<FString, FString>() |
+         [](const FString &Command) -> CLITypes::Either<FString, FString> {
+           return Command.IsEmpty()
+                      ? CLITypes::make_left(
+                            FString(TEXT("Command cannot be empty")), FString())
+                      : CLITypes::make_right(FString(), Command);
+         } |
+         [](const FString &Command) -> CLITypes::Either<FString, FString> {
         static const TArray<FString> ValidCommands = {
             TEXT("version"),          TEXT("status"),
             TEXT("doctor"),           TEXT("system_status"),
@@ -339,12 +337,11 @@ UForbocAICommandlet::commandValidationPipeline() {
             TEXT("config_set"),       TEXT("config_get"),
             TEXT("config_list"),
             TEXT("vector_init")};
-
-        if (!ValidCommands.Contains(Command)) {
-          return CLITypes::make_left(
-              FString::Printf(TEXT("Invalid command: %s"), *Command),
-              FString());
-        }
-        return CLITypes::make_right(FString(), Command);
-      });
+           return !ValidCommands.Contains(Command)
+                      ? CLITypes::make_left(
+                            FString::Printf(TEXT("Invalid command: %s"),
+                                             *Command),
+                            FString())
+                      : CLITypes::make_right(FString(), Command);
+         };
 }

@@ -6,9 +6,9 @@
  * User Story: As a maintainer, I need this note so the surrounding code intent stays clear during maintenance and debugging.
  */
 rtk::ApiSlice<FStoreState> APISlice::ForbocAiApi = []() {
-  rtk::ApiSlice<FStoreState> Api;
-  Api.ReducerPath = TEXT("forbocApi");
-  Api.TagTypes = {TEXT("NPC"),  TEXT("Memory"), TEXT("Cortex"), TEXT("Ghost"),
-                  TEXT("Soul"), TEXT("Bridge"), TEXT("Rule")};
-  return Api;
+  return rtk::createApiSlice<FStoreState>(
+      TEXT("forbocApi"),
+      TArray<FString>{TEXT("NPC"),  TEXT("Memory"), TEXT("Cortex"),
+                      TEXT("Ghost"), TEXT("Soul"), TEXT("Bridge"),
+                      TEXT("Rule")});
 }();

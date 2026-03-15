@@ -283,8 +283,9 @@ inline AnyAction CortexStreamComplete(const FString &FullText) {
  * one place so initialization, completion, and streaming state stay coherent.
  */
 inline Slice<FCortexSliceState> CreateCortexSlice() {
-  return SliceBuilder<FCortexSliceState>(TEXT("cortex"), FCortexSliceState())
-      .addExtraCase(
+  return buildSlice(
+      sliceBuilder<FCortexSliceState>(TEXT("cortex"), FCortexSliceState()) |
+      addExtraCase(
           Actions::CortexInitPendingActionCreator(),
           [](const FCortexSliceState &State,
              const Action<FString> &Action) -> FCortexSliceState {
@@ -294,7 +295,7 @@ inline Slice<FCortexSliceState> CreateCortexSlice() {
             Next.EngineStatus.Model = Action.PayloadValue;
             return Next;
           })
-      .addExtraCase(
+      | addExtraCase(
           Actions::CortexInitSuccessActionCreator(),
           [](const FCortexSliceState &State,
              const Action<FCortexStatus> &Action) -> FCortexSliceState {
@@ -303,7 +304,7 @@ inline Slice<FCortexSliceState> CreateCortexSlice() {
             Next.EngineStatus = Action.PayloadValue;
             return Next;
           })
-      .addExtraCase(
+      | addExtraCase(
           Actions::CortexInitFailedActionCreator(),
           [](const FCortexSliceState &State,
              const Action<FString> &Action) -> FCortexSliceState {
@@ -313,7 +314,7 @@ inline Slice<FCortexSliceState> CreateCortexSlice() {
             Next.EngineStatus.Error = Action.PayloadValue;
             return Next;
           })
-      .addExtraCase(
+      | addExtraCase(
           Actions::CortexCompletePendingActionCreator(),
           [](const FCortexSliceState &State,
              const Action<FString> &Action) -> FCortexSliceState {
@@ -322,7 +323,7 @@ inline Slice<FCortexSliceState> CreateCortexSlice() {
             Next.Error.Empty();
             return Next;
           })
-      .addExtraCase(
+      | addExtraCase(
           Actions::CortexCompleteSuccessActionCreator(),
           [](const FCortexSliceState &State,
              const Action<FCortexResponse> &Action) -> FCortexSliceState {
@@ -330,7 +331,7 @@ inline Slice<FCortexSliceState> CreateCortexSlice() {
             Next.LastResponseText = Action.PayloadValue.Text;
             return Next;
           })
-      .addExtraCase(
+      | addExtraCase(
           Actions::CortexCompleteFailedActionCreator(),
           [](const FCortexSliceState &State,
              const Action<FString> &Action) -> FCortexSliceState {
@@ -342,7 +343,7 @@ inline Slice<FCortexSliceState> CreateCortexSlice() {
        * G2: Download state reducer
        * User Story: As a maintainer, I need this section note so related declarations and logic stay easy to locate.
        */
-      .addExtraCase(
+      | addExtraCase(
           Actions::SetDownloadStateActionCreator(),
           [](const FCortexSliceState &State,
              const Action<Actions::FDownloadState> &Action) -> FCortexSliceState {
@@ -355,7 +356,7 @@ inline Slice<FCortexSliceState> CreateCortexSlice() {
        * G3: Embedder readiness reducer
        * User Story: As a maintainer, I need this section note so related declarations and logic stay easy to locate.
        */
-      .addExtraCase(
+      | addExtraCase(
           Actions::SetEmbedderReadyActionCreator(),
           [](const FCortexSliceState &State,
              const Action<bool> &Action) -> FCortexSliceState {
@@ -367,7 +368,7 @@ inline Slice<FCortexSliceState> CreateCortexSlice() {
        * G7: Streaming reducers
        * User Story: As a maintainer, I need this implementation note so I can understand which milestone behavior the surrounding code is preserving.
        */
-      .addExtraCase(
+      | addExtraCase(
           Actions::CortexStreamStartActionCreator(),
           [](const FCortexSliceState &State,
              const Action<FString> &Action) -> FCortexSliceState {
@@ -378,7 +379,7 @@ inline Slice<FCortexSliceState> CreateCortexSlice() {
             Next.Error.Empty();
             return Next;
           })
-      .addExtraCase(
+      | addExtraCase(
           Actions::CortexStreamTokenActionCreator(),
           [](const FCortexSliceState &State,
              const Action<FString> &Action) -> FCortexSliceState {
@@ -386,7 +387,7 @@ inline Slice<FCortexSliceState> CreateCortexSlice() {
             Next.StreamAccumulated += Action.PayloadValue;
             return Next;
           })
-      .addExtraCase(
+      | addExtraCase(
           Actions::CortexStreamCompleteActionCreator(),
           [](const FCortexSliceState &State,
              const Action<FString> &Action) -> FCortexSliceState {
@@ -396,7 +397,7 @@ inline Slice<FCortexSliceState> CreateCortexSlice() {
             Next.StreamAccumulated.Empty();
             return Next;
           })
-      .build();
+      );
 }
 
 } // namespace CortexSlice

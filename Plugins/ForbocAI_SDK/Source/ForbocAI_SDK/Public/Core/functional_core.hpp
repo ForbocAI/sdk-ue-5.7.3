@@ -12,10 +12,9 @@
  *   - Prefer structs and plain data for domain state.
  *   - Prefer factory functions for construction of public values.
  *   - Keep domain behavior in free functions under the `func` namespace.
- *   - A small number of helper wrappers intentionally expose fluent
- *     member APIs where C++11 ergonomics would otherwise become
- *     unreadable (`MemoizedLast`, `ValidationPipeline`,
- *     `ConfigBuilder`, `AsyncResult`).
+ *   - Use compatibility member wrappers only when preserving an existing
+ *     callable C++11 surface is materially cheaper than duplicating
+ *     abstractions (`MemoizedLast::operator()`, `AsyncResult` chaining).
  *   - Value semantics throughout.
  * CONTENTS:
  *   1. seq / gen_seq        — Index sequence (C++14 backport)
@@ -277,16 +276,20 @@ template <typename F> auto lazy(F &&f) -> Lazy<decltype(f())> {
   return Lazy<decltype(f())>{std::forward<F>(f), nullptr};
 }
 
+namespace detail {
+template <typename T> const T &cacheLazyValue(const Lazy<T> &lz) {
+  lz.cached = std::make_shared<T>(lz.thunk());
+  return *lz.cached;
+}
+} // namespace detail
+
 /**
  * Forces a lazy value and memoizes the computed result.
  * User Story: As deferred setup code, I need an explicit force helper so lazy
  * values can be materialized through one consistent API.
  */
 template <typename T> const T &eval(const Lazy<T> &lz) {
-  if (!lz.cached) {
-    lz.cached = std::make_shared<T>(lz.thunk());
-  }
-  return *lz.cached;
+  return lz.cached ? *lz.cached : detail::cacheLazyValue(lz);
 }
 
 /**
@@ -303,71 +306,80 @@ template <typename T> const T &eval(const Lazy<T> &lz) {
  * User Story: As a maintainer, I need this section note so related declarations and logic stay easy to locate.
  */
 
-template <typename Signature> class MemoizedLast;
+template <typename Signature> struct MemoizedLast;
+
+namespace detail {
+template <typename Signature> struct MemoizedLastFactory;
 
 template <typename Result, typename... Args>
-class MemoizedLast<Result(Args...)> {
-public:
+const Result &callMemoizedLast(const MemoizedLast<Result(Args...)> &memoized,
+                               Args... args);
+} // namespace detail
+
+template <typename Result, typename... Args>
+struct MemoizedLast<Result(Args...)> {
   typedef std::tuple<typename std::decay<Args>::type...> ArgsTuple;
   typedef std::function<bool(const ArgsTuple &, const ArgsTuple &)> Comparator;
-
-private:
   std::function<Result(Args...)> func;
   Comparator equals;
-  mutable bool hasCached;
+  mutable bool hasCached = false;
   mutable ArgsTuple lastArgs;
   mutable std::shared_ptr<Result> lastResult;
 
-  /**
-   * Returns the default tuple-equality comparator for memoized calls.
-   * User Story: As memoized selectors, I need a default comparator so repeated
-   * calls can skip recomputation when arguments have not changed.
-   */
-  static Comparator defaultComparator() {
-    return Comparator(
-        [](const ArgsTuple &lhs, const ArgsTuple &rhs) { return lhs == rhs; });
-  }
-
-public:
-  /**
-   * Constructs an empty memoizer with the default tuple comparator.
-   * User Story: As memoized selector setup, I need a default-constructed cache
-   * so wrappers can be created before binding a callable.
-   */
-  MemoizedLast()
-      : func(), equals(defaultComparator()), hasCached(false), lastArgs(),
-        lastResult() {}
-
-  /**
-   * Constructs a memoizer around a callable and comparator.
-   * User Story: As memoized selector setup, I need constructor injection so a
-   * callable and equality policy can be bound into one cache wrapper.
-   */
-  MemoizedLast(std::function<Result(Args...)> inFunc,
-               Comparator comparator = defaultComparator())
-      : func(std::move(inFunc)), equals(std::move(comparator)),
-        hasCached(false), lastArgs(), lastResult() {}
-
   const Result &operator()(Args... args) const {
-    ArgsTuple currentArgs(std::forward<Args>(args)...);
-
-    if (hasCached && lastResult && equals(lastArgs, currentArgs)) {
-      return *lastResult;
-    }
-
-    Result computed = func::apply(func, currentArgs);
-    lastArgs = currentArgs;
-
-    if (!lastResult) {
-      lastResult = std::make_shared<Result>(std::move(computed));
-    } else {
-      *lastResult = std::move(computed);
-    }
-
-    hasCached = true;
-    return *lastResult;
+    return detail::callMemoizedLast(*this, std::forward<Args>(args)...);
   }
 };
+
+namespace detail {
+template <typename Result, typename... Args>
+struct MemoizedLastFactory<Result(Args...)> {
+  typedef MemoizedLast<Result(Args...)> MemoizedType;
+
+  static typename MemoizedType::Comparator defaultComparator() {
+    return typename MemoizedType::Comparator(
+        [](const typename MemoizedType::ArgsTuple &lhs,
+           const typename MemoizedType::ArgsTuple &rhs) { return lhs == rhs; });
+  }
+
+  static MemoizedType
+  create(std::function<Result(Args...)> function,
+         typename MemoizedType::Comparator comparator = defaultComparator()) {
+    MemoizedType memoized;
+    memoized.func = std::move(function);
+    memoized.equals = std::move(comparator);
+    return memoized;
+  }
+};
+
+template <typename Result>
+const Result &storeMemoizedResult(std::shared_ptr<Result> &target,
+                                  Result computed) {
+  return target ? (*target = std::move(computed), *target)
+                : *(target = std::make_shared<Result>(std::move(computed)));
+}
+
+template <typename Result, typename... Args>
+const Result &
+recomputeMemoizedLast(const MemoizedLast<Result(Args...)> &memoized,
+                      typename MemoizedLast<Result(Args...)>::ArgsTuple current) {
+  Result computed = func::apply(memoized.func, current);
+  memoized.lastArgs = current;
+  memoized.hasCached = true;
+  return storeMemoizedResult(memoized.lastResult, std::move(computed));
+}
+
+template <typename Result, typename... Args>
+const Result &callMemoizedLast(const MemoizedLast<Result(Args...)> &memoized,
+                               Args... args) {
+  typename MemoizedLast<Result(Args...)>::ArgsTuple current(
+      std::forward<Args>(args)...);
+  bool useCached = memoized.hasCached && memoized.lastResult &&
+                   memoized.equals(memoized.lastArgs, current);
+  return useCached ? *memoized.lastResult
+                   : recomputeMemoizedLast(memoized, std::move(current));
+}
+} // namespace detail
 
 /**
  * Memoizes the last invocation of a std::function with default comparison.
@@ -376,7 +388,7 @@ public:
  */
 template <typename Signature>
 MemoizedLast<Signature> memoizeLast(std::function<Signature> function) {
-  return MemoizedLast<Signature>(std::move(function));
+  return detail::MemoizedLastFactory<Signature>::create(std::move(function));
 }
 
 /**
@@ -386,7 +398,8 @@ MemoizedLast<Signature> memoizeLast(std::function<Signature> function) {
  */
 template <typename Signature, typename F>
 MemoizedLast<Signature> memoizeLast(F f) {
-  return MemoizedLast<Signature>(std::function<Signature>(f));
+  return detail::MemoizedLastFactory<Signature>::create(
+      std::function<Signature>(f));
 }
 
 /**
@@ -398,7 +411,8 @@ template <typename Signature>
 MemoizedLast<Signature>
 memoizeLast(std::function<Signature> function,
             typename MemoizedLast<Signature>::Comparator comparator) {
-  return MemoizedLast<Signature>(std::move(function), std::move(comparator));
+  return detail::MemoizedLastFactory<Signature>::create(std::move(function),
+                                                        std::move(comparator));
 }
 
 /**
@@ -409,8 +423,8 @@ memoizeLast(std::function<Signature> function,
 template <typename Signature, typename F>
 MemoizedLast<Signature>
 memoizeLast(F f, typename MemoizedLast<Signature>::Comparator comparator) {
-  return MemoizedLast<Signature>(std::function<Signature>(f),
-                                 std::move(comparator));
+  return detail::MemoizedLastFactory<Signature>::create(
+      std::function<Signature>(f), std::move(comparator));
 }
 
 /**
@@ -501,9 +515,7 @@ template <typename F, typename G> Composed<F, G> compose(F f, G g) {
 template <typename T, typename Func>
 auto fmap(const Maybe<T> &m, Func f) -> Maybe<decltype(f(m.value))> {
   typedef decltype(f(m.value)) U;
-  if (!m.hasValue)
-    return Maybe<U>{false, U{}};
-  return Maybe<U>{true, f(m.value)};
+  return m.hasValue ? Maybe<U>{true, f(m.value)} : Maybe<U>{false, U{}};
 }
 
 /**
@@ -514,9 +526,8 @@ auto fmap(const Maybe<T> &m, Func f) -> Maybe<decltype(f(m.value))> {
 template <typename E, typename T, typename Func>
 auto fmap(const Either<E, T> &e, Func f) -> Either<E, decltype(f(e.right))> {
   typedef decltype(f(e.right)) U;
-  if (e.isLeft)
-    return Either<E, U>{true, e.left, U{}};
-  return Either<E, U>{false, E{}, f(e.right)};
+  return e.isLeft ? Either<E, U>{true, e.left, U{}}
+                  : Either<E, U>{false, E{}, f(e.right)};
 }
 
 /**
@@ -524,16 +535,25 @@ auto fmap(const Either<E, T> &e, Func f) -> Either<E, decltype(f(e.right))> {
  * User Story: As collection transformations, I need fmap on vectors so
  * element-wise mapping follows the same functional style as Maybe and Either.
  */
+namespace detail {
+template <typename T, typename Func, typename U>
+std::vector<U> fmapVectorRecursive(const std::vector<T> &vec, Func f,
+                                   size_t index, std::vector<U> result) {
+  return index == vec.size()
+             ? result
+             : (result.push_back(f(vec[index])),
+                fmapVectorRecursive<T, Func, U>(vec, f, index + 1,
+                                                std::move(result)));
+}
+} // namespace detail
+
 template <typename T, typename Func>
 auto fmap(const std::vector<T> &vec, Func f)
     -> std::vector<decltype(f(std::declval<const T &>()))> {
   typedef decltype(f(std::declval<const T &>())) U;
   std::vector<U> result;
   result.reserve(vec.size());
-  for (const auto &item : vec) {
-    result.push_back(f(item));
-  }
-  return result;
+  return detail::fmapVectorRecursive<T, Func, U>(vec, f, 0, std::move(result));
 }
 
 /**
@@ -543,9 +563,7 @@ auto fmap(const std::vector<T> &vec, Func f)
  */
 template <typename T, typename Func>
 auto mbind(const Maybe<T> &m, Func f) -> decltype(f(m.value)) {
-  if (!m.hasValue)
-    return decltype(f(m.value)){false, {}};
-  return f(m.value);
+  return m.hasValue ? f(m.value) : decltype(f(m.value)){false, {}};
 }
 
 /**
@@ -555,9 +573,7 @@ auto mbind(const Maybe<T> &m, Func f) -> decltype(f(m.value)) {
  */
 template <typename E, typename T, typename Func>
 auto ebind(const Either<E, T> &e, Func f) -> decltype(f(e.right)) {
-  if (e.isLeft)
-    return decltype(f(e.right)){true, e.left, {}};
-  return f(e.right);
+  return e.isLeft ? decltype(f(e.right)){true, e.left, {}} : f(e.right);
 }
 
 /**
@@ -577,9 +593,7 @@ template <typename T> T or_else(const Maybe<T> &m, const T &def) {
 template <typename T, typename FJust, typename FNothing>
 auto match(const Maybe<T> &m, FJust onJust, FNothing onNothing)
     -> decltype(onJust(m.value)) {
-  if (m.hasValue)
-    return onJust(m.value);
-  return onNothing();
+  return m.hasValue ? onJust(m.value) : onNothing();
 }
 
 /**
@@ -590,9 +604,7 @@ auto match(const Maybe<T> &m, FJust onJust, FNothing onNothing)
 template <typename E, typename T, typename FLeft, typename FRight>
 auto ematch(const Either<E, T> &e, FLeft onLeft, FRight onRight)
     -> decltype(onRight(e.right)) {
-  if (e.isLeft)
-    return onLeft(e.left);
-  return onRight(e.right);
+  return e.isLeft ? onLeft(e.left) : onRight(e.right);
 }
 
 /**
@@ -602,51 +614,16 @@ auto ematch(const Either<E, T> &e, FLeft onLeft, FRight onRight)
  * Either<Error, Result>. The pipeline short-circuits
  * on first error.
  * Usage:
- *   auto pipeline = ValidationPipeline<int>()
- *       .add(validatePositive)
- *       .add(validateRange)
- *       .add(validateEven);
- *   auto result = pipeline.run(42);
+ *   auto pipeline = validationPipeline<int>()
+ *       | validatePositive
+ *       | validateRange
+ *       | validateEven;
+ *   auto result = runValidation(pipeline, 42);
  * User Story: As a maintainer, I need this section note so related declarations and logic stay easy to locate.
  */
 
-template <typename T, typename E = std::string> class ValidationPipeline {
-  std::vector<std::function<Either<E, T>(T)>> validators;
-
-public:
-  /**
-   * Constructs an empty validation pipeline.
-   * User Story: As validation flows, I need a blank pipeline so validators can
-   * be appended incrementally before execution.
-   */
-  ValidationPipeline() = default;
-
-  /**
-   * Appends a validator to the pipeline.
-   * User Story: As validation flows, I need validators chained fluently so
-   * input rules can be assembled without mutable plumbing.
-   */
-  ValidationPipeline &add(std::function<Either<E, T>(T)> validator) {
-    validators.push_back(std::move(validator));
-    return *this;
-  }
-
-  /**
-   * Runs validators in order and stops on the first error.
-   * User Story: As validation flows, I need short-circuit execution so failing
-   * input stops at the first invalid step.
-   */
-  Either<E, T> run(T val) const {
-    T current = std::move(val);
-    for (const auto &validator : validators) {
-      auto result = validator(current);
-      if (result.isLeft) {
-        return result; // Short-circuit on first error
-      }
-      current = result.right;
-    }
-    return make_right(E{}, current);
-  }
+template <typename T, typename E = std::string> struct ValidationPipeline {
+  std::vector<std::function<Either<E, T>(T)>> Validators;
 };
 
 /**
@@ -656,76 +633,84 @@ public:
  */
 template <typename T, typename E = std::string>
 ValidationPipeline<T, E> validationPipeline() {
-  return ValidationPipeline<T, E>();
+  return ValidationPipeline<T, E>{{}};
+}
+
+/**
+ * Appends a validator to the pipeline.
+ * User Story: As validation flows, I need validators chained fluently so input
+ * rules can be assembled without stateful builder objects.
+ */
+template <typename T, typename E, typename Func>
+ValidationPipeline<T, E> addValidation(ValidationPipeline<T, E> Pipeline,
+                                       Func Validator) {
+  std::function<Either<E, T>(T)> WrappedValidator = Validator;
+  Pipeline.Validators.push_back(WrappedValidator);
+  return Pipeline;
+}
+
+/**
+ * Supports pipe-style validation assembly with free functions.
+ * User Story: As validation flows, I need ergonomic composition so validators
+ * can still be chained declaratively after removing member builders.
+ */
+template <typename T, typename E, typename Func>
+ValidationPipeline<T, E> operator|(ValidationPipeline<T, E> Pipeline,
+                                   Func Validator) {
+  return addValidation(std::move(Pipeline), Validator);
+}
+
+namespace detail {
+template <typename T, typename E>
+Either<E, T>
+runValidationRecursive(const std::vector<std::function<Either<E, T>(T)>> &Steps,
+                       size_t Index, T Current);
+
+template <typename T, typename E>
+Either<E, T>
+runValidationStep(const std::vector<std::function<Either<E, T>(T)>> &Steps,
+                  size_t Index, T Current) {
+  Either<E, T> Result = Steps[Index](Current);
+  return Result.isLeft ? Result
+                       : runValidationRecursive<T, E>(Steps, Index + 1,
+                                                      Result.right);
+}
+
+template <typename T, typename E>
+Either<E, T>
+runValidationRecursive(const std::vector<std::function<Either<E, T>(T)>> &Steps,
+                       size_t Index, T Current) {
+  return Index == Steps.size()
+             ? make_right(E{}, Current)
+             : runValidationStep<T, E>(Steps, Index, Current);
+}
+} // namespace detail
+
+/**
+ * Runs validators in order and stops on the first error.
+ * User Story: As validation flows, I need short-circuit execution so failing
+ * input stops at the first invalid step.
+ */
+template <typename T, typename E>
+Either<E, T> runValidation(const ValidationPipeline<T, E> &Pipeline, T Value) {
+  return detail::runValidationRecursive<T, E>(Pipeline.Validators, 0,
+                                              std::move(Value));
 }
 
 /**
  * 14. ConfigBuilder (Functional Configuration Builder)
- * A builder pattern for creating immutable
+ * A data-first builder for creating immutable
  * configuration objects using functional composition.
  * Usage:
- *   auto config = configBuilder<MyConfig>()
- *       .setMember(&MyConfig::name, std::string("MyApp"))
- *       .setMember(&MyConfig::port, 8080)
- *       .build();
+ *   auto builder = configBuilder<MyConfig>();
+ *   builder = setMember(builder, &MyConfig::name, std::string("MyApp"));
+ *   builder = setMember(builder, &MyConfig::port, 8080);
+ *   auto config = buildConfig(builder);
  * User Story: As a maintainer, I need this note so the surrounding code intent stays clear during maintenance and debugging.
  */
 
-template <typename Config> class ConfigBuilder {
-  std::vector<std::function<void(Config &)>> setters;
-
-public:
-  /**
-   * Constructs an empty configuration builder.
-   * User Story: As config assembly flows, I need a blank builder so setter
-   * transforms can be accumulated before materializing a config value.
-   */
-  ConfigBuilder() = default;
-
-  /**
-   * Adds an explicit mutating transform to the eventual config value.
-   * User Story: As config assembly flows, I need queued setters so immutable
-   * config objects can be built through composable transforms.
-   */
-  ConfigBuilder &with(std::function<void(Config &)> setter) {
-    setters.push_back(std::move(setter));
-    return *this;
-  }
-
-  /**
-   * Assigns a concrete member through a pointer-to-member.
-   * User Story: As config assembly flows, I need member assignment helpers so
-   * config values can be declared without repetitive boilerplate.
-   */
-  template <typename T> ConfigBuilder &setMember(T Config::*member, T value) {
-    return with([member, value](Config &config) mutable {
-      config.*member = std::move(value);
-    });
-  }
-
-  /**
-   * Delegates string-keyed assignment to config types that expose `set`.
-   * User Story: As config assembly flows, I need key-based setters so dynamic
-   * config types can participate in the same builder pattern.
-   */
-  template <typename T> ConfigBuilder &set(const std::string &key, T value) {
-    return with([key, value](Config &config) mutable {
-      config.set(key, std::move(value));
-    });
-  }
-
-  /**
-   * Materializes the configured value by replaying all queued setters.
-   * User Story: As config assembly flows, I need a final build step so queued
-   * transforms can produce one immutable config value.
-   */
-  Config build() const {
-    Config config;
-    for (const auto &setter : setters) {
-      setter(config);
-    }
-    return config;
-  }
+template <typename Config> struct ConfigBuilder {
+  std::vector<std::function<void(Config &)>> Setters;
 };
 
 /**
@@ -734,8 +719,73 @@ public:
  * immutable config values can be constructed declaratively.
  */
 template <typename Config> ConfigBuilder<Config> configBuilder() {
-  return ConfigBuilder<Config>();
+  return ConfigBuilder<Config>{{}};
 }
+
+/**
+ * Adds an explicit mutating transform to the eventual config value.
+ * User Story: As config assembly flows, I need queued setters so immutable
+ * config objects can be built through composable transforms.
+ */
+template <typename Config, typename Func>
+ConfigBuilder<Config> with(ConfigBuilder<Config> Builder, Func Setter) {
+  std::function<void(Config &)> WrappedSetter = Setter;
+  Builder.Setters.push_back(WrappedSetter);
+  return Builder;
+}
+
+/**
+ * Assigns a concrete member through a pointer-to-member.
+ * User Story: As config assembly flows, I need member assignment helpers so
+ * config values can be declared without repetitive boilerplate.
+ */
+template <typename Config, typename T>
+ConfigBuilder<Config> setMember(ConfigBuilder<Config> Builder,
+                                T Config::*Member, T Value) {
+  return with(std::move(Builder),
+              [Member, Value](Config &ConfigValue) mutable {
+                ConfigValue.*Member = std::move(Value);
+              });
+}
+
+/**
+ * Delegates string-keyed assignment to config types that expose `set`.
+ * User Story: As config assembly flows, I need key-based setters so dynamic
+ * config types can participate in the same builder pattern.
+ */
+template <typename Config, typename T>
+ConfigBuilder<Config> set(ConfigBuilder<Config> Builder, const std::string &Key,
+                          T Value) {
+  return with(std::move(Builder), [Key, Value](Config &ConfigValue) mutable {
+    ConfigValue.set(Key, std::move(Value));
+  });
+}
+
+/**
+ * Materializes the configured value by replaying all queued setters.
+ * User Story: As config assembly flows, I need a final build step so queued
+ * transforms can produce one immutable config value.
+ */
+namespace detail {
+template <typename Config>
+Config applyConfigSettersRecursive(
+    const std::vector<std::function<void(Config &)>> &Setters, size_t Index,
+    Config ConfigValue) {
+  return Index == Setters.size()
+             ? ConfigValue
+             : (Setters[Index](ConfigValue),
+                applyConfigSettersRecursive(Setters, Index + 1,
+                                            std::move(ConfigValue)));
+}
+} // namespace detail
+
+template <typename Config> Config buildConfig(const ConfigBuilder<Config> &Builder) {
+  return detail::applyConfigSettersRecursive(Builder.Setters, 0, Config{});
+}
+
+namespace detail {
+template <typename T> T failWithMessage(const std::string &Message);
+} // namespace detail
 
 /**
  * 15. TestResult (Functional Testing Result)
@@ -802,14 +852,9 @@ template <typename T> struct TestResult {
    * demand a successful value when failure is unrecoverable.
    */
   T getValue() const {
-    if (!bSuccess) {
-#if defined(__cpp_exceptions) || defined(__EXCEPTIONS) || defined(_CPPUNWIND)
-      throw std::runtime_error("TestResult: Cannot get value from failure");
-#else
-      std::abort();
-#endif
-    }
-    return value;
+    return bSuccess ? value
+                    : detail::failWithMessage<T>(
+                          "TestResult: Cannot get value from failure");
   }
 };
 
@@ -879,7 +924,50 @@ template <> struct TestResult<void> {
  * User Story: As a maintainer, I need this section note so related declarations and logic stay easy to locate.
  */
 
-template <typename T> class AsyncResult {
+namespace detail {
+template <typename T> T failWithMessage(const std::string &Message) {
+#if defined(__cpp_exceptions) || defined(__EXCEPTIONS) || defined(_CPPUNWIND)
+  throw std::runtime_error(Message);
+#else
+  std::abort();
+#endif
+}
+} // namespace detail
+
+template <typename T> struct AsyncResult;
+
+template <typename T>
+AsyncResult<T>
+createAsyncResult(std::function<void(std::function<void(T)>,
+                                     std::function<void(std::string)>)>
+                      executor);
+
+template <typename T, typename Handler>
+const AsyncResult<T> &thenAsync(const AsyncResult<T> &result,
+                                Handler handler);
+
+template <typename T, typename Handler>
+const AsyncResult<T> &catchAsync(const AsyncResult<T> &result,
+                                 Handler handler);
+
+template <typename T> void executeAsync(const AsyncResult<T> &result);
+
+inline AsyncResult<void>
+createAsyncResult(std::function<void(std::function<void()>,
+                                     std::function<void(std::string)>)>
+                      executor);
+
+template <typename Handler>
+inline const AsyncResult<void> &thenAsync(const AsyncResult<void> &result,
+                                          Handler handler);
+
+template <typename Handler>
+inline const AsyncResult<void> &catchAsync(const AsyncResult<void> &result,
+                                           Handler handler);
+
+inline void executeAsync(const AsyncResult<void> &result);
+
+template <typename T> struct AsyncResult {
   struct State {
     std::function<void(std::function<void(T)>,
                        std::function<void(std::string)>)>
@@ -887,9 +975,8 @@ template <typename T> class AsyncResult {
     std::vector<std::function<void(T)>> successHandlers;
     std::vector<std::function<void(std::string)>> errorHandlers;
   };
-  std::shared_ptr<State> state;
+  std::shared_ptr<State> state = std::make_shared<State>();
 
-public:
   /**
    * Builds an async result from an executor callback.
    * User Story: As async composition code, I need a factory that captures an
@@ -899,17 +986,8 @@ public:
   create(std::function<void(std::function<void(T)>,
                             std::function<void(std::string)>)>
              executor) {
-    auto res = AsyncResult<T>();
-    res.state->executor = std::move(executor);
-    return res;
+    return createAsyncResult<T>(std::move(executor));
   }
-
-  /**
-   * Constructs an empty async result shell with shared state.
-   * User Story: As async composition code, I need a default async container so
-   * executors and handlers can be attached after construction.
-   */
-  AsyncResult() : state(std::make_shared<State>()) {}
 
   /**
    * Registers a success handler on the async result.
@@ -917,8 +995,7 @@ public:
    * values can trigger follow-up behavior without blocking.
    */
   const AsyncResult<T> &then(std::function<void(T)> handler) const {
-    state->successHandlers.push_back(std::move(handler));
-    return *this;
+    return thenAsync(*this, std::move(handler));
   }
 
   /**
@@ -927,8 +1004,7 @@ public:
    * work can surface failures through the same fluent API.
    */
   const AsyncResult<T> &catch_(std::function<void(std::string)> handler) const {
-    state->errorHandlers.push_back(std::move(handler));
-    return *this;
+    return catchAsync(*this, std::move(handler));
   }
 
   /**
@@ -936,27 +1012,7 @@ public:
    * User Story: As async composition code, I need an explicit execute step so
    * async pipelines run only when the caller is ready to trigger them.
    */
-  void execute() const {
-    if (!state || !state->executor)
-      return;
-
-    /**
-     * Capture state in lambda to keep it alive
-     * User Story: As a maintainer, I need this note so the surrounding code intent stays clear during maintenance and debugging.
-     */
-    auto capturedState = state;
-    state->executor(
-        [capturedState](T value) {
-          for (const auto &handler : capturedState->successHandlers) {
-            handler(value);
-          }
-        },
-        [capturedState](std::string error) {
-          for (const auto &handler : capturedState->errorHandlers) {
-            handler(error);
-          }
-        });
-  }
+  void execute() const { executeAsync(*this); }
 };
 
 /**
@@ -964,16 +1020,15 @@ public:
  * User Story: As a maintainer, I need this note so the surrounding code intent stays clear during maintenance and debugging.
  */
 
-template <> class AsyncResult<void> {
+template <> struct AsyncResult<void> {
   struct State {
     std::function<void(std::function<void()>, std::function<void(std::string)>)>
         executor;
     std::vector<std::function<void()>> successHandlers;
     std::vector<std::function<void(std::string)>> errorHandlers;
   };
-  std::shared_ptr<State> state;
+  std::shared_ptr<State> state = std::make_shared<State>();
 
-public:
   /**
    * Builds a void async result from an executor callback.
    * User Story: As async composition code, I need a void factory so fire-and-
@@ -983,17 +1038,8 @@ public:
   create(std::function<void(std::function<void()>,
                             std::function<void(std::string)>)>
              executor) {
-    auto res = AsyncResult<void>();
-    res.state->executor = std::move(executor);
-    return res;
+    return createAsyncResult(std::move(executor));
   }
-
-  /**
-   * Constructs an empty void async result shell with shared state.
-   * User Story: As async composition code, I need a default void container so
-   * executors and callbacks can be wired together incrementally.
-   */
-  AsyncResult() : state(std::make_shared<State>()) {}
 
   /**
    * Registers a success handler on the void async result.
@@ -1001,8 +1047,7 @@ public:
    * completion-only tasks can notify later stages without return values.
    */
   const AsyncResult<void> &then(std::function<void()> handler) const {
-    state->successHandlers.push_back(std::move(handler));
-    return *this;
+    return thenAsync(*this, std::move(handler));
   }
 
   /**
@@ -1012,8 +1057,7 @@ public:
    */
   const AsyncResult<void> &
   catch_(std::function<void(std::string)> handler) const {
-    state->errorHandlers.push_back(std::move(handler));
-    return *this;
+    return catchAsync(*this, std::move(handler));
   }
 
   /**
@@ -1021,24 +1065,136 @@ public:
    * User Story: As async composition code, I need an explicit execute step so
    * completion-only async pipelines run on demand.
    */
-  void execute() const {
-    if (!state || !state->executor)
-      return;
-
-    auto capturedState = state;
-    state->executor(
-        [capturedState]() {
-          for (const auto &handler : capturedState->successHandlers) {
-            handler();
-          }
-        },
-        [capturedState](std::string error) {
-          for (const auto &handler : capturedState->errorHandlers) {
-            handler(error);
-          }
-        });
-  }
+  void execute() const { executeAsync(*this); }
 };
+
+namespace detail {
+template <typename T>
+void invokeSuccessHandlersRecursive(
+    const std::vector<std::function<void(T)>> &Handlers, size_t Index,
+    T Value) {
+  Index == Handlers.size()
+      ? void()
+      : (Handlers[Index](Value),
+         invokeSuccessHandlersRecursive<T>(Handlers, Index + 1, Value));
+}
+
+inline void
+invokeVoidHandlersRecursive(const std::vector<std::function<void()>> &Handlers,
+                            size_t Index) {
+  Index == Handlers.size()
+      ? void()
+      : (Handlers[Index](), invokeVoidHandlersRecursive(Handlers, Index + 1));
+}
+
+inline void invokeErrorHandlersRecursive(
+    const std::vector<std::function<void(std::string)>> &Handlers,
+    size_t Index, const std::string &Error) {
+  Index == Handlers.size()
+      ? void()
+      : (Handlers[Index](Error),
+         invokeErrorHandlersRecursive(Handlers, Index + 1, Error));
+}
+
+template <typename T>
+void runAsyncExecutor(
+    const std::shared_ptr<typename AsyncResult<T>::State> &CapturedState) {
+  CapturedState->executor(
+      [CapturedState](T Value) {
+        invokeSuccessHandlersRecursive<T>(CapturedState->successHandlers, 0,
+                                          Value);
+      },
+      [CapturedState](std::string Error) {
+        invokeErrorHandlersRecursive(CapturedState->errorHandlers, 0, Error);
+      });
+}
+
+inline void runAsyncExecutor(
+    const std::shared_ptr<typename AsyncResult<void>::State> &CapturedState) {
+  CapturedState->executor(
+      [CapturedState]() {
+        invokeVoidHandlersRecursive(CapturedState->successHandlers, 0);
+      },
+      [CapturedState](std::string Error) {
+        invokeErrorHandlersRecursive(CapturedState->errorHandlers, 0, Error);
+      });
+}
+} // namespace detail
+
+template <typename T>
+AsyncResult<T>
+createAsyncResult(std::function<void(std::function<void(T)>,
+                                     std::function<void(std::string)>)>
+                      executor) {
+  AsyncResult<T> Result;
+  Result.state->executor = std::move(executor);
+  return Result;
+}
+
+template <typename T, typename Handler>
+const AsyncResult<T> &thenAsync(const AsyncResult<T> &result,
+                                Handler handler) {
+  return result.state
+             ? (result.state->successHandlers.push_back(
+                    std::function<void(T)>(std::move(handler))),
+                result)
+             : result;
+}
+
+template <typename T, typename Handler>
+const AsyncResult<T> &catchAsync(const AsyncResult<T> &result,
+                                 Handler handler) {
+  return result.state
+             ? (result.state->errorHandlers.push_back(
+                    std::function<void(std::string)>(std::move(handler))),
+                result)
+             : result;
+}
+
+template <typename T> void executeAsync(const AsyncResult<T> &result) {
+  const std::shared_ptr<typename AsyncResult<T>::State> CapturedState =
+      result.state;
+  (CapturedState && CapturedState->executor)
+      ? detail::runAsyncExecutor<T>(CapturedState)
+      : void();
+}
+
+inline AsyncResult<void>
+createAsyncResult(std::function<void(std::function<void()>,
+                                     std::function<void(std::string)>)>
+                      executor) {
+  AsyncResult<void> Result;
+  Result.state->executor = std::move(executor);
+  return Result;
+}
+
+template <typename Handler>
+inline const AsyncResult<void> &thenAsync(const AsyncResult<void> &result,
+                                          Handler handler) {
+  return result.state
+             ? (result.state->successHandlers.push_back(
+                    std::function<void()>(std::move(handler))),
+                result)
+             : result;
+}
+
+template <typename Handler>
+inline const AsyncResult<void> &catchAsync(const AsyncResult<void> &result,
+                                           Handler handler) {
+  return result.state
+             ? (result.state->errorHandlers.push_back(
+                    std::function<void(std::string)>(std::move(handler))),
+                result)
+             : result;
+}
+
+inline void executeAsync(const AsyncResult<void> &result) {
+  const std::shared_ptr<typename AsyncResult<void>::State> CapturedState =
+      result.state;
+  (CapturedState && CapturedState->executor)
+      ? detail::runAsyncExecutor(CapturedState)
+      : void();
+}
 
 /**
  * 17. HttpResult (Functional Http Request Wrapper)
@@ -1085,14 +1241,18 @@ namespace AsyncChain {
  */
 template <typename T, typename U, typename F>
 auto then(const AsyncResult<T> &res, F f) -> AsyncResult<U> {
-  return AsyncResult<U>::create(
+  return createAsyncResult<U>(
       [res, f](std::function<void(U)> resolve,
                std::function<void(std::string)> reject) {
-        res.then([f, resolve, reject](T val) {
-             f(val).then(resolve).catch_(reject).execute();
-           })
-            .catch_(reject)
-            .execute();
+        AsyncResult<T> Source = res;
+        thenAsync(Source, [f, resolve, reject](T val) {
+          AsyncResult<U> Next = f(val);
+          thenAsync(Next, resolve);
+          catchAsync(Next, reject);
+          executeAsync(Next);
+        });
+        catchAsync(Source, reject);
+        executeAsync(Source);
       });
 }
 } // namespace AsyncChain
@@ -1119,6 +1279,32 @@ template <typename Key, typename Result> struct Dispatcher {
   std::unordered_map<Key, std::function<Result()>> table;
 };
 
+namespace detail {
+template <typename Key, typename Result>
+Dispatcher<Key, Result>
+createDispatcherRecursive(
+    const std::vector<std::pair<Key, std::function<Result()>>> &Entries,
+    size_t Index, Dispatcher<Key, Result> Current) {
+  return Index == Entries.size()
+             ? Current
+             : (Current.table[Entries[Index].first] = Entries[Index].second,
+                createDispatcherRecursive<Key, Result>(Entries, Index + 1,
+                                                       std::move(Current)));
+}
+
+template <typename Key, typename Result>
+std::vector<Key> dispatcherKeysRecursive(
+    typename std::unordered_map<Key, std::function<Result()>>::const_iterator It,
+    typename std::unordered_map<Key, std::function<Result()>>::const_iterator End,
+    std::vector<Key> Current) {
+  return It == End
+             ? Current
+             : (Current.push_back(It->first),
+                dispatcherKeysRecursive<Key, Result>(++It, End,
+                                                     std::move(Current)));
+}
+} // namespace detail
+
 /**
  * Builds a dispatcher table from key-to-handler entries.
  * User Story: As keyed dispatch flows, I need a typed dispatcher table so
@@ -1127,11 +1313,8 @@ template <typename Key, typename Result> struct Dispatcher {
 template <typename Key, typename Result>
 Dispatcher<Key, Result> createDispatcher(
     std::vector<std::pair<Key, std::function<Result()>>> entries) {
-  Dispatcher<Key, Result> d;
-  for (size_t i = 0; i < entries.size(); ++i) {
-    d.table[entries[i].first] = entries[i].second;
-  }
-  return d;
+  return detail::createDispatcherRecursive<Key, Result>(entries, 0,
+                                                        Dispatcher<Key, Result>{});
 }
 
 /**
@@ -1143,10 +1326,7 @@ template <typename Key, typename Result>
 Maybe<Result> dispatch(const Dispatcher<Key, Result> &d, const Key &key) {
   typename std::unordered_map<Key, std::function<Result()>>::const_iterator it =
       d.table.find(key);
-  if (it != d.table.end()) {
-    return just(it->second());
-  }
-  return nothing<Result>();
+  return it != d.table.end() ? just(it->second()) : nothing<Result>();
 }
 
 /**
@@ -1166,13 +1346,9 @@ bool has(const Dispatcher<Key, Result> &d, const Key &key) {
  */
 template <typename Key, typename Result>
 std::vector<Key> keys(const Dispatcher<Key, Result> &d) {
-  std::vector<Key> result;
-  for (typename std::unordered_map<Key, std::function<Result()>>::const_iterator
-           it = d.table.begin();
-       it != d.table.end(); ++it) {
-    result.push_back(it->first);
-  }
-  return result;
+  return detail::dispatcherKeysRecursive<Key, Result>(d.table.begin(),
+                                                      d.table.end(),
+                                                      std::vector<Key>());
 }
 
 /**
@@ -1202,6 +1378,19 @@ template <typename T, typename R> struct MatchCase {
   std::function<bool(const T &)> predicate;
   std::function<R(const T &)> handler;
 };
+
+namespace detail {
+template <typename T, typename R>
+Maybe<R> multiMatchRecursive(const T &Value,
+                             const std::vector<MatchCase<T, R>> &Cases,
+                             size_t Index) {
+  return Index == Cases.size()
+             ? nothing<R>()
+             : (Cases[Index].predicate(Value)
+                    ? just(Cases[Index].handler(Value))
+                    : multiMatchRecursive<T, R>(Value, Cases, Index + 1));
+}
+} // namespace detail
 
 /**
  * Builds a match case from a predicate and a handler.
@@ -1242,12 +1431,7 @@ template <typename T> std::function<bool(const T &)> equals(T expected) {
  */
 template <typename T, typename R>
 Maybe<R> multi_match(const T &value, const std::vector<MatchCase<T, R>> &cases) {
-  for (size_t i = 0; i < cases.size(); ++i) {
-    if (cases[i].predicate(value)) {
-      return just(cases[i].handler(value));
-    }
-  }
-  return nothing<R>();
+  return detail::multiMatchRecursive<T, R>(value, cases, 0);
 }
 
 /**
@@ -1256,10 +1440,7 @@ Maybe<R> multi_match(const T &value, const std::vector<MatchCase<T, R>> &cases) 
  * so pointer-based APIs can join functional pipelines safely.
  */
 template <typename T> Maybe<T> from_nullable(const T *ptr) {
-  if (ptr) {
-    return just(*ptr);
-  }
-  return nothing<T>();
+  return ptr ? just(*ptr) : nothing<T>();
 }
 
 /**
@@ -1268,10 +1449,7 @@ template <typename T> Maybe<T> from_nullable(const T *ptr) {
  * APIs can still participate in Maybe-based flows.
  */
 template <typename T> Maybe<T> from_nullable_value(T value, bool valid) {
-  if (valid) {
-    return just(std::move(value));
-  }
-  return nothing<T>();
+  return valid ? just(std::move(value)) : nothing<T>();
 }
 
 /**
@@ -1281,14 +1459,7 @@ template <typename T> Maybe<T> from_nullable_value(T value, bool valid) {
  */
 template <typename T>
 T require_just(const Maybe<T> &m, const std::string &errorMsg) {
-  if (m.hasValue) {
-    return m.value;
-  }
-#if defined(__cpp_exceptions) || defined(__EXCEPTIONS) || defined(_CPPUNWIND)
-  throw std::runtime_error(errorMsg);
-#else
-  std::abort();
-#endif
+  return m.hasValue ? m.value : detail::failWithMessage<T>(errorMsg);
 }
 
 } // namespace func

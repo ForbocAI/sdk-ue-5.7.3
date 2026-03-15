@@ -10,6 +10,7 @@
 #include "LlamaFacade.h"
 #include <cstdlib>
 #include <cstring>
+#include <memory>
 #include <string>
 #include <vector>
 
@@ -63,8 +64,9 @@ llama_facade_context *LoadInferenceModel(const char *PathUtf8) {
     return nullptr;
   }
 
-  auto *F = new llama_facade_context{Model, Ctx, false};
-  return F;
+  std::unique_ptr<llama_facade_context> F(
+      new llama_facade_context{Model, Ctx, false});
+  return F.release(); // Ownership transferred to caller; freed via FreeContext
 }
 
 llama_facade_context *LoadEmbeddingModel(const char *PathUtf8) {
@@ -92,15 +94,17 @@ llama_facade_context *LoadEmbeddingModel(const char *PathUtf8) {
     return nullptr;
   }
 
-  auto *F = new llama_facade_context{Model, Ctx, true};
-  return F;
+  std::unique_ptr<llama_facade_context> F(
+      new llama_facade_context{Model, Ctx, true});
+  return F.release(); // Ownership transferred to caller; freed via FreeContext
 }
 
 void FreeContext(llama_facade_context *Ctx) {
   if (!Ctx) return;
   llama_free(Ctx->Ctx);
   llama_model_free(Ctx->Model);
-  delete Ctx;
+  std::unique_ptr<llama_facade_context> Guard(Ctx);
+  // Guard destructor calls delete
 }
 
 char *Infer(llama_facade_context *Ctx, const char *PromptUtf8, int MaxTokens,

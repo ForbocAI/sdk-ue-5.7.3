@@ -124,19 +124,19 @@ createLazySoul(const FAgentState &state, const TArray<FMemoryItem> &memories,
  * identifiers or persona data fail before serialization and export.
  */
 inline SoulTypes::ValidationPipeline<FSoul, FString> soulValidationPipeline() {
-  return func::validationPipeline<FSoul, FString>()
-      .add([](const FSoul &soul) -> SoulTypes::Either<FString, FSoul> {
-        if (soul.Id.IsEmpty()) {
-          return SoulTypes::make_left(FString(TEXT("Missing Soul ID")), FSoul{});
-        }
-        return SoulTypes::make_right(FString(), soul);
-      })
-      .add([](const FSoul &soul) -> SoulTypes::Either<FString, FSoul> {
-        if (soul.Persona.IsEmpty()) {
-          return SoulTypes::make_left(FString(TEXT("Missing Persona")), FSoul{});
-        }
-        return SoulTypes::make_right(FString(), soul);
-      });
+  return func::validationPipeline<FSoul, FString>() |
+         [](const FSoul &soul) -> SoulTypes::Either<FString, FSoul> {
+           return soul.Id.IsEmpty()
+                      ? SoulTypes::make_left(FString(TEXT("Missing Soul ID")),
+                                             FSoul{})
+                      : SoulTypes::make_right(FString(), soul);
+         } |
+         [](const FSoul &soul) -> SoulTypes::Either<FString, FSoul> {
+           return soul.Persona.IsEmpty()
+                      ? SoulTypes::make_left(FString(TEXT("Missing Persona")),
+                                             FSoul{})
+                      : SoulTypes::make_right(FString(), soul);
+         };
 }
 
 /**
@@ -153,9 +153,11 @@ inline SoulTypes::Pipeline<FSoul> soulSerializationPipeline(const FSoul &soul) {
  * User Story: As functional soul construction, I need a curried creator so
  * soul creation can be partially applied inside pipelines.
  */
-inline auto curriedSoulCreation()
-    -> decltype(func::curry<4>(std::function<SoulTypes::SoulCreationResult(
-        FAgentState, TArray<FMemoryItem>, FString, FString)>())) {
+typedef decltype(func::curry<4>(std::function<SoulTypes::SoulCreationResult(
+    FAgentState, TArray<FMemoryItem>, FString, FString)>()))
+    FCurriedSoulCreation;
+
+inline FCurriedSoulCreation curriedSoulCreation() {
   std::function<SoulTypes::SoulCreationResult(
       FAgentState, TArray<FMemoryItem>, FString, FString)>
       Creator = [](FAgentState state, TArray<FMemoryItem> memories,

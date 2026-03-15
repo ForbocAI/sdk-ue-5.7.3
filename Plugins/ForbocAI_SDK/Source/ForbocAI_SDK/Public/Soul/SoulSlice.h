@@ -196,8 +196,9 @@ inline AnyAction ClearSoulState() { return ClearSoulStateActionCreator()(); }
  * import actions are wired into the store consistently.
  */
 inline Slice<FSoulSliceState> CreateSoulSlice() {
-  return SliceBuilder<FSoulSliceState>(TEXT("soul"), FSoulSliceState())
-      .addExtraCase(
+  return buildSlice(
+      sliceBuilder<FSoulSliceState>(TEXT("soul"), FSoulSliceState()) |
+      addExtraCase(
           Actions::RemoteExportSoulPendingActionCreator(),
           [](const FSoulSliceState &State,
              const Action<rtk::FEmptyPayload> &Action) -> FSoulSliceState {
@@ -206,7 +207,7 @@ inline Slice<FSoulSliceState> CreateSoulSlice() {
             Next.Error.Empty();
             return Next;
           })
-      .addExtraCase(
+      | addExtraCase(
           Actions::RemoteExportSoulSuccessActionCreator(),
           [](const FSoulSliceState &State,
              const Action<FSoulExportResult> &Action) -> FSoulSliceState {
@@ -216,15 +217,15 @@ inline Slice<FSoulSliceState> CreateSoulSlice() {
             Next.bHasLastExport = true;
             return Next;
           })
-      .addExtraCase(Actions::RemoteExportSoulFailedActionCreator(),
+      | addExtraCase(Actions::RemoteExportSoulFailedActionCreator(),
                     [](const FSoulSliceState &State,
                        const Action<FString> &Action) -> FSoulSliceState {
                       FSoulSliceState Next = State;
                       Next.ExportStatus = TEXT("failed");
                       Next.Error = Action.PayloadValue;
                       return Next;
-                    })
-      .addExtraCase(
+                    }) |
+      addExtraCase(
           Actions::ImportSoulPendingActionCreator(),
           [](const FSoulSliceState &State,
              const Action<rtk::FEmptyPayload> &Action) -> FSoulSliceState {
@@ -233,7 +234,7 @@ inline Slice<FSoulSliceState> CreateSoulSlice() {
             Next.Error.Empty();
             return Next;
           })
-      .addExtraCase(Actions::ImportSoulSuccessActionCreator(),
+      | addExtraCase(Actions::ImportSoulSuccessActionCreator(),
                     [](const FSoulSliceState &State,
                        const Action<FSoul> &Action) -> FSoulSliceState {
                       FSoulSliceState Next = State;
@@ -241,30 +242,29 @@ inline Slice<FSoulSliceState> CreateSoulSlice() {
                       Next.LastImport = Action.PayloadValue;
                       Next.bHasLastImport = true;
                       return Next;
-                    })
-      .addExtraCase(Actions::ImportSoulFailedActionCreator(),
+                    }) |
+      addExtraCase(Actions::ImportSoulFailedActionCreator(),
                     [](const FSoulSliceState &State,
                        const Action<FString> &Action) -> FSoulSliceState {
                       FSoulSliceState Next = State;
                       Next.ImportStatus = TEXT("failed");
                       Next.Error = Action.PayloadValue;
                       return Next;
-                    })
-      .addExtraCase(
+                    }) |
+      addExtraCase(
           Actions::SetSoulListActionCreator(),
           [](const FSoulSliceState &State,
              const Action<TArray<FSoulListItem>> &Action) -> FSoulSliceState {
             FSoulSliceState Next = State;
             Next.AvailableSouls = Action.PayloadValue;
             return Next;
-          })
-      .addExtraCase(
+          }) |
+      addExtraCase(
           Actions::ClearSoulStateActionCreator(),
           [](const FSoulSliceState &State,
              const Action<rtk::FEmptyPayload> &Action) -> FSoulSliceState {
             return FSoulSliceState();
-          })
-      .build();
+          }));
 }
 
 } // namespace SoulSlice

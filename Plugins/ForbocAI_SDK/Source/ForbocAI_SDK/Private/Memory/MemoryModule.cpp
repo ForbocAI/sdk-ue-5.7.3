@@ -17,9 +17,10 @@ FMemoryStore MemoryFactory::CreateStore(const FMemoryConfig &Config) {
   /**
    * Use functional validation
    * User Story: As a maintainer, I need this section note so related declarations and logic stay easy to locate.
-   */
+  */
   auto validationResult =
-      MemoryHelpers::memoryConfigValidationPipeline().run(Config);
+      func::runValidation(MemoryHelpers::memoryConfigValidationPipeline(),
+                          Config);
   if (validationResult.isLeft) {
     throw std::runtime_error(TCHAR_TO_UTF8(*validationResult.left));
   }

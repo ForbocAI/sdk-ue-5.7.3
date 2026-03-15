@@ -134,33 +134,31 @@ createLazyCortex(const FCortexConfig &config) {
  */
 inline CortexTypes::ValidationPipeline<FCortexConfig, FString>
 cortexConfigValidationPipeline() {
-  return func::validationPipeline<FCortexConfig, FString>()
-      .add([](const FCortexConfig &config)
-               -> CortexTypes::Either<FString, FCortexConfig> {
-        if (config.Model.IsEmpty()) {
-          return CortexTypes::make_left(FString(TEXT("Model cannot be empty")),
-                                        FCortexConfig{});
-        }
-        return CortexTypes::make_right(FString(), config);
-      })
-      .add([](const FCortexConfig &config)
-               -> CortexTypes::Either<FString, FCortexConfig> {
-        if (config.MaxTokens < 1 || config.MaxTokens > 2048) {
-          return CortexTypes::make_left(
-              FString(TEXT("Max tokens must be between 1 and 2048")),
-              FCortexConfig{});
-        }
-        return CortexTypes::make_right(FString(), config);
-      })
-      .add([](const FCortexConfig &config)
-               -> CortexTypes::Either<FString, FCortexConfig> {
-        if (config.Temperature < 0.0f || config.Temperature > 2.0f) {
-          return CortexTypes::make_left(
-              FString(TEXT("Temperature must be between 0.0 and 2.0")),
-              FCortexConfig{});
-        }
-        return CortexTypes::make_right(FString(), config);
-      });
+  return func::validationPipeline<FCortexConfig, FString>() |
+         [](const FCortexConfig &config)
+             -> CortexTypes::Either<FString, FCortexConfig> {
+           return config.Model.IsEmpty()
+                      ? CortexTypes::make_left(
+                            FString(TEXT("Model cannot be empty")),
+                            FCortexConfig{})
+                      : CortexTypes::make_right(FString(), config);
+         } |
+         [](const FCortexConfig &config)
+             -> CortexTypes::Either<FString, FCortexConfig> {
+           return (config.MaxTokens < 1 || config.MaxTokens > 2048)
+                      ? CortexTypes::make_left(
+                            FString(TEXT("Max tokens must be between 1 and 2048")),
+                            FCortexConfig{})
+                      : CortexTypes::make_right(FString(), config);
+         } |
+         [](const FCortexConfig &config)
+             -> CortexTypes::Either<FString, FCortexConfig> {
+           return (config.Temperature < 0.0f || config.Temperature > 2.0f)
+                      ? CortexTypes::make_left(
+                            FString(TEXT("Temperature must be between 0.0 and 2.0")),
+                            FCortexConfig{})
+                      : CortexTypes::make_right(FString(), config);
+         };
 }
 
 /**
@@ -178,9 +176,11 @@ cortexCompletionPipeline(const FCortex &cortex) {
  * User Story: As functional cortex construction, I need a curried creator so
  * cortex creation can participate in composable pipelines.
  */
-inline auto curriedCortexCreation()
-    -> decltype(func::curry<1>(
-        std::function<CortexTypes::CortexCreationResult(FCortexConfig)>())) {
+typedef decltype(func::curry<1>(
+    std::function<CortexTypes::CortexCreationResult(FCortexConfig)>()))
+    FCurriedCortexCreation;
+
+inline FCurriedCortexCreation curriedCortexCreation() {
   std::function<CortexTypes::CortexCreationResult(FCortexConfig)> Creator =
       [](FCortexConfig config) -> CortexTypes::CortexCreationResult {
     try {

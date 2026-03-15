@@ -2,6 +2,7 @@
 #include "LlamaFacade.h"
 #include "Misc/FileHelper.h"
 #include "Misc/Paths.h"
+#include <memory>
 
 #if WITH_FORBOC_SQLITE_VEC
 extern "C" {
@@ -17,19 +18,147 @@ namespace {
 
 constexpr int32 EmbeddingDimensions = 384;
 
+struct FBinaryDownloadState {
+  FString Destination;
+  std::function<void(FString)> Resolve;
+  std::function<void(std::string)> Reject;
+};
+
+const char *Utf8Bytes(const UTF8CHAR *Chars) {
+  return reinterpret_cast<const char *>(Chars);
+}
+
+uint64 StableHashRecursive(const FString &Value, int32 Index, uint64 Hash) {
+  return Index == Value.Len()
+             ? Hash
+             : StableHashRecursive(
+                   Value, Index + 1,
+                   (Hash ^ static_cast<uint64>(FChar::ToLower(Value[Index]))) *
+                       1099511628211ull);
+}
+
+int32 EarliestStopRecursive(const FString &Value,
+                            const TArray<FString> &StopTokens, int32 Index,
+                            int32 EarliestStop) {
+  return Index == StopTokens.Num()
+             ? EarliestStop
+             : EarliestStopRecursive(
+                   Value, StopTokens, Index + 1,
+                   (!StopTokens[Index].IsEmpty()
+                            ? Value.Find(StopTokens[Index])
+                            : INDEX_NONE) != INDEX_NONE &&
+                           (EarliestStop == INDEX_NONE ||
+                            Value.Find(StopTokens[Index]) < EarliestStop)
+                       ? Value.Find(StopTokens[Index])
+                       : EarliestStop);
+}
+
+bool ContainsStopTokenRecursive(const FString &Accumulated,
+                                const TArray<FString> &StopTokens,
+                                int32 Index) {
+  return Index == StopTokens.Num()
+             ? false
+             : (!StopTokens[Index].IsEmpty() &&
+                Accumulated.Contains(StopTokens[Index]))
+                   ? true
+                   : ContainsStopTokenRecursive(Accumulated, StopTokens,
+                                                Index + 1);
+}
+
+FString BuildJsonVectorRecursive(const TArray<float> &Vector, int32 Index,
+                                 FString JsonVec) {
+  return Index == Vector.Num()
+             ? JsonVec + TEXT("]")
+             : BuildJsonVectorRecursive(
+                   Vector, Index + 1,
+                   JsonVec + FString::SanitizeFloat(Vector[Index]) +
+                       (Index + 1 < Vector.Num() ? TEXT(",") : TEXT("")));
+}
+
+FString BuildJsonVector(const TArray<float> &Vector) {
+  return BuildJsonVectorRecursive(Vector, 0, TEXT("["));
+}
+
+#if WITH_FORBOC_SQLITE_VEC
+FMemoryItem ReadMemoryItem(sqlite3_stmt *Stmt) {
+  FMemoryItem Item;
+  const unsigned char *IdText = sqlite3_column_text(Stmt, 0);
+  const unsigned char *Txt = sqlite3_column_text(Stmt, 1);
+  const unsigned char *TypeTxt = sqlite3_column_text(Stmt, 2);
+  Item.Id = IdText ? UTF8_TO_TCHAR(reinterpret_cast<const char *>(IdText))
+                   : TEXT("");
+  Item.Text = Txt ? UTF8_TO_TCHAR(reinterpret_cast<const char *>(Txt))
+                  : TEXT("");
+  Item.Type = TypeTxt ? UTF8_TO_TCHAR(reinterpret_cast<const char *>(TypeTxt))
+                      : TEXT("observation");
+  Item.Importance = static_cast<float>(sqlite3_column_double(Stmt, 3));
+  Item.Timestamp = static_cast<int64>(sqlite3_column_int64(Stmt, 4));
+  Item.Similarity =
+      static_cast<float>(1.0 - sqlite3_column_double(Stmt, 5));
+  return Item;
+}
+
+void CollectSearchRowsRecursive(sqlite3_stmt *Stmt, TArray<FMemoryItem> &Results) {
+  const int StepResult = sqlite3_step(Stmt);
+  StepResult == SQLITE_ROW
+      ? (Results.Add(ReadMemoryItem(Stmt)),
+         CollectSearchRowsRecursive(Stmt, Results))
+      : void();
+}
+#endif
+
+bool IsRedirectCode(const int32 Code) {
+  return Code == 301 || Code == 302 || Code == 303 || Code == 307 ||
+         Code == 308;
+}
+
+void ContinueBinaryDownload(const FString &RequestUrl,
+                            const TSharedPtr<FBinaryDownloadState> &State);
+
+void ResolveBinaryDownload(const TSharedPtr<FBinaryDownloadState> &State,
+                           const TArray<uint8> &Payload) {
+  FFileHelper::SaveArrayToFile(Payload, *State->Destination)
+      ? State->Resolve(State->Destination)
+      : State->Reject("Failed to save downloaded file to disk");
+}
+
+void HandleBinaryDownloadResponse(FHttpResponsePtr Response,
+                                  const bool bWasSuccessful,
+                                  const TSharedPtr<FBinaryDownloadState> &State) {
+  (!bWasSuccessful || !Response.IsValid())
+      ? State->Reject("Network failure downloading binary")
+      : IsRedirectCode(Response->GetResponseCode()) &&
+                !Response->GetHeader(TEXT("Location")).IsEmpty()
+            ? ContinueBinaryDownload(Response->GetHeader(TEXT("Location")),
+                                     State)
+            : (Response->GetResponseCode() < 200 ||
+               Response->GetResponseCode() >= 300)
+                  ? State->Reject(std::string("HTTP error ") +
+                                  std::to_string(Response->GetResponseCode()))
+                  : ResolveBinaryDownload(State, Response->GetContent());
+}
+
+void ContinueBinaryDownload(const FString &RequestUrl,
+                            const TSharedPtr<FBinaryDownloadState> &State) {
+  TSharedRef<IHttpRequest, ESPMode::ThreadSafe> Request =
+      FHttpModule::Get().CreateRequest();
+  Request->SetURL(RequestUrl);
+  Request->SetVerb(TEXT("GET"));
+  Request->OnProcessRequestComplete().BindLambda(
+      [State](FHttpRequestPtr RequestPtr, FHttpResponsePtr Response,
+              bool bWasSuccessful) {
+        HandleBinaryDownloadResponse(Response, bWasSuccessful, State);
+      });
+  Request->ProcessRequest();
+}
+
 /**
  * Computes a case-insensitive stable hash used for generated memory ids.
  * User Story: As local-memory persistence, I need stable hashes so derived
  * memory ids stay deterministic across repeated saves.
  */
 uint64 StableHashString(const FString &Value) {
-  uint64 Hash = 1469598103934665603ull;
-  for (int32 Index = 0; Index < Value.Len(); ++Index) {
-    const TCHAR LowerCh = FChar::ToLower(Value[Index]);
-    Hash ^= static_cast<uint64>(LowerCh);
-    Hash *= 1099511628211ull;
-  }
-  return Hash;
+  return StableHashRecursive(Value, 0, 1469598103934665603ull);
 }
 
 /**
@@ -52,19 +181,8 @@ FString MakeStableMemoryId(const FMemoryItem &Item) {
  */
 FString ApplyStopTokens(const FString &Value,
                         const TArray<FString> &StopTokens) {
-  int32 EarliestStop = INDEX_NONE;
-  for (const FString &StopToken : StopTokens) {
-    if (StopToken.IsEmpty()) {
-      continue;
-    }
-
-    const int32 FoundIndex = Value.Find(StopToken);
-    if (FoundIndex != INDEX_NONE &&
-        (EarliestStop == INDEX_NONE || FoundIndex < EarliestStop)) {
-      EarliestStop = FoundIndex;
-    }
-  }
-
+  const int32 EarliestStop =
+      EarliestStopRecursive(Value, StopTokens, 0, INDEX_NONE);
   return EarliestStop == INDEX_NONE ? Value : Value.Left(EarliestStop);
 }
 
@@ -75,11 +193,8 @@ FString ApplyStopTokens(const FString &Value,
  */
 FMemoryItem PrepareStoredItem(const FMemoryItem &Item) {
   FMemoryItem StoredItem = Item;
-
-  if (StoredItem.Id.IsEmpty()) {
-    StoredItem.Id = MakeStableMemoryId(StoredItem);
-  }
-
+  StoredItem.Id =
+      StoredItem.Id.IsEmpty() ? MakeStableMemoryId(StoredItem) : StoredItem.Id;
   StoredItem.Similarity = 0.0f;
   return StoredItem;
 }
@@ -98,7 +213,7 @@ Context LoadModel(const FString &Path) {
 #if WITH_FORBOC_NATIVE
   auto Utf8Path = StringCast<UTF8CHAR>(*Path);
   return reinterpret_cast<Context>(
-      LlamaFacade::LoadInferenceModel(Utf8Path.Get()));
+      LlamaFacade::LoadInferenceModel(Utf8Bytes(Utf8Path.Get())));
 #else
   UE_LOG(LogTemp, Error, TEXT("ForbocAI: LoadModel requires WITH_FORBOC_NATIVE=1. Native libs not available."));
   return nullptr;
@@ -114,7 +229,7 @@ Context LoadEmbeddingModel(const FString &Path) {
 #if WITH_FORBOC_NATIVE
   auto Utf8Path = StringCast<UTF8CHAR>(*Path);
   return reinterpret_cast<Context>(
-      LlamaFacade::LoadEmbeddingModel(Utf8Path.Get()));
+      LlamaFacade::LoadEmbeddingModel(Utf8Bytes(Utf8Path.Get())));
 #else
   (void)Path;
   return nullptr;
@@ -150,7 +265,7 @@ TArray<float> Embed(Context Ctx, const FString &Text) {
     auto Utf8 = StringCast<UTF8CHAR>(*Text);
     if (LlamaFacade::Embed(
             reinterpret_cast<struct llama_facade_context *>(Ctx),
-            Utf8.Get(), Out.GetData(), EmbeddingDimensions)) {
+            Utf8Bytes(Utf8.Get()), Out.GetData(), EmbeddingDimensions)) {
       return Out;
     }
   }
@@ -172,8 +287,8 @@ FString Infer(Context Ctx, const FString &Prompt, int32 MaxTokens) {
 #if WITH_FORBOC_NATIVE
   auto Utf8Prompt = StringCast<UTF8CHAR>(*Prompt);
   char *Result = LlamaFacade::Infer(
-      reinterpret_cast<struct llama_facade_context *>(Ctx), Utf8Prompt.Get(),
-      MaxTokens, 0.8f);
+      reinterpret_cast<struct llama_facade_context *>(Ctx),
+      Utf8Bytes(Utf8Prompt.Get()), MaxTokens, 0.8f);
   if (Result) {
     FString Out(UTF8_TO_TCHAR(Result));
     free(Result);
@@ -202,9 +317,10 @@ FString Infer(Context Ctx, const FString &Prompt, const FCortexConfig &Config) {
     auto Utf8Prompt = StringCast<UTF8CHAR>(*Prompt);
     auto Utf8Grammar = StringCast<UTF8CHAR>(*Config.GbnfGrammar);
     char *Result = LlamaFacade::InferWithGrammar(
-        reinterpret_cast<struct llama_facade_context *>(Ctx), Utf8Prompt.Get(),
-        Config.MaxTokens, Config.Temperature > 0.0f ? Config.Temperature : 0.8f,
-        Utf8Grammar.Get());
+        reinterpret_cast<struct llama_facade_context *>(Ctx),
+        Utf8Bytes(Utf8Prompt.Get()), Config.MaxTokens,
+        Config.Temperature > 0.0f ? Config.Temperature : 0.8f,
+        Utf8Bytes(Utf8Grammar.Get()));
     if (Result) {
       FString Out(UTF8_TO_TCHAR(Result));
       free(Result);
@@ -246,19 +362,15 @@ FString InferStream(Context Ctx, const FString &Prompt,
 
   auto Utf8Prompt = StringCast<UTF8CHAR>(*Prompt);
   LlamaFacade::InferStream(
-      reinterpret_cast<struct llama_facade_context *>(Ctx), Utf8Prompt.Get(),
-      Config.MaxTokens, 0.8f,
+      reinterpret_cast<struct llama_facade_context *>(Ctx),
+      Utf8Bytes(Utf8Prompt.Get()), Config.MaxTokens, 0.8f,
       [](const char *TokenUtf8, int Len, void *UserData) {
         StreamState *S = static_cast<StreamState *>(UserData);
         if (S->bStopped) return;
         FString Token(Len, UTF8_TO_TCHAR(TokenUtf8));
         S->Accumulated += Token;
-        for (const FString &Stop : S->StopTokens) {
-          if (!Stop.IsEmpty() && S->Accumulated.Contains(Stop)) {
-            S->bStopped = true;
-            return;
-          }
-        }
+        S->bStopped = ContainsStopTokenRecursive(S->Accumulated, S->StopTokens, 0);
+        if (S->bStopped) return;
         S->Callback(Token);
       },
       &State);
@@ -282,54 +394,15 @@ namespace File {
  */
 func::AsyncResult<FString> DownloadBinary(const FString &Url,
                                           const FString &DestPath) {
-  return func::AsyncResult<FString>::create(
+  return func::createAsyncResult<FString>(
       [Url, DestPath](std::function<void(FString)> Resolve,
                       std::function<void(std::string)> Reject) {
-        auto PerformDownload =
-            [Destination = DestPath, Rslv = Resolve, Rjct = Reject](
-                FString RequestUrl, auto &PerformDownloadRef) -> void {
-          TSharedRef<IHttpRequest, ESPMode::ThreadSafe> Request =
-              FHttpModule::Get().CreateRequest();
-          Request->SetURL(RequestUrl);
-          Request->SetVerb(TEXT("GET"));
-
-          Request->OnProcessRequestComplete().BindLambda(
-              [Destination, Rslv, Rjct,
-               PerformDownloadRef](FHttpRequestPtr Req, FHttpResponsePtr Res,
-                                   bool bWasSuccessful) {
-                if (!bWasSuccessful || !Res.IsValid()) {
-                  Rjct("Network failure downloading binary");
-                  return;
-                }
-
-                const int32 Code = Res->GetResponseCode();
-
-                if (Code == 301 || Code == 302 || Code == 303 || Code == 307 ||
-                    Code == 308) {
-                  const FString Location = Res->GetHeader(TEXT("Location"));
-                  if (!Location.IsEmpty()) {
-                    PerformDownloadRef(Location, PerformDownloadRef);
-                    return;
-                  }
-                }
-
-                if (Code < 200 || Code >= 300) {
-                  Rjct(std::string("HTTP error ") + std::to_string(Code));
-                  return;
-                }
-
-                auto Payload = Res->GetContent();
-                if (FFileHelper::SaveArrayToFile(Payload, *Destination)) {
-                  Rslv(Destination);
-                } else {
-                  Rjct("Failed to save downloaded file to disk");
-                }
-              });
-
-          Request->ProcessRequest();
-        };
-
-        PerformDownload(Url, PerformDownload);
+        TSharedPtr<FBinaryDownloadState> State =
+            MakeShared<FBinaryDownloadState>();
+        State->Destination = DestPath;
+        State->Resolve = Resolve;
+        State->Reject = Reject;
+        ContinueBinaryDownload(Url, State);
       });
 }
 
@@ -373,12 +446,7 @@ DB Open(const FString &Path) {
       "id TEXT, text TEXT, type TEXT, importance REAL, timestamp INTEGER);";
   sqlite3_exec(Db, CreateSql, nullptr, nullptr, nullptr);
 
-  struct FSqliteHandle {
-    sqlite3 *Db;
-    FString Path;
-  };
-  FSqliteHandle *Handle = new FSqliteHandle{Db, NormalizedPath};
-  return reinterpret_cast<DB>(Handle);
+  return reinterpret_cast<DB>(Db);
 #else
   UE_LOG(LogTemp, Error, TEXT("ForbocAI: Sqlite::Open requires WITH_FORBOC_SQLITE_VEC=1. Native libs not available."));
   return nullptr;
@@ -396,16 +464,7 @@ void Close(DB Database) {
   }
 
 #if WITH_FORBOC_SQLITE_VEC
-  struct FSqliteHandle {
-    sqlite3 *Db;
-    FString Path;
-  };
-  FSqliteHandle *Handle =
-      reinterpret_cast<FSqliteHandle *>(Database);
-  if (Handle->Db) {
-    sqlite3_close(Handle->Db);
-  }
-  delete Handle;
+  sqlite3_close(reinterpret_cast<sqlite3 *>(Database));
 #else
   (void)Database;
 #endif
@@ -418,17 +477,11 @@ void Close(DB Database) {
  */
 void Clear(DB Database) {
 #if WITH_FORBOC_SQLITE_VEC
-  struct FSqliteHandle {
-    sqlite3 *Db;
-    FString Path;
-  };
-  FSqliteHandle *Handle =
-      reinterpret_cast<FSqliteHandle *>(Database);
-  if (!Handle || !Handle->Db) {
+  sqlite3 *Handle = reinterpret_cast<sqlite3 *>(Database);
+  if (!Handle) {
     return;
   }
-  sqlite3_exec(Handle->Db, "DELETE FROM memories;", nullptr, nullptr,
-               nullptr);
+  sqlite3_exec(Handle, "DELETE FROM memories;", nullptr, nullptr, nullptr);
 #else
   (void)Database;
 #endif
@@ -469,13 +522,8 @@ TArray<FMemoryItem> SearchRows(DB Database, const TArray<float> &Vector,
                                int32 TopK) {
   TArray<FMemoryItem> Results;
 #if WITH_FORBOC_SQLITE_VEC
-  struct FSqliteHandle {
-    sqlite3 *Db;
-    FString Path;
-  };
-  FSqliteHandle *Handle =
-      reinterpret_cast<FSqliteHandle *>(Database);
-  if (!Handle || !Handle->Db) {
+  sqlite3 *Handle = reinterpret_cast<sqlite3 *>(Database);
+  if (!Handle) {
     return Results;
   }
 
@@ -488,43 +536,17 @@ TArray<FMemoryItem> SearchRows(DB Database, const TArray<float> &Vector,
       "LIMIT ?;";
 
   sqlite3_stmt *Stmt = nullptr;
-  if (sqlite3_prepare_v2(Handle->Db, Sql, -1, &Stmt, nullptr) !=
+  if (sqlite3_prepare_v2(Handle, Sql, -1, &Stmt, nullptr) !=
       SQLITE_OK) {
     return Results;
   }
 
-  FString JsonVec = TEXT("[");
-  for (int32 Index = 0; Index < Vector.Num(); ++Index) {
-    JsonVec += FString::SanitizeFloat(Vector[Index]);
-    if (Index + 1 < Vector.Num()) {
-      JsonVec += TEXT(",");
-    }
-  }
-  JsonVec += TEXT("]");
+  const FString JsonVec = BuildJsonVector(Vector);
 
   sqlite3_bind_text(Stmt, 1, TCHAR_TO_UTF8(*JsonVec), -1,
                     SQLITE_TRANSIENT);
   sqlite3_bind_int(Stmt, 2, Limit);
-
-  while (sqlite3_step(Stmt) == SQLITE_ROW) {
-    FMemoryItem Item;
-    const unsigned char *IdText = sqlite3_column_text(Stmt, 0);
-    const unsigned char *Txt = sqlite3_column_text(Stmt, 1);
-    const unsigned char *TypeTxt = sqlite3_column_text(Stmt, 2);
-    Item.Id = IdText ? UTF8_TO_TCHAR(reinterpret_cast<const char *>(IdText))
-                     : TEXT("");
-    Item.Text = Txt ? UTF8_TO_TCHAR(reinterpret_cast<const char *>(Txt))
-                    : TEXT("");
-    Item.Type = TypeTxt ? UTF8_TO_TCHAR(reinterpret_cast<const char *>(TypeTxt))
-                        : TEXT("observation");
-    Item.Importance =
-        static_cast<float>(sqlite3_column_double(Stmt, 3));
-    Item.Timestamp = static_cast<int64>(
-        sqlite3_column_int64(Stmt, 4));
-    const double Distance = sqlite3_column_double(Stmt, 5);
-    Item.Similarity = static_cast<float>(1.0 - Distance);
-    Results.Add(Item);
-  }
+  CollectSearchRowsRecursive(Stmt, Results);
 
   sqlite3_finalize(Stmt);
 
@@ -570,13 +592,8 @@ TArray<FMemoryItem> Search(DB Database, const TArray<float> &Vector,
  */
 bool Upsert(DB Database, const FMemoryItem &Item, const TArray<float> &Vector) {
 #if WITH_FORBOC_SQLITE_VEC
-  struct FSqliteHandle {
-    sqlite3 *Db;
-    FString Path;
-  };
-  FSqliteHandle *Handle =
-      reinterpret_cast<FSqliteHandle *>(Database);
-  if (!Handle || !Handle->Db) {
+  sqlite3 *Handle = reinterpret_cast<sqlite3 *>(Database);
+  if (!Handle) {
     return false;
   }
 
@@ -590,21 +607,13 @@ bool Upsert(DB Database, const FMemoryItem &Item, const TArray<float> &Vector) {
       "VALUES (?, ?, ?, ?, ?, ?);";
 
   sqlite3_stmt *Stmt = nullptr;
-  if (sqlite3_prepare_v2(Handle->Db, Sql, -1, &Stmt, nullptr) !=
+  if (sqlite3_prepare_v2(Handle, Sql, -1, &Stmt, nullptr) !=
       SQLITE_OK) {
     return false;
   }
 
   const FMemoryItem StoredItem = PrepareStoredItem(Item);
-
-  FString JsonVec = TEXT("[");
-  for (int32 Index = 0; Index < Vector.Num(); ++Index) {
-    JsonVec += FString::SanitizeFloat(Vector[Index]);
-    if (Index + 1 < Vector.Num()) {
-      JsonVec += TEXT(",");
-    }
-  }
-  JsonVec += TEXT("]");
+  const FString JsonVec = BuildJsonVector(Vector);
 
   sqlite3_bind_text(Stmt, 1, TCHAR_TO_UTF8(*StoredItem.Id), -1,
                     SQLITE_TRANSIENT);

@@ -53,7 +53,7 @@ FValidationResult RunLocalBridgeValidation(const FAgentAction &Action,
                                           const TArray<FValidationRule> &Rules,
                                           const FBridgeRuleContext &Context) {
   auto validationPipeline = bridgeValidationPipeline();
-  auto result = validationPipeline.run(Action);
+  auto result = func::runValidation(validationPipeline, Action);
 
   if (result.isLeft) {
     return TypeFactory::Invalid(result.left);
@@ -154,25 +154,23 @@ createLazyHttpRequest(const FString &url) {
  */
 BridgeTypes::ValidationPipeline<FAgentAction, FString>
 bridgeValidationPipeline() {
-  return func::validationPipeline<FAgentAction, FString>()
-      .add([](const FAgentAction &action)
-               -> BridgeTypes::Either<FString, FAgentAction> {
-        if (action.Type.IsEmpty()) {
-          return BridgeTypes::make_left(
-              FString(TEXT("Action type cannot be empty")),
-              FAgentAction{});
-        }
-        return BridgeTypes::make_right(FString(), action);
-      })
-      .add([](const FAgentAction &action)
-               -> BridgeTypes::Either<FString, FAgentAction> {
-        if (action.Target.IsEmpty()) {
-          return BridgeTypes::make_left(
-              FString(TEXT("Action target cannot be empty")),
-              FAgentAction{});
-        }
-        return BridgeTypes::make_right(FString(), action);
-      });
+  return func::validationPipeline<FAgentAction, FString>() |
+         [](const FAgentAction &action)
+             -> BridgeTypes::Either<FString, FAgentAction> {
+           return action.Type.IsEmpty()
+                      ? BridgeTypes::make_left(
+                            FString(TEXT("Action type cannot be empty")),
+                            FAgentAction{})
+                      : BridgeTypes::make_right(FString(), action);
+         } |
+         [](const FAgentAction &action)
+             -> BridgeTypes::Either<FString, FAgentAction> {
+           return action.Target.IsEmpty()
+                      ? BridgeTypes::make_left(
+                            FString(TEXT("Action target cannot be empty")),
+                            FAgentAction{})
+                      : BridgeTypes::make_right(FString(), action);
+         };
 }
 
 /**
@@ -188,9 +186,10 @@ bridgeProcessingPipeline(const FAgentAction &action) {
  * Implementation of curried bridge validation
  * User Story: As a maintainer, I need this section note so related declarations and logic stay easy to locate.
  */
-inline auto curriedBridgeValidation()
-    -> decltype(func::curry<2>(std::function<BridgeTypes::ValidationResult(
-        FAgentAction, FBridgeRuleContext)>())) {
+typedef decltype(func::curry<2>(std::function<BridgeTypes::ValidationResult(
+    FAgentAction, FBridgeRuleContext)>())) FCurriedBridgeValidation;
+
+inline FCurriedBridgeValidation curriedBridgeValidation() {
   std::function<BridgeTypes::ValidationResult(FAgentAction, FBridgeRuleContext)>
       Creator =
           [](FAgentAction action,

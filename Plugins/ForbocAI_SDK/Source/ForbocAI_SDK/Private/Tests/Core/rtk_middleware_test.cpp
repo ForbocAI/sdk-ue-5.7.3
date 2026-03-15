@@ -45,19 +45,19 @@ bool FRtkMiddlewareTest::RunTest(const FString &Parameters) {
    * 3. Setup Listener Middleware (MwB)
    * User Story: As a maintainer, I need this note so the surrounding code intent stays clear during maintenance and debugging.
    */
-  ListenerMiddleware<FAppMockState> Listeners;
-  Listeners.addListener(TEXT("trigger"),
-                        [&EventLog](const AnyAction &Action,
-                                    const MiddlewareApi<FAppMockState> &Api) {
-                          EventLog.Add(TEXT("Listener_Triggered"));
-                        });
+  ListenerMiddleware<FAppMockState> Listeners =
+      addListener(createListenerMiddleware<FAppMockState>(), TEXT("trigger"),
+                  [&EventLog](const AnyAction &Action,
+                              const MiddlewareApi<FAppMockState> &Api) {
+                    EventLog.Add(TEXT("Listener_Triggered"));
+                  });
 
   /**
    * 4. Compose
    * User Story: As a maintainer, I need this note so the surrounding code intent stays clear during maintenance and debugging.
    */
-  std::vector<Middleware<FAppMockState>> Chain = {MiddlewareA,
-                                                  Listeners.getMiddleware()};
+  std::vector<Middleware<FAppMockState>> Chain = {
+      MiddlewareA, buildListenerMiddleware(Listeners)};
   auto EnhancedDispatch = applyMiddleware(BaseDispatch, GetState, Chain);
 
   /**

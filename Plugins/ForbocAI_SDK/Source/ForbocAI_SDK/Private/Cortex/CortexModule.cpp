@@ -27,7 +27,8 @@ FCortex CortexOps::Create(const FCortexConfig &Config) {
 
 TFuture<CortexTypes::CortexInitResult> CortexOps::Init(FCortex &Cortex) {
   auto configValidation =
-      CortexHelpers::cortexConfigValidationPipeline().run(Cortex.Config);
+      func::runValidation(CortexHelpers::cortexConfigValidationPipeline(),
+                          Cortex.Config);
   if (configValidation.isLeft) {
     TPromise<CortexTypes::CortexInitResult> Promise;
     Promise.SetValue(CortexTypes::make_left(configValidation.left, false));

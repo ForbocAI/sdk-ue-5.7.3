@@ -147,18 +147,18 @@ inline AgentTypes::Lazy<FAgent> createLazyAgent(const FAgentConfig &config) {
  */
 inline AgentTypes::ValidationPipeline<FAgentState, FString>
 agentStateValidationPipeline() {
-  return func::validationPipeline<FAgentState, FString>()
-      .add([](const FAgentState &state)
-               -> AgentTypes::Either<FString, FAgentState> {
-        if (state.JsonData.IsEmpty() || state.JsonData == TEXT("{}")) {
-          return AgentTypes::make_left(FString(TEXT("Empty agent state")), FAgentState{});
-        }
-        return AgentTypes::make_right(FString(), state);
-      })
-      .add([](const FAgentState &state)
-               -> AgentTypes::Either<FString, FAgentState> {
-        return AgentTypes::make_right(FString(), state);
-      });
+  return func::validationPipeline<FAgentState, FString>() |
+         [](const FAgentState &state)
+             -> AgentTypes::Either<FString, FAgentState> {
+           return (state.JsonData.IsEmpty() || state.JsonData == TEXT("{}"))
+                      ? AgentTypes::make_left(FString(TEXT("Empty agent state")),
+                                              FAgentState{})
+                      : AgentTypes::make_right(FString(), state);
+         } |
+         [](const FAgentState &state)
+             -> AgentTypes::Either<FString, FAgentState> {
+           return AgentTypes::make_right(FString(), state);
+         };
 }
 
 /**
@@ -176,9 +176,11 @@ agentProcessingPipeline(const FAgent &agent) {
  * User Story: As functional agent construction, I need a curried creator so
  * agent creation can participate in composable pipelines.
  */
-inline auto curriedAgentCreation()
-    -> decltype(func::curry<1>(
-        std::function<AgentTypes::AgentCreationResult(FAgentConfig)>())) {
+typedef decltype(func::curry<1>(
+    std::function<AgentTypes::AgentCreationResult(FAgentConfig)>()))
+    FCurriedAgentCreation;
+
+inline FCurriedAgentCreation curriedAgentCreation() {
   std::function<AgentTypes::AgentCreationResult(FAgentConfig)> Creator =
       [](FAgentConfig config) -> AgentTypes::AgentCreationResult {
     try {

@@ -138,9 +138,10 @@ inline rtk::AnyAction ApplyNpcVerdict(const FApplyVerdictPayload &P) {
  * actions update normalized NPC state predictably.
  */
 inline rtk::Slice<FNPCsSliceState> CreateNPCsSlice() {
-  return rtk::SliceBuilder<FNPCsSliceState>(TEXT("testgame/npcs"),
-                                            FNPCsSliceState())
-      .addExtraCase(
+  return rtk::buildSlice(
+      rtk::sliceBuilder<FNPCsSliceState>(TEXT("testgame/npcs"),
+                                         FNPCsSliceState())
+      | rtk::addExtraCase(
           NPCsActions::UpsertNPCActionCreator(),
           [](const FNPCsSliceState &S,
              const rtk::Action<FGameNPC> &A) -> FNPCsSliceState {
@@ -149,7 +150,7 @@ inline rtk::Slice<FNPCsSliceState> CreateNPCsSlice() {
                 GetNPCAdapter().upsertOne(Next.Entities, A.PayloadValue);
             return Next;
           })
-      .addExtraCase(
+      | rtk::addExtraCase(
           NPCsActions::MoveNPCActionCreator(),
           [](const FNPCsSliceState &S,
              const rtk::Action<NPCsActions::FMoveNPCPayload> &A)
@@ -164,7 +165,7 @@ inline rtk::Slice<FNPCsSliceState> CreateNPCsSlice() {
                 });
             return Next;
           })
-      .addExtraCase(
+      | rtk::addExtraCase(
           NPCsActions::PatchNPCActionCreator(),
           [](const FNPCsSliceState &S,
              const rtk::Action<NPCsActions::FPatchNPCPayload> &A)
@@ -181,7 +182,7 @@ inline rtk::Slice<FNPCsSliceState> CreateNPCsSlice() {
                 });
             return Next;
           })
-      .addExtraCase(
+      | rtk::addExtraCase(
           NPCsActions::ApplyNpcVerdictActionCreator(),
           [](const FNPCsSliceState &S,
              const rtk::Action<NPCsActions::FApplyVerdictPayload> &A)
@@ -198,8 +199,7 @@ inline rtk::Slice<FNPCsSliceState> CreateNPCsSlice() {
                   return Updated;
                 });
             return Next;
-          })
-      .build();
+          }));
 }
 
 /**
@@ -248,23 +248,23 @@ inline rtk::AnyAction SetHidden(bool H) {
  * movement and hidden-state actions update one canonical player state.
  */
 inline rtk::Slice<FPlayerState> CreatePlayerSlice() {
-  return rtk::SliceBuilder<FPlayerState>(TEXT("testgame/player"),
-                                         FPlayerState())
-      .addExtraCase(SetPositionActionCreator(),
-                    [](const FPlayerState &S,
-                       const rtk::Action<FPosition> &A) -> FPlayerState {
-                      FPlayerState Next = S;
-                      Next.Position = A.PayloadValue;
-                      return Next;
-                    })
-      .addExtraCase(SetHiddenActionCreator(),
-                    [](const FPlayerState &S,
-                       const rtk::Action<bool> &A) -> FPlayerState {
-                      FPlayerState Next = S;
-                      Next.bHidden = A.PayloadValue;
-                      return Next;
-                    })
-      .build();
+  return rtk::buildSlice(
+      rtk::sliceBuilder<FPlayerState>(TEXT("testgame/player"), FPlayerState())
+      | rtk::addExtraCase(SetPositionActionCreator(),
+                          [](const FPlayerState &S,
+                             const rtk::Action<FPosition> &A)
+                              -> FPlayerState {
+                            FPlayerState Next = S;
+                            Next.Position = A.PayloadValue;
+                            return Next;
+                          })
+      | rtk::addExtraCase(SetHiddenActionCreator(),
+                          [](const FPlayerState &S, const rtk::Action<bool> &A)
+                              -> FPlayerState {
+                            FPlayerState Next = S;
+                            Next.bHidden = A.PayloadValue;
+                            return Next;
+                          }));
 }
 
 /**
@@ -326,8 +326,9 @@ inline rtk::AnyAction SetBlocked(const TArray<FPosition> &B) {
  * dimensions and blocked tiles are managed by one reducer.
  */
 inline rtk::Slice<FGridState> CreateGridSlice() {
-  return rtk::SliceBuilder<FGridState>(TEXT("testgame/grid"), FGridState())
-      .addExtraCase(
+  return rtk::buildSlice(
+      rtk::sliceBuilder<FGridState>(TEXT("testgame/grid"), FGridState())
+      | rtk::addExtraCase(
           GridActions::SetGridSizeActionCreator(),
           [](const FGridState &S,
              const rtk::Action<FSetGridSizePayload> &A) -> FGridState {
@@ -336,15 +337,14 @@ inline rtk::Slice<FGridState> CreateGridSlice() {
             Next.Height = A.PayloadValue.Height;
             return Next;
           })
-      .addExtraCase(
+      | rtk::addExtraCase(
           GridActions::SetBlockedActionCreator(),
           [](const FGridState &S,
              const rtk::Action<TArray<FPosition>> &A) -> FGridState {
             FGridState Next = S;
             Next.Blocked = A.PayloadValue;
             return Next;
-          })
-      .build();
+          }));
 }
 
 /**
@@ -401,25 +401,27 @@ inline rtk::AnyAction BumpAlert(int32 Delta) {
  * and alert changes flow through one state reducer.
  */
 inline rtk::Slice<FStealthState> CreateStealthSlice() {
-  return rtk::SliceBuilder<FStealthState>(TEXT("testgame/stealth"),
-                                          FStealthState())
-      .addExtraCase(StealthActions::SetDoorOpenActionCreator(),
-                    [](const FStealthState &S,
-                       const rtk::Action<bool> &A) -> FStealthState {
-                      FStealthState Next = S;
-                      Next.bDoorOpen = A.PayloadValue;
-                      return Next;
-                    })
-      .addExtraCase(StealthActions::BumpAlertActionCreator(),
-                    [](const FStealthState &S,
-                       const rtk::Action<int32> &A) -> FStealthState {
-                      FStealthState Next = S;
-                      int32 Raw = Next.AlertLevel + A.PayloadValue;
-                      Next.AlertLevel =
-                          FMath::Clamp(Raw, 0, 100);
-                      return Next;
-                    })
-      .build();
+  return rtk::buildSlice(
+      rtk::sliceBuilder<FStealthState>(TEXT("testgame/stealth"),
+                                       FStealthState())
+      | rtk::addExtraCase(StealthActions::SetDoorOpenActionCreator(),
+                          [](const FStealthState &S,
+                             const rtk::Action<bool> &A)
+                              -> FStealthState {
+                            FStealthState Next = S;
+                            Next.bDoorOpen = A.PayloadValue;
+                            return Next;
+                          })
+      | rtk::addExtraCase(StealthActions::BumpAlertActionCreator(),
+                          [](const FStealthState &S,
+                             const rtk::Action<int32> &A)
+                              -> FStealthState {
+                            FStealthState Next = S;
+                            int32 Raw = Next.AlertLevel + A.PayloadValue;
+                            Next.AlertLevel =
+                                FMath::Clamp(Raw, 0, 100);
+                            return Next;
+                          }));
 }
 
 /**
@@ -495,28 +497,29 @@ inline rtk::AnyAction ClearSocialState() {
  * dialogue and trade actions update one canonical social state.
  */
 inline rtk::Slice<FSocialState> CreateSocialSlice() {
-  return rtk::SliceBuilder<FSocialState>(TEXT("testgame/social"),
-                                         FSocialState())
-      .addExtraCase(SocialActions::SetDialogueActionCreator(),
-                    [](const FSocialState &S,
-                       const rtk::Action<FString> &A) -> FSocialState {
-                      FSocialState Next = S;
-                      Next.ActiveDialogue = A.PayloadValue;
-                      return Next;
-                    })
-      .addExtraCase(SocialActions::SetTradeOfferActionCreator(),
-                    [](const FSocialState &S,
-                       const rtk::Action<FTradeOffer> &A) -> FSocialState {
-                      FSocialState Next = S;
-                      Next.ActiveTrade = A.PayloadValue;
-                      Next.bHasActiveTrade = true;
-                      return Next;
-                    })
-      .addExtraCase(SocialActions::ClearSocialStateActionCreator(),
-                    [](const FSocialState &S,
-                       const rtk::Action<rtk::FEmptyPayload> &)
-                        -> FSocialState { return FSocialState(); })
-      .build();
+  return rtk::buildSlice(
+      rtk::sliceBuilder<FSocialState>(TEXT("testgame/social"), FSocialState())
+      | rtk::addExtraCase(SocialActions::SetDialogueActionCreator(),
+                          [](const FSocialState &S,
+                             const rtk::Action<FString> &A)
+                              -> FSocialState {
+                            FSocialState Next = S;
+                            Next.ActiveDialogue = A.PayloadValue;
+                            return Next;
+                          })
+      | rtk::addExtraCase(SocialActions::SetTradeOfferActionCreator(),
+                          [](const FSocialState &S,
+                             const rtk::Action<FTradeOffer> &A)
+                              -> FSocialState {
+                            FSocialState Next = S;
+                            Next.ActiveTrade = A.PayloadValue;
+                            Next.bHasActiveTrade = true;
+                            return Next;
+                          })
+      | rtk::addExtraCase(SocialActions::ClearSocialStateActionCreator(),
+                          [](const FSocialState &S,
+                             const rtk::Action<rtk::FEmptyPayload> &)
+                              -> FSocialState { return FSocialState(); }));
 }
 
 /**
@@ -573,15 +576,16 @@ inline rtk::AnyAction LoadBridgePreset(const FString &P) {
  * bridge presets and rules are reduced in one place.
  */
 inline rtk::Slice<FBridgeRulesState> CreateGameBridgeSlice() {
-  return rtk::SliceBuilder<FBridgeRulesState>(TEXT("testgame/bridge"),
-                                              FBridgeRulesState())
-      .addExtraCase(
+  return rtk::buildSlice(
+      rtk::sliceBuilder<FBridgeRulesState>(TEXT("testgame/bridge"),
+                                           FBridgeRulesState())
+      | rtk::addExtraCase(
           GameBridgeActions::SetBridgeRulesActionCreator(),
           [](const FBridgeRulesState &S,
              const rtk::Action<FBridgeRulesState> &A) -> FBridgeRulesState {
             return A.PayloadValue;
           })
-      .addExtraCase(
+      | rtk::addExtraCase(
           GameBridgeActions::LoadBridgePresetActionCreator(),
           [](const FBridgeRulesState &S,
              const rtk::Action<FString> &A) -> FBridgeRulesState {
@@ -594,8 +598,7 @@ inline rtk::Slice<FBridgeRulesState> CreateGameBridgeSlice() {
               Next.MaxMoveDistance = 2;
             }
             return Next;
-          })
-      .build();
+          }));
 }
 
 /**
@@ -668,9 +671,10 @@ inline rtk::AnyAction ClearMemoryForNpc(const FString &NpcId) {
  * memory records can be stored and cleared through one reducer.
  */
 inline rtk::Slice<FGameMemorySliceState> CreateGameMemorySlice() {
-  return rtk::SliceBuilder<FGameMemorySliceState>(TEXT("testgame/memory"),
-                                                  FGameMemorySliceState())
-      .addExtraCase(
+  return rtk::buildSlice(
+      rtk::sliceBuilder<FGameMemorySliceState>(TEXT("testgame/memory"),
+                                               FGameMemorySliceState())
+      | rtk::addExtraCase(
           GameMemoryActions::StoreMemoryActionCreator(),
           [](const FGameMemorySliceState &S,
              const rtk::Action<FMemoryRecord> &A) -> FGameMemorySliceState {
@@ -679,7 +683,7 @@ inline rtk::Slice<FGameMemorySliceState> CreateGameMemorySlice() {
                 GetGameMemoryAdapter().addOne(Next.Entities, A.PayloadValue);
             return Next;
           })
-      .addExtraCase(
+      | rtk::addExtraCase(
           GameMemoryActions::ClearMemoryForNpcActionCreator(),
           [](const FGameMemorySliceState &S,
              const rtk::Action<FString> &A) -> FGameMemorySliceState {
@@ -695,8 +699,7 @@ inline rtk::Slice<FGameMemorySliceState> CreateGameMemorySlice() {
             Next.Entities =
                 GetGameMemoryAdapter().removeMany(Next.Entities, ToRemove);
             return Next;
-          })
-      .build();
+          }));
 }
 
 /**
@@ -740,9 +743,10 @@ inline rtk::AnyAction SetOwnerInventory(const FSetOwnerInventoryPayload &P) {
  * owner item lists are reduced in one place.
  */
 inline rtk::Slice<FInventoryState> CreateInventorySlice() {
-  return rtk::SliceBuilder<FInventoryState>(TEXT("testgame/inventory"),
-                                            FInventoryState())
-      .addExtraCase(
+  return rtk::buildSlice(
+      rtk::sliceBuilder<FInventoryState>(TEXT("testgame/inventory"),
+                                         FInventoryState())
+      | rtk::addExtraCase(
           InventoryActions::SetOwnerInventoryActionCreator(),
           [](const FInventoryState &S,
              const rtk::Action<FSetOwnerInventoryPayload> &A)
@@ -750,8 +754,7 @@ inline rtk::Slice<FInventoryState> CreateInventorySlice() {
             FInventoryState Next = S;
             Next.ByOwner.Add(A.PayloadValue.OwnerId, A.PayloadValue.Items);
             return Next;
-          })
-      .build();
+          }));
 }
 
 /**
@@ -814,9 +817,10 @@ inline rtk::AnyAction MarkSoulImported(const FString &TxId) {
  * and import tracking live in one reducer.
  */
 inline rtk::Slice<FSoulTrackingState> CreateGameSoulSlice() {
-  return rtk::SliceBuilder<FSoulTrackingState>(TEXT("testgame/soul"),
-                                               FSoulTrackingState())
-      .addExtraCase(
+  return rtk::buildSlice(
+      rtk::sliceBuilder<FSoulTrackingState>(TEXT("testgame/soul"),
+                                            FSoulTrackingState())
+      | rtk::addExtraCase(
           GameSoulActions::MarkSoulExportedActionCreator(),
           [](const FSoulTrackingState &S,
              const rtk::Action<FMarkSoulExportedPayload> &A)
@@ -825,14 +829,14 @@ inline rtk::Slice<FSoulTrackingState> CreateGameSoulSlice() {
             Next.ExportsByNpc.Add(A.PayloadValue.NpcId, A.PayloadValue.TxId);
             return Next;
           })
-      .addExtraCase(GameSoulActions::MarkSoulImportedActionCreator(),
-                    [](const FSoulTrackingState &S,
-                       const rtk::Action<FString> &A) -> FSoulTrackingState {
-                      FSoulTrackingState Next = S;
-                      Next.ImportedSoulTxIds.Add(A.PayloadValue);
-                      return Next;
-                    })
-      .build();
+      | rtk::addExtraCase(GameSoulActions::MarkSoulImportedActionCreator(),
+                          [](const FSoulTrackingState &S,
+                             const rtk::Action<FString> &A)
+                              -> FSoulTrackingState {
+                            FSoulTrackingState Next = S;
+                            Next.ImportedSoulTxIds.Add(A.PayloadValue);
+                            return Next;
+                          }));
 }
 
 /**
@@ -889,22 +893,23 @@ inline rtk::AnyAction AddMessage(const FString &Msg) {
  * message updates flow through one reducer.
  */
 inline rtk::Slice<FUIState> CreateUISlice() {
-  return rtk::SliceBuilder<FUIState>(TEXT("testgame/ui"), FUIState())
-      .addExtraCase(UIActions::SetModeActionCreator(),
-                    [](const FUIState &S,
-                       const rtk::Action<EPlayMode> &A) -> FUIState {
-                      FUIState Next = S;
-                      Next.Mode = A.PayloadValue;
-                      return Next;
-                    })
-      .addExtraCase(UIActions::AddMessageActionCreator(),
-                    [](const FUIState &S,
-                       const rtk::Action<FString> &A) -> FUIState {
-                      FUIState Next = S;
-                      Next.Messages.Add(A.PayloadValue);
-                      return Next;
-                    })
-      .build();
+  return rtk::buildSlice(
+      rtk::sliceBuilder<FUIState>(TEXT("testgame/ui"), FUIState())
+      | rtk::addExtraCase(UIActions::SetModeActionCreator(),
+                          [](const FUIState &S,
+                             const rtk::Action<EPlayMode> &A)
+                              -> FUIState {
+                            FUIState Next = S;
+                            Next.Mode = A.PayloadValue;
+                            return Next;
+                          })
+      | rtk::addExtraCase(UIActions::AddMessageActionCreator(),
+                          [](const FUIState &S,
+                             const rtk::Action<FString> &A) -> FUIState {
+                            FUIState Next = S;
+                            Next.Messages.Add(A.PayloadValue);
+                            return Next;
+                          }));
 }
 
 /**
@@ -971,9 +976,10 @@ inline rtk::AnyAction ResetTranscript() {
  * command history is recorded through one reducer.
  */
 inline rtk::Slice<FTranscriptState> CreateTranscriptSlice() {
-  return rtk::SliceBuilder<FTranscriptState>(TEXT("testgame/transcript"),
-                                             FTranscriptState())
-      .addExtraCase(
+  return rtk::buildSlice(
+      rtk::sliceBuilder<FTranscriptState>(TEXT("testgame/transcript"),
+                                          FTranscriptState())
+      | rtk::addExtraCase(
           TranscriptActions::RecordTranscriptActionCreator(),
           [](const FTranscriptState &S,
              const rtk::Action<TranscriptActions::FRecordTranscriptPayload> &A)
@@ -993,13 +999,12 @@ inline rtk::Slice<FTranscriptState> CreateTranscriptSlice() {
             Next.Entries.Add(E);
             return Next;
           })
-      .addExtraCase(
+      | rtk::addExtraCase(
           TranscriptActions::ResetTranscriptActionCreator(),
           [](const FTranscriptState &S,
              const rtk::Action<rtk::FEmptyPayload> &) -> FTranscriptState {
             return FTranscriptState();
-          })
-      .build();
+          }));
 }
 
 /**
@@ -1056,22 +1061,23 @@ inline rtk::AnyAction ResetCoverage() {
  * coverage updates are reduced in one place.
  */
 inline rtk::Slice<FHarnessState> CreateHarnessSlice() {
-  return rtk::SliceBuilder<FHarnessState>(TEXT("testgame/harness"),
-                                          FHarnessState())
-      .addExtraCase(HarnessActions::MarkCoveredActionCreator(),
-                    [](const FHarnessState &S,
-                       const rtk::Action<ECommandGroup> &A) -> FHarnessState {
-                      FHarnessState Next = S;
-                      Next.Covered.Add(A.PayloadValue, true);
-                      return Next;
-                    })
-      .addExtraCase(
+  return rtk::buildSlice(
+      rtk::sliceBuilder<FHarnessState>(TEXT("testgame/harness"),
+                                       FHarnessState())
+      | rtk::addExtraCase(HarnessActions::MarkCoveredActionCreator(),
+                          [](const FHarnessState &S,
+                             const rtk::Action<ECommandGroup> &A)
+                              -> FHarnessState {
+                            FHarnessState Next = S;
+                            Next.Covered.Add(A.PayloadValue, true);
+                            return Next;
+                          })
+      | rtk::addExtraCase(
           HarnessActions::ResetCoverageActionCreator(),
           [](const FHarnessState &S,
              const rtk::Action<rtk::FEmptyPayload> &) -> FHarnessState {
             return FHarnessState();
-          })
-      .build();
+          }));
 }
 
 /**
@@ -1101,9 +1107,9 @@ TArray<FScenarioStep> GetDefaultScenarioSteps();
 inline rtk::Slice<FScenarioSliceState> CreateScenarioSlice() {
   FScenarioSliceState Initial;
   Initial.Steps = GetDefaultScenarioSteps();
-  return rtk::SliceBuilder<FScenarioSliceState>(TEXT("testgame/scenario"),
-                                                Initial)
-      .build();
+  return rtk::buildSlice(
+      rtk::sliceBuilder<FScenarioSliceState>(TEXT("testgame/scenario"),
+                                             Initial));
 }
 
 /**

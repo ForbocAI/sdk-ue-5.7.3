@@ -16,6 +16,54 @@ namespace func {
 namespace AsyncHttp {
 namespace detail {
 
+template <typename JsonValueT>
+bool DeserializeStringArrayRecursive(
+    const TArray<TSharedPtr<JsonValueT>> &JsonValues, int32 Index,
+    TArray<FString> &OutValue) {
+  return Index == JsonValues.Num()
+             ? true
+             : !JsonValues[Index].IsValid()
+                   ? false
+                   : (OutValue.Add(JsonValues[Index]->AsString()),
+                      DeserializeStringArrayRecursive(JsonValues, Index + 1,
+                                                     OutValue));
+}
+
+template <typename T, typename JsonValueT>
+bool DeserializeStructArrayRecursive(
+    const TArray<TSharedPtr<JsonValueT>> &JsonValues, int32 Index,
+    TArray<T> &OutValue) {
+  return Index == JsonValues.Num()
+             ? true
+             : !JsonValues[Index].IsValid()
+                   ? false
+                   : !JsonValues[Index]->AsObject().IsValid()
+                         ? false
+                         : []() { return true; }(),
+               [&]() -> bool {
+                 T Item;
+                 const TSharedPtr<FJsonObject> JsonObject =
+                     JsonValues[Index]->AsObject();
+                 return !FJsonObjectConverter::JsonObjectToUStruct(
+                            JsonObject.ToSharedRef(), T::StaticStruct(), &Item,
+                            0, 0)
+                            ? false
+                            : (OutValue.Add(Item),
+                               DeserializeStructArrayRecursive<T>(
+                                   JsonValues, Index + 1, OutValue));
+               }();
+}
+
+template <typename CallbackT>
+void NotifyCallbacksRecursive(const std::vector<CallbackT> &Callbacks,
+                              size_t Index, const FString &Body,
+                              HttpStatusCode Code) {
+  Index == Callbacks.size()
+      ? void()
+      : (Callbacks[Index](Body, Code),
+         NotifyCallbacksRecursive(Callbacks, Index + 1, Body, Code));
+}
+
 /**
  * Deserializes an HTTP payload into a UStruct-backed value.
  * User Story: As generic HTTP decoding, I need a default deserializer so API
@@ -66,15 +114,7 @@ template <> struct JsonDeserializer<TArray<FString>, void> {
     }
 
     OutValue.Empty(JsonValues.Num());
-    for (int32 Index = 0; Index < JsonValues.Num(); ++Index) {
-      const TSharedPtr<FJsonValue> &JsonValue = JsonValues[Index];
-      if (!JsonValue.IsValid()) {
-        return false;
-      }
-      OutValue.Add(JsonValue->AsString());
-    }
-
-    return true;
+    return DeserializeStringArrayRecursive(JsonValues, 0, OutValue);
   }
 };
 
@@ -92,24 +132,7 @@ template <typename T> struct JsonDeserializer<TArray<T>, void> {
     }
 
     OutValue.Empty(JsonValues.Num());
-    for (int32 Index = 0; Index < JsonValues.Num(); ++Index) {
-      const TSharedPtr<FJsonValue> &JsonValue = JsonValues[Index];
-      if (!JsonValue.IsValid()) {
-        return false;
-      }
-
-      T Item;
-      const TSharedPtr<FJsonObject> JsonObject = JsonValue->AsObject();
-      if (!JsonObject.IsValid() ||
-          !FJsonObjectConverter::JsonObjectToUStruct(JsonObject.ToSharedRef(),
-                                                     T::StaticStruct(), &Item,
-                                                     0, 0)) {
-        return false;
-      }
-      OutValue.Add(Item);
-    }
-
-    return true;
+    return DeserializeStructArrayRecursive<T>(JsonValues, 0, OutValue);
   }
 };
 
@@ -287,7 +310,7 @@ GetDeduped(const FString &Url, const FString &ApiKey = TEXT("")) {
    * User Story: As a maintainer, I need this step note so I can follow the scenario progression and reason about the expected state changes.
    */
   TSharedPtr<detail::InFlightEntry> Entry =
-      MakeShareable(new detail::InFlightEntry());
+      MakeShared<detail::InFlightEntry>();
   Map.Add(Key, Entry);
 
   return func::AsyncChain::then<func::HttpResult<T>, func::HttpResult<T>>(
@@ -302,9 +325,8 @@ GetDeduped(const FString &Url, const FString &ApiKey = TEXT("")) {
          */
         const FString Body =
             Result.bSuccess ? TEXT("") : FString(UTF8_TO_TCHAR(Result.Error.c_str()));
-        for (auto &CB : Entry->Callbacks) {
-          CB(Body, Result.StatusCode);
-        }
+        detail::NotifyCallbacksRecursive(Entry->Callbacks, 0, Body,
+                                         Result.StatusCode);
 
         Map.Remove(Key);
         return func::AsyncResult<func::HttpResult<T>>::create(

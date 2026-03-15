@@ -160,43 +160,39 @@ createLazyMemoryStore(const FMemoryConfig &config) {
  */
 inline MemoryTypes::ValidationPipeline<FMemoryConfig, FString>
 memoryConfigValidationPipeline() {
-  return func::validationPipeline<FMemoryConfig, FString>()
-      .add([](const FMemoryConfig &config)
-               -> MemoryTypes::Either<FString, FMemoryConfig> {
-        if (config.DatabasePath.IsEmpty()) {
-          return MemoryTypes::make_left(
-              FString(TEXT("Database path cannot be empty")),
-              FMemoryConfig{});
-        }
-        return MemoryTypes::make_right(FString(), config);
-      })
-      .add([](const FMemoryConfig &config)
-               -> MemoryTypes::Either<FString, FMemoryConfig> {
-        if (config.MaxMemories < 1) {
-          return MemoryTypes::make_left(
-              FString(TEXT("Max memories must be at least 1")),
-              FMemoryConfig{});
-        }
-        return MemoryTypes::make_right(FString(), config);
-      })
-      .add([](const FMemoryConfig &config)
-               -> MemoryTypes::Either<FString, FMemoryConfig> {
-        if (config.VectorDimension != 384) {
-          return MemoryTypes::make_left(
-              FString(TEXT("Vector dimension must be 384")),
-              FMemoryConfig{});
-        }
-        return MemoryTypes::make_right(FString(), config);
-      })
-      .add([](const FMemoryConfig &config)
-               -> MemoryTypes::Either<FString, FMemoryConfig> {
-        if (config.MaxRecallResults < 1) {
-          return MemoryTypes::make_left(
-              FString(TEXT("Max recall results must be at least 1")),
-              FMemoryConfig{});
-        }
-        return MemoryTypes::make_right(FString(), config);
-      });
+  return func::validationPipeline<FMemoryConfig, FString>() |
+         [](const FMemoryConfig &config)
+             -> MemoryTypes::Either<FString, FMemoryConfig> {
+           return config.DatabasePath.IsEmpty()
+                      ? MemoryTypes::make_left(
+                            FString(TEXT("Database path cannot be empty")),
+                            FMemoryConfig{})
+                      : MemoryTypes::make_right(FString(), config);
+         } |
+         [](const FMemoryConfig &config)
+             -> MemoryTypes::Either<FString, FMemoryConfig> {
+           return config.MaxMemories < 1
+                      ? MemoryTypes::make_left(
+                            FString(TEXT("Max memories must be at least 1")),
+                            FMemoryConfig{})
+                      : MemoryTypes::make_right(FString(), config);
+         } |
+         [](const FMemoryConfig &config)
+             -> MemoryTypes::Either<FString, FMemoryConfig> {
+           return config.VectorDimension != 384
+                      ? MemoryTypes::make_left(
+                            FString(TEXT("Vector dimension must be 384")),
+                            FMemoryConfig{})
+                      : MemoryTypes::make_right(FString(), config);
+         } |
+         [](const FMemoryConfig &config)
+             -> MemoryTypes::Either<FString, FMemoryConfig> {
+           return config.MaxRecallResults < 1
+                      ? MemoryTypes::make_left(
+                            FString(TEXT("Max recall results must be at least 1")),
+                            FMemoryConfig{})
+                      : MemoryTypes::make_right(FString(), config);
+         };
 }
 
 /**
@@ -214,9 +210,11 @@ memoryStoreCreationPipeline(const FMemoryStore &store) {
  * User Story: As functional memory construction, I need a curried creator so
  * store creation can be partially applied in pipelines.
  */
-inline auto curriedMemoryStoreCreation()
-    -> decltype(func::curry<1>(
-        std::function<MemoryTypes::MemoryStoreCreationResult(FMemoryConfig)>())) {
+typedef decltype(func::curry<1>(
+    std::function<MemoryTypes::MemoryStoreCreationResult(FMemoryConfig)>()))
+    FCurriedMemoryStoreCreation;
+
+inline FCurriedMemoryStoreCreation curriedMemoryStoreCreation() {
   std::function<MemoryTypes::MemoryStoreCreationResult(FMemoryConfig)> Creator =
       [](FMemoryConfig config) -> MemoryTypes::MemoryStoreCreationResult {
     try {

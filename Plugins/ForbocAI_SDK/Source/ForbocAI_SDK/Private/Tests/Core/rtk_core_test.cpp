@@ -14,38 +14,40 @@ bool FRtkStoreAndSliceTest::RunTest(const FString &Parameters) {
    * Build Slice
    * User Story: As a maintainer, I need this note so the surrounding code intent stays clear during maintenance and debugging.
    */
-  SliceBuilder<FNpcMockState> Builder(TEXT("npc"),
-                                      FNpcMockState{TEXT(""), 100});
+  SliceBuilder<FNpcMockState> Builder =
+      sliceBuilder<FNpcMockState>(TEXT("npc"), FNpcMockState{TEXT(""), 100});
 
-  auto SetInfoAction = Builder.createCase<FNpcMockState>(
+  auto SetInfoAction = createCase<FNpcMockState>(
+      Builder,
       TEXT("setInfo"),
       [](const FNpcMockState &State, const Action<FNpcMockState> &Action) {
         return Action.PayloadValue;
       });
 
-  auto ResetAction = Builder.createCase(
+  auto ResetAction = createCase(
+      Builder,
       TEXT("reset"),
       [](const FNpcMockState &State,
          const Action<rtk::FEmptyPayload> &Action) {
         return FNpcMockState{TEXT(""), 100};
       });
 
-  Slice<FNpcMockState> NpcSlice = Builder.build();
+  Slice<FNpcMockState> NpcSlice = buildSlice(Builder);
 
   /**
    * Combine
    * User Story: As a maintainer, I need this note so the surrounding code intent stays clear during maintenance and debugging.
    */
-  auto RootReducer = combineReducers<FAppMockState>()
-                         .add(&FAppMockState::ActiveNpc, NpcSlice.Reducer)
-                         .build();
+  auto RootReducer = buildReducer(addReducer(combineReducers<FAppMockState>(),
+                                             &FAppMockState::ActiveNpc,
+                                             NpcSlice.Reducer));
 
   /**
    * Create Store
    * User Story: As a maintainer, I need this step note so I can follow the scenario progression and reason about the expected state changes.
    */
   FAppMockState InitialState{FNpcMockState{TEXT(""), 100}};
-  Store<FAppMockState> AppStore(InitialState, RootReducer);
+  Store<FAppMockState> AppStore = createCoreStore(InitialState, RootReducer);
 
   int CallCount = 0;
   auto Unsub = AppStore.subscribe([&CallCount]() { CallCount++; });

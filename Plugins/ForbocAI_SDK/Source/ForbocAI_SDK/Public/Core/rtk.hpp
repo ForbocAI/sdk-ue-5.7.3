@@ -73,10 +73,9 @@ struct AnyAction {
    * payload type matches the stored value. Prefer ActionCreator::extract() when possible.
    */
   template <typename Payload> func::Maybe<Payload> getPayload() const {
-    if (!PayloadWrapper) {
-      return func::nothing<Payload>();
-    }
-    return func::just(*static_cast<Payload *>(PayloadWrapper.get()));
+    return PayloadWrapper
+               ? func::just(*static_cast<Payload *>(PayloadWrapper.get()))
+               : func::nothing<Payload>();
   }
 };
 
@@ -89,6 +88,20 @@ using Reducer = std::function<State(const State &, const ActionT &)>;
 
 template <typename State>
 using CaseReducer = std::function<State(const State &, const AnyAction &)>;
+
+template <typename State> struct Store;
+
+template <typename State>
+Store<State> createCoreStore(State InitialState, CaseReducer<State> ReducerFunc);
+
+template <typename State> const State &getState(const Store<State> &StoreValue);
+
+template <typename State>
+AnyAction dispatch(Store<State> &StoreValue, const AnyAction &Action);
+
+template <typename State>
+std::function<void()> subscribe(Store<State> &StoreValue,
+                                std::function<void()> Callback);
 
 /**
  * 1.3 Store
@@ -106,20 +119,11 @@ template <typename State> struct Store {
   int64_t NextId = 1;
 
   /**
-   * Constructs a store from initial state and a root reducer.
-   * User Story: As runtime bootstrapping, I need a store constructor so a root
-   * reducer and its initial state can start handling dispatched actions.
-   */
-  Store(State InitialState, CaseReducer<State> ReducerFunc)
-      : CurrentState(std::move(InitialState)),
-        RootReducer(std::move(ReducerFunc)) {}
-
-  /**
    * Returns the current store state snapshot.
    * User Story: As store consumers, I need the current state exposed so
    * dispatchers, selectors, and subscribers can inspect runtime data.
    */
-  const State &getState() const { return CurrentState; }
+  const State &getState() const { return rtk::getState(*this); }
 
   /**
    * Applies an action and notifies subscribers after the reducer runs.
@@ -127,16 +131,7 @@ template <typename State> struct Store {
    * listeners so runtime flows can react to reducer changes.
    */
   AnyAction dispatch(const AnyAction &action) {
-    CurrentState = RootReducer(CurrentState, action);
-    /**
-     * Copy subscribers so list is stable if unsubscribed during callback
-     * User Story: As a maintainer, I need this note so the surrounding code intent stays clear during maintenance and debugging.
-     */
-    auto SubsCopy = Subscribers;
-    for (const auto &sub : SubsCopy) {
-      sub.Callback();
-    }
-    return action;
+    return rtk::dispatch(*this, action);
   }
 
   /**
@@ -145,75 +140,81 @@ template <typename State> struct Store {
    * handles so runtime code can observe state safely.
    */
   std::function<void()> subscribe(std::function<void()> Callback) {
-    int64_t Id = NextId++;
-    Subscribers.push_back({Id, std::move(Callback)});
-
-    /**
-     * Return unsubscribe callable Handle
-     * User Story: As a maintainer, I need this note so the surrounding code intent stays clear during maintenance and debugging.
-     */
-    return [this, Id]() {
-      for (auto it = Subscribers.begin(); it != Subscribers.end(); ++it) {
-        if (it->Id == Id) {
-          Subscribers.erase(it);
-          break;
-        }
-      }
-    };
+    return rtk::subscribe(*this, std::move(Callback));
   }
 };
 
+namespace detail {
+template <typename State>
+void notifySubscribersRecursive(
+    const std::vector<typename Store<State>::Subscriber> &Subscribers,
+    size_t Index) {
+  Index == Subscribers.size()
+      ? void()
+      : (Subscribers[Index].Callback(),
+         notifySubscribersRecursive<State>(Subscribers, Index + 1));
+}
+
+template <typename State>
+void eraseSubscriberAt(std::vector<typename Store<State>::Subscriber> &Subscribers,
+                       size_t Index) {
+  Subscribers.erase(Subscribers.begin() + Index);
+}
+
+template <typename State>
+void eraseSubscriberRecursive(
+    std::vector<typename Store<State>::Subscriber> &Subscribers, size_t Index,
+    int64_t Id) {
+  Index == Subscribers.size()
+      ? void()
+      : (Subscribers[Index].Id == Id
+             ? eraseSubscriberAt<State>(Subscribers, Index)
+             : eraseSubscriberRecursive<State>(Subscribers, Index + 1, Id),
+         void());
+}
+} // namespace detail
+
+template <typename State>
+Store<State> createCoreStore(State InitialState, CaseReducer<State> ReducerFunc) {
+  Store<State> StoreValue;
+  StoreValue.CurrentState = std::move(InitialState);
+  StoreValue.RootReducer = std::move(ReducerFunc);
+  return StoreValue;
+}
+
+template <typename State> const State &getState(const Store<State> &StoreValue) {
+  return StoreValue.CurrentState;
+}
+
+template <typename State>
+AnyAction dispatch(Store<State> &StoreValue, const AnyAction &Action) {
+  StoreValue.CurrentState = StoreValue.RootReducer(StoreValue.CurrentState, Action);
+  const std::vector<typename Store<State>::Subscriber> SubsCopy =
+      StoreValue.Subscribers;
+  detail::notifySubscribersRecursive<State>(SubsCopy, 0);
+  return Action;
+}
+
+template <typename State>
+std::function<void()> subscribe(Store<State> &StoreValue,
+                                std::function<void()> Callback) {
+  const int64_t Id = StoreValue.NextId++;
+  StoreValue.Subscribers.push_back(
+      typename Store<State>::Subscriber{Id, std::move(Callback)});
+  return [&StoreValue, Id]() {
+    detail::eraseSubscriberRecursive<State>(StoreValue.Subscribers, 0, Id);
+  };
+}
+
 /**
  * 1.4 combineReducers
- * User Story: As a maintainer, I need this note so the surrounding code intent stays clear during maintenance and debugging.
+ * User Story: As a maintainer, I need this note so the surrounding code intent
+ * stays clear during maintenance and debugging.
  */
-template <typename RootState> class ReducerCombiner {
+template <typename RootState> struct ReducerCombiner {
   std::vector<
       std::function<bool(RootState &, const RootState &, const AnyAction &)>>
-      bindings;
-
-public:
-  /**
-   * Adds a reducer binding for a specific slice member on the root state.
-   * User Story: As root-store assembly, I need slice bindings declared
-   * fluently so reducers can be composed without boilerplate glue.
-   */
-  template <typename SliceState>
-  ReducerCombiner &add(SliceState RootState::*member,
-                       CaseReducer<SliceState> reducer) {
-    bindings.push_back([member, reducer](RootState &nextState,
-                                         const RootState &prevState,
-                                         const AnyAction &action) {
-      const SliceState &prevSlice = prevState.*member;
-      SliceState nextSlice = reducer(prevSlice, action);
-      bool changed = !(prevSlice == nextSlice);
-      if (changed) {
-        nextState.*member = std::move(nextSlice);
-      }
-      return changed;
-    });
-    return *this;
-  }
-
-  /**
-   * Produces a root reducer that fans an action out to every bound slice.
-   * User Story: As root-store assembly, I need one reducer combiner output so
-   * bound slices receive the same dispatched action coherently.
-   */
-  CaseReducer<RootState> build() const {
-    auto b = bindings;
-    return
-        [b](const RootState &prevState, const AnyAction &action) -> RootState {
-          RootState nextState = prevState;
-          bool changed = false;
-          for (const auto &binding : b) {
-            if (binding(nextState, prevState, action)) {
-              changed = true;
-            }
-          }
-          return changed ? nextState : prevState;
-        };
-  }
+      Bindings;
 };
 
 /**
@@ -222,7 +223,81 @@ public:
  * slices can be registered incrementally.
  */
 template <typename RootState> ReducerCombiner<RootState> combineReducers() {
-  return ReducerCombiner<RootState>();
+  return ReducerCombiner<RootState>{{}};
+}
+
+/**
+ * Adds a reducer binding for a specific slice member on the root state.
+ * User Story: As root-store assembly, I need slice bindings declared through
+ * free functions so reducer wiring stays outside builder classes.
+ */
+template <typename RootState, typename SliceState>
+ReducerCombiner<RootState>
+addReducer(ReducerCombiner<RootState> Combiner, SliceState RootState::*Member,
+           CaseReducer<SliceState> ReducerFunc) {
+  Combiner.Bindings.push_back(
+      [Member, ReducerFunc](RootState &NextState, const RootState &PrevState,
+                            const AnyAction &Action) {
+        const SliceState &PrevSlice = PrevState.*Member;
+        SliceState NextSlice = ReducerFunc(PrevSlice, Action);
+        bool bChanged = !(PrevSlice == NextSlice);
+        return bChanged ? (NextState.*Member = std::move(NextSlice), true)
+                        : false;
+      });
+  return Combiner;
+}
+
+namespace detail {
+template <typename RootState>
+RootState applyReducerBindingsRecursive(
+    const std::vector<
+        std::function<bool(RootState &, const RootState &, const AnyAction &)>>
+        &Bindings,
+    size_t Index, const RootState &PrevState, RootState NextState,
+    bool bChanged, const AnyAction &Action);
+
+template <typename RootState>
+RootState applyReducerBindingStep(
+    const std::vector<
+        std::function<bool(RootState &, const RootState &, const AnyAction &)>>
+        &Bindings,
+    size_t Index, const RootState &PrevState, RootState NextState,
+    bool bChanged, const AnyAction &Action) {
+  const bool bNextChanged =
+      Bindings[Index](NextState, PrevState, Action) ? true : bChanged;
+  return applyReducerBindingsRecursive<RootState>(
+      Bindings, Index + 1, PrevState, std::move(NextState), bNextChanged,
+      Action);
+}
+
+template <typename RootState>
+RootState applyReducerBindingsRecursive(
+    const std::vector<
+        std::function<bool(RootState &, const RootState &, const AnyAction &)>>
+        &Bindings,
+    size_t Index, const RootState &PrevState, RootState NextState,
+    bool bChanged, const AnyAction &Action) {
+  return Index == Bindings.size()
+             ? (bChanged ? NextState : PrevState)
+             : applyReducerBindingStep<RootState>(
+                   Bindings, Index, PrevState, std::move(NextState), bChanged,
+                   Action);
+}
+} // namespace detail
+
+/**
+ * Produces a root reducer that fans an action out to every bound slice.
+ * User Story: As root-store assembly, I need one reducer combiner output so
+ * bound slices receive the same dispatched action coherently.
+ */
+template <typename RootState>
+CaseReducer<RootState> buildReducer(const ReducerCombiner<RootState> &Combiner) {
+  auto Bindings = Combiner.Bindings;
+  return [Bindings](const RootState &PrevState,
+                    const AnyAction &Action) -> RootState {
+    return detail::applyReducerBindingsRecursive<RootState>(
+        Bindings, 0, PrevState, PrevState, false, Action);
+  };
 }
 
 /**
@@ -249,10 +324,8 @@ template <typename Payload> struct ActionCreator {
    * reducers can consume AnyAction without repeating casts.
    */
   func::Maybe<Payload> extract(const AnyAction &action) const {
-    if (action.Type == Type && action.PayloadWrapper) {
-      return func::just(*static_cast<Payload *>(action.PayloadWrapper.get()));
-    }
-    return func::nothing<Payload>();
+    return match(action) ? action.getPayload<Payload>()
+                         : func::nothing<Payload>();
   }
 };
 
@@ -301,141 +374,173 @@ template <typename State> struct Slice {
 
 /**
  * 2.3 SliceBuilder for generating slices and binding action creators locally
- * User Story: As a maintainer, I need this note so the surrounding code intent stays clear during maintenance and debugging.
+ * User Story: As a maintainer, I need this note so the surrounding code intent
+ * stays clear during maintenance and debugging.
  */
-template <typename State> class SliceBuilder {
+template <typename State> struct SliceBuilder {
   FString Name;
   State InitialState;
   TMap<FString, CaseReducer<State>> Reducers;
-
-public:
-  /**
-   * Constructs a slice builder with a name and initial state.
-   * User Story: As slice authors, I need a builder constructor so slice naming
-   * and initial state are defined before reducer cases are registered.
-   */
-  SliceBuilder(FString InName, State InInitialState)
-      : Name(MoveTemp(InName)), InitialState(MoveTemp(InInitialState)) {}
-
-  /**
-   * Registers a typed reducer case and returns its local action creator.
-   * User Story: As slice authors, I need local case registration so reducers
-   * and action creators can be declared together.
-   */
-  template <typename Payload>
-  ActionCreator<Payload>
-  createCase(const FString &ShortName,
-             std::function<State(const State &, const Action<Payload> &)>
-                 ReducerFunc) {
-    FString FullType = Name + TEXT("/") + ShortName;
-    ActionCreator<Payload> Creator{FullType};
-
-    Reducers.Add(FullType,
-                 [Creator, ReducerFunc](const State &prevState,
-                                        const AnyAction &anyAction) -> State {
-                   auto payloadOpt = Creator.extract(anyAction);
-                   if (payloadOpt.hasValue) {
-                     return ReducerFunc(
-                         prevState,
-                         makeAction(anyAction.Type, payloadOpt.value));
-                   }
-                   return prevState;
-                 });
-
-    return Creator;
-  }
-
-  /**
-   * Registers an empty-payload reducer case and returns its action creator.
-   * User Story: As slice authors, I need empty case registration so lifecycle
-   * reducers can be declared without custom payload types.
-   */
-  EmptyActionCreator
-  createCase(const FString &ShortName,
-             std::function<State(const State &, const Action<FEmptyPayload> &)>
-                 ReducerFunc) {
-    FString FullType = Name + TEXT("/") + ShortName;
-    EmptyActionCreator Creator{FullType};
-
-    Reducers.Add(FullType,
-                 [Creator, ReducerFunc](const State &prevState,
-                                        const AnyAction &anyAction) -> State {
-                   if (Creator.match(anyAction)) {
-                     return ReducerFunc(prevState, makeAction(anyAction.Type));
-                   }
-                   return prevState;
-                 });
-
-    return Creator;
-  }
-
-  /**
-   * Binds an externally created typed action to this slice.
-   * User Story: As slice authors, I need externally owned actions bindable into
-   * a slice so cross-slice lifecycle handling stays ergonomic.
-   */
-  template <typename Payload, typename ReducerFn>
-  SliceBuilder &
-  addExtraCase(const ActionCreator<Payload> &Creator, ReducerFn ReducerFunc) {
-    std::function<State(const State &, const Action<Payload> &)> WrappedReducer =
-        ReducerFunc;
-    Reducers.Add(Creator.Type,
-                 [Creator, WrappedReducer](const State &prevState,
-                                           const AnyAction &anyAction) -> State {
-                   auto payloadOpt = Creator.extract(anyAction);
-                   if (payloadOpt.hasValue) {
-                     return WrappedReducer(
-                         prevState,
-                         makeAction(anyAction.Type, payloadOpt.value));
-                   }
-                   return prevState;
-                 });
-    return *this;
-  }
-
-  /**
-   * Binds an externally created empty action to this slice.
-   * User Story: As slice authors, I need external empty actions bindable into a
-   * slice so lifecycle wiring stays consistent across modules.
-   */
-  template <typename ReducerFn>
-  SliceBuilder &addExtraCase(const EmptyActionCreator &Creator,
-                             ReducerFn ReducerFunc) {
-    std::function<State(const State &, const Action<FEmptyPayload> &)>
-        WrappedReducer = ReducerFunc;
-    Reducers.Add(Creator.Type,
-                 [Creator, WrappedReducer](const State &prevState,
-                                           const AnyAction &anyAction) -> State {
-                   if (Creator.match(anyAction)) {
-                     return WrappedReducer(prevState,
-                                           makeAction(anyAction.Type));
-                   }
-                   return prevState;
-                 });
-    return *this;
-  }
-
-  /**
-   * Finalizes the slice and its reducer lookup table.
-   * User Story: As slice authors, I need a final build step so the slice can be
-   * exported with its reducer map intact.
-   */
-  Slice<State> build() const {
-    Slice<State> S;
-    S.Name = Name;
-    auto DefaultState = InitialState;
-    auto Map = Reducers;
-
-    S.Reducer = [DefaultState, Map](const State &prevState,
-                                    const AnyAction &action) -> State {
-      if (const CaseReducer<State> *Found = Map.Find(action.Type)) {
-        return (*Found)(prevState, action);
-      }
-      return prevState;
-    };
-    return S;
-  }
 };
+
+/**
+ * Constructs a slice builder with a name and initial state.
+ * User Story: As slice authors, I need a builder factory so slice naming and
+ * initial state are defined before reducer cases are registered.
+ */
+template <typename State>
+SliceBuilder<State> sliceBuilder(FString InName, State InInitialState) {
+  SliceBuilder<State> Builder;
+  Builder.Name = MoveTemp(InName);
+  Builder.InitialState = MoveTemp(InInitialState);
+  return Builder;
+}
+
+/**
+ * Registers a typed reducer case and returns its local action creator.
+ * User Story: As slice authors, I need local case registration so reducers and
+ * action creators can be declared together without class methods.
+ */
+template <typename Payload, typename State, typename ReducerFn>
+ActionCreator<Payload>
+createCase(SliceBuilder<State> &Builder, const FString &ShortName,
+           ReducerFn ReducerFunc) {
+  std::function<State(const State &, const Action<Payload> &)> WrappedReducer =
+      ReducerFunc;
+  FString FullType = Builder.Name + TEXT("/") + ShortName;
+  ActionCreator<Payload> Creator{FullType};
+
+  Builder.Reducers.Add(
+      FullType, [Creator, WrappedReducer](const State &PrevState,
+                                          const AnyAction &AnyActionValue) {
+        auto PayloadOpt = Creator.extract(AnyActionValue);
+        return PayloadOpt.hasValue
+                   ? WrappedReducer(
+                         PrevState,
+                         makeAction(AnyActionValue.Type, PayloadOpt.value))
+                   : PrevState;
+      });
+
+  return Creator;
+}
+
+/**
+ * Registers an empty-payload reducer case and returns its action creator.
+ * User Story: As slice authors, I need empty case registration so lifecycle
+ * reducers can be declared without custom payload types.
+ */
+template <typename State, typename ReducerFn>
+EmptyActionCreator createCase(SliceBuilder<State> &Builder,
+                              const FString &ShortName,
+                              ReducerFn ReducerFunc) {
+  std::function<State(const State &, const Action<FEmptyPayload> &)>
+      WrappedReducer = ReducerFunc;
+  FString FullType = Builder.Name + TEXT("/") + ShortName;
+  EmptyActionCreator Creator{FullType};
+
+  Builder.Reducers.Add(
+      FullType, [Creator, WrappedReducer](const State &PrevState,
+                                          const AnyAction &AnyActionValue) {
+        return Creator.match(AnyActionValue)
+                   ? WrappedReducer(PrevState, makeAction(AnyActionValue.Type))
+                   : PrevState;
+      });
+
+  return Creator;
+}
+
+template <typename CreatorT, typename ReducerFn> struct ExtraCaseBinding {
+  CreatorT Creator;
+  ReducerFn ReducerFunc;
+};
+
+/**
+ * Creates a pipe-friendly extra-case binding description.
+ * User Story: As slice authors, I need declarative extra-case descriptors so
+ * slice construction can remain chained with free functions.
+ */
+template <typename CreatorT, typename ReducerFn>
+ExtraCaseBinding<CreatorT, ReducerFn>
+addExtraCase(const CreatorT &Creator, ReducerFn ReducerFunc) {
+  return ExtraCaseBinding<CreatorT, ReducerFn>{Creator, ReducerFunc};
+}
+
+/**
+ * Binds an externally created typed action to this slice.
+ * User Story: As slice authors, I need externally owned actions bindable into
+ * a slice so cross-slice lifecycle handling stays ergonomic.
+ */
+template <typename State, typename Payload, typename ReducerFn>
+SliceBuilder<State>
+addExtraCase(SliceBuilder<State> Builder, const ActionCreator<Payload> &Creator,
+             ReducerFn ReducerFunc) {
+  std::function<State(const State &, const Action<Payload> &)> WrappedReducer =
+      ReducerFunc;
+  Builder.Reducers.Add(
+      Creator.Type,
+      [Creator, WrappedReducer](const State &PrevState,
+                                const AnyAction &AnyActionValue) -> State {
+        auto PayloadOpt = Creator.extract(AnyActionValue);
+        return PayloadOpt.hasValue
+                   ? WrappedReducer(
+                         PrevState,
+                         makeAction(AnyActionValue.Type, PayloadOpt.value))
+                   : PrevState;
+      });
+  return Builder;
+}
+
+/**
+ * Binds an externally created empty action to this slice.
+ * User Story: As slice authors, I need external empty actions bindable into a
+ * slice so lifecycle wiring stays consistent across modules.
+ */
+template <typename State, typename ReducerFn>
+SliceBuilder<State>
+addExtraCase(SliceBuilder<State> Builder, const EmptyActionCreator &Creator,
+             ReducerFn ReducerFunc) {
+  std::function<State(const State &, const Action<FEmptyPayload> &)>
+      WrappedReducer = ReducerFunc;
+  Builder.Reducers.Add(
+      Creator.Type,
+      [Creator, WrappedReducer](const State &PrevState,
+                                const AnyAction &AnyActionValue) -> State {
+        return Creator.match(AnyActionValue)
+                   ? WrappedReducer(PrevState, makeAction(AnyActionValue.Type))
+                   : PrevState;
+      });
+  return Builder;
+}
+
+/**
+ * Supports pipe-style extra-case composition for slice builders.
+ * User Story: As slice authors, I need free-function chaining so removing
+ * builder classes does not force deeply nested construction code.
+ */
+template <typename State, typename CreatorT, typename ReducerFn>
+SliceBuilder<State>
+operator|(SliceBuilder<State> Builder,
+          const ExtraCaseBinding<CreatorT, ReducerFn> &Binding) {
+  return addExtraCase(std::move(Builder), Binding.Creator, Binding.ReducerFunc);
+}
+
+/**
+ * Finalizes the slice and its reducer lookup table.
+ * User Story: As slice authors, I need a final build step so the slice can be
+ * exported with its reducer map intact.
+ */
+template <typename State> Slice<State> buildSlice(const SliceBuilder<State> &Builder) {
+  Slice<State> Result;
+  Result.Name = Builder.Name;
+  auto ReducerMap = Builder.Reducers;
+
+  Result.Reducer =
+      [ReducerMap](const State &PrevState, const AnyAction &Action) -> State {
+    const CaseReducer<State> *Found = ReducerMap.Find(Action.Type);
+    return Found ? (*Found)(PrevState, Action) : PrevState;
+  };
+  return Result;
+}
 
 /**
  * Phase 3: Entity Adapter
@@ -455,6 +560,72 @@ template <typename T> struct EntitySelectors {
   std::function<int32_t(const EntityState<T> &)> selectTotal;
 };
 
+template <typename T> struct EntityAdapterOps;
+
+namespace detail {
+template <typename T>
+void addEntityIfMissing(EntityState<T> &Next, const FString &Id,
+                        const T &Entity) {
+  const bool bMissing = !Next.entities.Find(Id);
+  bMissing && (Next.ids.Add(Id), true);
+  bMissing && (Next.entities.Add(Id, Entity), true);
+}
+
+template <typename T>
+void setEntity(EntityState<T> &Next, const FString &Id, const T &Entity) {
+  (!Next.entities.Find(Id)) && (Next.ids.Add(Id), true);
+  Next.entities.Add(Id, Entity);
+}
+
+template <typename T>
+void removeEntityIfPresent(EntityState<T> &Next, const FString &Id) {
+  (Next.entities.Remove(Id) > 0) && (Next.ids.Remove(Id), true);
+}
+
+template <typename T, typename PatchFn>
+void updateEntityIfPresent(EntityState<T> &Next, const FString &Id,
+                           PatchFn Patch) {
+  const T *Existing = Next.entities.Find(Id);
+  Existing && (Next.entities.Add(Id, Patch(*Existing)), true);
+}
+
+template <typename T>
+void appendEntityIfPresent(TArray<T> &Result, const EntityState<T> &State,
+                           const FString &Id) {
+  const T *Entity = State.entities.Find(Id);
+  Entity && (Result.Add(*Entity), true);
+}
+
+template <typename T>
+func::Maybe<T> findEntityById(const EntityState<T> &State, const FString &Id) {
+  const T *Entity = State.entities.Find(Id);
+  return Entity ? func::just(*Entity) : func::nothing<T>();
+}
+
+template <typename T>
+EntityState<T> addManyEntitiesRecursive(const EntityAdapterOps<T> &Ops,
+                                        const TArray<T> &NewEntities,
+                                        int32 Index, EntityState<T> Next);
+
+template <typename T>
+EntityState<T> setAllEntitiesRecursive(const EntityAdapterOps<T> &Ops,
+                                       const TArray<T> &NewEntities,
+                                       int32 Index, EntityState<T> Next);
+
+template <typename T>
+EntityState<T> upsertManyEntitiesRecursive(const EntityAdapterOps<T> &Ops,
+                                           const TArray<T> &EntitiesToUpsert,
+                                           int32 Index, EntityState<T> Next);
+
+template <typename T>
+EntityState<T> removeManyEntitiesRecursive(const TArray<FString> &RemoveIds,
+                                           int32 Index, EntityState<T> Next);
+
+template <typename T>
+TArray<T> selectAllEntitiesRecursive(const EntityState<T> &State, int32 Index,
+                                     TArray<T> Result);
+} // namespace detail
+
 template <typename T> struct EntityAdapterOps {
   std::function<FString(const T &)> selectId;
 
@@ -473,10 +644,7 @@ template <typename T> struct EntityAdapterOps {
   EntityState<T> addOne(const EntityState<T> &state, const T &entity) const {
     EntityState<T> next = state;
     FString id = selectId(entity);
-    if (!next.entities.Find(id)) {
-      next.ids.Add(id);
-      next.entities.Add(id, entity);
-    }
+    detail::addEntityIfMissing(next, id, entity);
     return next;
   }
 
@@ -487,15 +655,7 @@ template <typename T> struct EntityAdapterOps {
    */
   EntityState<T> addMany(const EntityState<T> &state,
                          const TArray<T> &newEntities) const {
-    EntityState<T> next = state;
-    for (const auto &entity : newEntities) {
-      FString id = selectId(entity);
-      if (!next.entities.Find(id)) {
-        next.ids.Add(id);
-        next.entities.Add(id, entity);
-      }
-    }
-    return next;
+    return detail::addManyEntitiesRecursive(*this, newEntities, 0, state);
   }
 
   /**
@@ -506,10 +666,7 @@ template <typename T> struct EntityAdapterOps {
   EntityState<T> setOne(const EntityState<T> &state, const T &entity) const {
     EntityState<T> next = state;
     FString id = selectId(entity);
-    if (!next.entities.Find(id)) {
-      next.ids.Add(id);
-    }
-    next.entities.Add(id, entity);
+    detail::setEntity(next, id, entity);
     return next;
   }
 
@@ -520,13 +677,8 @@ template <typename T> struct EntityAdapterOps {
    */
   EntityState<T> setAll(const EntityState<T> &state,
                         const TArray<T> &newEntities) const {
-    EntityState<T> next;
-    for (const auto &entity : newEntities) {
-      FString id = selectId(entity);
-      next.ids.Add(id);
-      next.entities.Add(id, entity);
-    }
-    return next;
+    return detail::setAllEntitiesRecursive(*this, newEntities, 0,
+                                           EntityState<T>());
   }
 
   /**
@@ -545,11 +697,8 @@ template <typename T> struct EntityAdapterOps {
    */
   EntityState<T> upsertMany(const EntityState<T> &state,
                             const TArray<T> &entitiesToUpsert) const {
-    EntityState<T> next = state;
-    for (const auto &entity : entitiesToUpsert) {
-      next = setOne(next, entity);
-    }
-    return next;
+    return detail::upsertManyEntitiesRecursive(*this, entitiesToUpsert, 0,
+                                               state);
   }
 
   /**
@@ -560,9 +709,7 @@ template <typename T> struct EntityAdapterOps {
   EntityState<T> removeOne(const EntityState<T> &state,
                            const FString &id) const {
     EntityState<T> next = state;
-    if (next.entities.Remove(id) > 0) {
-      next.ids.Remove(id);
-    }
+    detail::removeEntityIfPresent(next, id);
     return next;
   }
 
@@ -573,13 +720,7 @@ template <typename T> struct EntityAdapterOps {
    */
   EntityState<T> removeMany(const EntityState<T> &state,
                             const TArray<FString> &removeIds) const {
-    EntityState<T> next = state;
-    for (const auto &id : removeIds) {
-      if (next.entities.Remove(id) > 0) {
-        next.ids.Remove(id);
-      }
-    }
-    return next;
+    return detail::removeManyEntitiesRecursive(removeIds, 0, state);
   }
 
   /**
@@ -599,9 +740,7 @@ template <typename T> struct EntityAdapterOps {
   EntityState<T> updateOne(const EntityState<T> &state, const FString &id,
                            std::function<T(const T &)> patch) const {
     EntityState<T> next = state;
-    if (const T *existing = next.entities.Find(id)) {
-      next.entities.Add(id, patch(*existing));
-    }
+    detail::updateEntityIfPresent(next, id, patch);
     return next;
   }
 
@@ -612,21 +751,12 @@ template <typename T> struct EntityAdapterOps {
    */
   EntitySelectors<T> getSelectors() const {
     const auto SelectAll = [](const EntityState<T> &state) -> TArray<T> {
-      TArray<T> result;
-      for (const auto &id : state.ids) {
-        if (const T *ent = state.entities.Find(id)) {
-          result.Add(*ent);
-        }
-      }
-      return result;
+      return detail::selectAllEntitiesRecursive(state, 0, TArray<T>());
     };
 
     const auto SelectById =
         [](const EntityState<T> &state, const FString &id) -> func::Maybe<T> {
-      if (const T *ent = state.entities.Find(id)) {
-        return func::just(*ent);
-      }
-      return func::nothing<T>();
+      return detail::findEntityById(state, id);
     };
 
     const auto SelectIds = [](const EntityState<T> &state) -> TArray<FString> {
@@ -641,6 +771,64 @@ template <typename T> struct EntityAdapterOps {
         SelectAll, SelectById, SelectIds, SelectTotal};
   }
 };
+
+namespace detail {
+template <typename T>
+EntityState<T> addManyEntitiesRecursive(const EntityAdapterOps<T> &Ops,
+                                        const TArray<T> &NewEntities,
+                                        int32 Index, EntityState<T> Next) {
+  return Index >= NewEntities.Num()
+             ? Next
+             : (addEntityIfMissing(Next, Ops.selectId(NewEntities[Index]),
+                                   NewEntities[Index]),
+                addManyEntitiesRecursive(Ops, NewEntities, Index + 1,
+                                         std::move(Next)));
+}
+
+template <typename T>
+EntityState<T> setAllEntitiesRecursive(const EntityAdapterOps<T> &Ops,
+                                       const TArray<T> &NewEntities,
+                                       int32 Index, EntityState<T> Next) {
+  return Index >= NewEntities.Num()
+             ? Next
+             : (Next.ids.Add(Ops.selectId(NewEntities[Index])),
+                Next.entities.Add(Ops.selectId(NewEntities[Index]),
+                                  NewEntities[Index]),
+                setAllEntitiesRecursive(Ops, NewEntities, Index + 1,
+                                        std::move(Next)));
+}
+
+template <typename T>
+EntityState<T> upsertManyEntitiesRecursive(const EntityAdapterOps<T> &Ops,
+                                           const TArray<T> &EntitiesToUpsert,
+                                           int32 Index, EntityState<T> Next) {
+  return Index >= EntitiesToUpsert.Num()
+             ? Next
+             : upsertManyEntitiesRecursive(Ops, EntitiesToUpsert, Index + 1,
+                                           Ops.setOne(Next,
+                                                      EntitiesToUpsert[Index]));
+}
+
+template <typename T>
+EntityState<T> removeManyEntitiesRecursive(const TArray<FString> &RemoveIds,
+                                           int32 Index, EntityState<T> Next) {
+  return Index >= RemoveIds.Num()
+             ? Next
+             : (removeEntityIfPresent(Next, RemoveIds[Index]),
+                removeManyEntitiesRecursive(RemoveIds, Index + 1,
+                                            std::move(Next)));
+}
+
+template <typename T>
+TArray<T> selectAllEntitiesRecursive(const EntityState<T> &State, int32 Index,
+                                     TArray<T> Result) {
+  return Index >= State.ids.Num()
+             ? Result
+             : (appendEntityIfPresent(Result, State, State.ids[Index]),
+                selectAllEntitiesRecursive(State, Index + 1,
+                                           std::move(Result)));
+}
+} // namespace detail
 
 /**
  * Creates entity-adapter operations from an id selector.
@@ -726,19 +914,19 @@ AsyncThunkConfig<Result, Arg, State> createAsyncThunk(
        *    .execute() on the returned result to trigger the full chain.
        * User Story: As a maintainer, I need this section note so related declarations and logic stay easy to locate.
        */
-      return func::AsyncChain::then<Result, Result>(
-                 result,
-                 [dispatch, fulfilled](Result res) {
-                   dispatch(fulfilled(res));
-                   return func::AsyncResult<Result>::create(
-                       [res](std::function<void(Result)> resolve,
-                             std::function<void(std::string)> reject) {
-                         resolve(res);
-                       });
-                 })
-          .catch_([dispatch, rejected](std::string err) {
-            dispatch(rejected(FString(UTF8_TO_TCHAR(err.c_str()))));
+      func::AsyncResult<Result> Chained = func::AsyncChain::then<Result, Result>(
+          result, [dispatch, fulfilled](Result res) {
+            dispatch(fulfilled(res));
+            return func::createAsyncResult<Result>(
+                [res](std::function<void(Result)> resolve,
+                      std::function<void(std::string)> reject) {
+                  resolve(res);
+                });
           });
+      func::catchAsync(Chained, [dispatch, rejected](std::string err) {
+        dispatch(rejected(FString(UTF8_TO_TCHAR(err.c_str()))));
+      });
+      return Chained;
     };
   };
 
@@ -767,6 +955,19 @@ using Middleware =
     std::function<std::function<Dispatcher(Dispatcher)>(
         const MiddlewareApi<State> &)>;
 
+namespace detail {
+template <typename State>
+Dispatcher applyMiddlewareRecursive(
+    typename std::vector<Middleware<State>>::const_reverse_iterator It,
+    typename std::vector<Middleware<State>>::const_reverse_iterator End,
+    const MiddlewareApi<State> &Api, Dispatcher CurrentDispatch) {
+  return It == End
+             ? CurrentDispatch
+             : applyMiddlewareRecursive<State>(It + 1, End, Api,
+                                               (*It)(Api)(CurrentDispatch));
+}
+} // namespace detail
+
 /**
  * Wraps a dispatcher with middleware while preserving RTK-style composition order.
  * User Story: As store configuration, I need middleware composition so dispatch
@@ -793,22 +994,15 @@ applyMiddleware(Dispatcher baseDispatch,
         return (*enhancedDispatch)(action);
       },
       getState};
-
-  Dispatcher currentDispatch = baseDispatch;
-
-  /**
-   * Compose in reverse so that the first middleware in the vector wraps the
-   * later ones
-   * User Story: As a maintainer, I need this note so the surrounding code intent stays clear during maintenance and debugging.
-   */
-  for (auto it = middlewares.rbegin(); it != middlewares.rend(); ++it) {
-    currentDispatch = (*it)(api)(currentDispatch);
-  }
+  Dispatcher currentDispatch =
+      detail::applyMiddlewareRecursive<State>(middlewares.rbegin(),
+                                             middlewares.rend(), api,
+                                             baseDispatch);
 
   /**
-   * Point the shared dispatch at the fully composed chain
-   * User Story: As a maintainer, I need this note so the surrounding code intent stays clear during maintenance and debugging.
-   */
+  * Point the shared dispatch at the fully composed chain
+  * User Story: As a maintainer, I need this note so the surrounding code intent stays clear during maintenance and debugging.
+  */
   *enhancedDispatch = currentDispatch;
 
   return currentDispatch;
@@ -819,53 +1013,63 @@ template <typename State> struct ListenerMiddleware {
                                             const MiddlewareApi<State> &api)>;
 
   TMap<FString, TArray<EffectCallback>> listeners;
+};
 
-  /**
-   * Registers a side-effect callback for a specific action type.
-   * User Story: As listener middleware users, I need type-scoped listeners so
-   * side effects can subscribe to reducer events declaratively.
-   */
-  void addListener(const FString &actionType, EffectCallback effect) {
-    listeners.FindOrAdd(actionType).Add(effect);
-  }
+namespace detail {
+template <typename State>
+void invokeListenerEffectsRecursive(
+    const TArray<typename ListenerMiddleware<State>::EffectCallback> &Effects,
+    int32 Index, const AnyAction &Action, const MiddlewareApi<State> &Api) {
+  Index >= Effects.Num()
+      ? void()
+      : (Effects[Index](Action, Api),
+         invokeListenerEffectsRecursive<State>(Effects, Index + 1, Action,
+                                               Api));
+}
 
-  /**
-   * Materializes middleware that executes listeners after reducers run.
-   * User Story: As listener middleware users, I need middleware output so
-   * listeners can run after state updates with access to dispatch and state.
-   */
-  Middleware<State> getMiddleware() const {
-    /**
-     * Capture listeners by value to avoid lifetime dependence on this
-     * User Story: As a maintainer, I need this note so the surrounding code intent stays clear during maintenance and debugging.
-     */
-    auto listenersCopy = listeners;
-    return [listenersCopy](const MiddlewareApi<State> &api)
-               -> std::function<Dispatcher(Dispatcher)> {
-      return [listenersCopy, api](Dispatcher next) -> Dispatcher {
-        return [listenersCopy, api, next](const AnyAction &action) -> AnyAction {
-          /**
-           * Propagate to reducers first
-           * User Story: As a maintainer, I need this note so the surrounding code intent stays clear during maintenance and debugging.
-           */
-          auto resultAction = next(action);
+template <typename State>
+void runListenerEffects(
+    const TMap<FString, TArray<typename ListenerMiddleware<State>::EffectCallback>>
+        &Listeners,
+    const AnyAction &Action, const MiddlewareApi<State> &Api) {
+  const TArray<typename ListenerMiddleware<State>::EffectCallback>
+      *ActiveListeners = Listeners.Find(Action.Type);
+  ActiveListeners
+      ? invokeListenerEffectsRecursive<State>(*ActiveListeners, 0, Action, Api)
+      : void();
+}
+} // namespace detail
 
-          /**
-           * Then execute listener effects
-           * User Story: As a maintainer, I need this note so the surrounding code intent stays clear during maintenance and debugging.
-           */
-          if (const auto *activeListeners = listenersCopy.Find(action.Type)) {
-            for (const auto &effect : *activeListeners) {
-              effect(action, api);
-            }
-          }
+template <typename State>
+ListenerMiddleware<State> createListenerMiddleware() {
+  return ListenerMiddleware<State>();
+}
 
-          return resultAction;
-        };
+template <typename State>
+ListenerMiddleware<State>
+addListener(ListenerMiddleware<State> MiddlewareValue,
+            const FString &ActionType,
+            typename ListenerMiddleware<State>::EffectCallback Effect) {
+  MiddlewareValue.listeners.FindOrAdd(ActionType).Add(Effect);
+  return MiddlewareValue;
+}
+
+template <typename State>
+Middleware<State>
+buildListenerMiddleware(const ListenerMiddleware<State> &MiddlewareValue) {
+  const TMap<FString, TArray<typename ListenerMiddleware<State>::EffectCallback>>
+      ListenersCopy = MiddlewareValue.listeners;
+  return [ListenersCopy](const MiddlewareApi<State> &api)
+             -> std::function<Dispatcher(Dispatcher)> {
+    return [ListenersCopy, api](Dispatcher next) -> Dispatcher {
+      return [ListenersCopy, api, next](const AnyAction &action) -> AnyAction {
+        const AnyAction ResultAction = next(action);
+        detail::runListenerEffects<State>(ListenersCopy, action, api);
+        return ResultAction;
       };
     };
-  }
-};
+  };
+}
 
 /**
  * Phase 6: Selectors
@@ -943,50 +1147,46 @@ template <typename Arg, typename Result> struct ApiEndpoint {
 template <typename State> struct ApiSlice {
   FString ReducerPath;
   TArray<FString> TagTypes;
-
-  /**
-   * Injects an endpoint as an async thunk under this API slice's reducer path.
-   * User Story: As API-slice authors, I need endpoint injection so network
-   * operations inherit standard thunk lifecycle behavior automatically.
-   */
-  template <typename Arg, typename Result>
-  AsyncThunkConfig<Result, Arg, State>
-  injectEndpoint(const ApiEndpoint<Arg, Result> &EndpointDesc) {
-    FString ThunkPrefix = ReducerPath + TEXT("/") + EndpointDesc.EndpointName;
-
-    return createAsyncThunk<Result, Arg, State>(
-        ThunkPrefix,
-        [EndpointDesc](const Arg &arg, const ThunkApi<State> &api)
-            -> func::AsyncResult<Result> {
-          /**
-           * Execute the provided HTTP Request
-           * User Story: As a maintainer, I need this note so the surrounding code intent stays clear during maintenance and debugging.
-           */
-          return func::AsyncChain::then<func::HttpResult<Result>, Result>(
-              EndpointDesc.RequestBuilder(arg),
-              [](func::HttpResult<Result> httpRes) {
-                /**
-                 * RTK Query unwraps the payload on success or rejects on
-                 * HTTP failure
-                 * User Story: As a maintainer, I need this note so the surrounding code intent stays clear during maintenance and debugging.
-                 */
-                if (httpRes.bSuccess) {
-                  return func::AsyncResult<Result>::create(
-                      [httpRes](std::function<void(Result)> Resolve,
-                                std::function<void(std::string)> Reject) {
-                        Resolve(httpRes.data);
-                      });
-                } else {
-                  return func::AsyncResult<Result>::create(
-                      [httpRes](std::function<void(Result)> Resolve,
-                                std::function<void(std::string)> Reject) {
-                        Reject(httpRes.error);
-                      });
-                }
-              });
-        });
-  }
 };
+
+template <typename State>
+ApiSlice<State> createApiSlice(const FString &ReducerPath,
+                               const TArray<FString> &TagTypes) {
+  ApiSlice<State> Slice;
+  Slice.ReducerPath = ReducerPath;
+  Slice.TagTypes = TagTypes;
+  return Slice;
+}
+
+template <typename Result>
+func::AsyncResult<Result>
+unwrapEndpointResult(func::HttpResult<Result> HttpResultValue) {
+  return HttpResultValue.bSuccess
+             ? func::createAsyncResult<Result>(
+                   [HttpResultValue](std::function<void(Result)> Resolve,
+                                     std::function<void(std::string)> Reject) {
+                     Resolve(HttpResultValue.data);
+                   })
+             : func::createAsyncResult<Result>(
+                   [HttpResultValue](std::function<void(Result)> Resolve,
+                                     std::function<void(std::string)> Reject) {
+                     Reject(HttpResultValue.error);
+                   });
+}
+
+template <typename State, typename Arg, typename Result>
+AsyncThunkConfig<Result, Arg, State>
+injectEndpoint(const ApiSlice<State> &Slice,
+               const ApiEndpoint<Arg, Result> &EndpointDesc) {
+  const FString ThunkPrefix = Slice.ReducerPath + TEXT("/") + EndpointDesc.EndpointName;
+  return createAsyncThunk<Result, Arg, State>(
+      ThunkPrefix,
+      [EndpointDesc](const Arg &arg, const ThunkApi<State> &api)
+          -> func::AsyncResult<Result> {
+        return func::AsyncChain::then<func::HttpResult<Result>, Result>(
+            EndpointDesc.RequestBuilder(arg), unwrapEndpointResult<Result>);
+      });
+}
 
 /**
  * Phase 8: Store Configuration
@@ -1044,8 +1244,8 @@ EnhancedStore<State>
 configureStore(CaseReducer<State> rootReducer, State preloadedState,
                const std::vector<Middleware<State>> &middlewares) {
   EnhancedStore<State> enhanced;
-  auto coreStore = std::make_shared<Store<State>>(std::move(preloadedState),
-                                                  std::move(rootReducer));
+  auto coreStore = std::make_shared<Store<State>>(
+      createCoreStore(std::move(preloadedState), std::move(rootReducer)));
   enhanced.CoreStore = coreStore;
 
   Dispatcher coreDispatch = [coreStore](const AnyAction &action) -> AnyAction {

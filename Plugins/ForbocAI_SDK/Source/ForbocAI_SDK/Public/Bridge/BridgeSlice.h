@@ -201,8 +201,9 @@ inline AnyAction ClearBridgeValidation() {
  * rulesets, and presets share a single reducer definition.
  */
 inline Slice<FBridgeSliceState> CreateBridgeSlice() {
-  return SliceBuilder<FBridgeSliceState>(TEXT("bridge"), FBridgeSliceState())
-      .addExtraCase(
+  return buildSlice(
+      sliceBuilder<FBridgeSliceState>(TEXT("bridge"), FBridgeSliceState()) |
+      addExtraCase(
           Actions::BridgeValidationPendingActionCreator(),
           [](const FBridgeSliceState &State,
              const Action<rtk::FEmptyPayload> &Action) -> FBridgeSliceState {
@@ -211,7 +212,7 @@ inline Slice<FBridgeSliceState> CreateBridgeSlice() {
             Next.Error.Empty();
             return Next;
           })
-      .addExtraCase(
+      | addExtraCase(
           Actions::BridgeValidationSuccessActionCreator(),
           [](const FBridgeSliceState &State,
              const Action<FValidationResult> &Action) -> FBridgeSliceState {
@@ -221,7 +222,7 @@ inline Slice<FBridgeSliceState> CreateBridgeSlice() {
             Next.bHasLastValidation = true;
             return Next;
           })
-      .addExtraCase(Actions::BridgeValidationFailedActionCreator(),
+      | addExtraCase(Actions::BridgeValidationFailedActionCreator(),
                     [](const FBridgeSliceState &State,
                        const Action<FString> &Action) -> FBridgeSliceState {
                       FBridgeSliceState Next = State;
@@ -232,7 +233,7 @@ inline Slice<FBridgeSliceState> CreateBridgeSlice() {
                       Next.bHasLastValidation = true;
                       return Next;
                     })
-      .addExtraCase(Actions::SetActivePresetsActionCreator(),
+      | addExtraCase(Actions::SetActivePresetsActionCreator(),
                     [](const FBridgeSliceState &State,
                        const Action<TArray<FDirectiveRuleSet>> &Action)
                         -> FBridgeSliceState {
@@ -240,7 +241,7 @@ inline Slice<FBridgeSliceState> CreateBridgeSlice() {
                       Next.ActivePresets = Action.PayloadValue;
                       return Next;
                     })
-      .addExtraCase(
+      | addExtraCase(
           Actions::AddActivePresetActionCreator(),
           [](const FBridgeSliceState &State,
              const Action<FDirectiveRuleSet> &Action) -> FBridgeSliceState {
@@ -262,7 +263,7 @@ inline Slice<FBridgeSliceState> CreateBridgeSlice() {
             }
             return Next;
           })
-      .addExtraCase(Actions::SetAvailableRulesetsActionCreator(),
+      | addExtraCase(Actions::SetAvailableRulesetsActionCreator(),
                     [](const FBridgeSliceState &State,
                        const Action<TArray<FDirectiveRuleSet>> &Action)
                         -> FBridgeSliceState {
@@ -270,7 +271,7 @@ inline Slice<FBridgeSliceState> CreateBridgeSlice() {
                       Next.AvailableRulesets = Action.PayloadValue;
                       return Next;
                     })
-      .addExtraCase(
+      | addExtraCase(
           Actions::SetAvailablePresetIdsActionCreator(),
           [](const FBridgeSliceState &State,
              const Action<TArray<FString>> &Action) -> FBridgeSliceState {
@@ -278,7 +279,7 @@ inline Slice<FBridgeSliceState> CreateBridgeSlice() {
             Next.AvailablePresetIds = Action.PayloadValue;
             return Next;
           })
-      .addExtraCase(
+      | addExtraCase(
           Actions::ClearBridgeValidationActionCreator(),
           [](const FBridgeSliceState &State,
              const Action<rtk::FEmptyPayload> &Action) -> FBridgeSliceState {
@@ -289,7 +290,7 @@ inline Slice<FBridgeSliceState> CreateBridgeSlice() {
             Next.Error.Empty();
             return Next;
           })
-      .build();
+      );
 }
 
 } // namespace BridgeSlice

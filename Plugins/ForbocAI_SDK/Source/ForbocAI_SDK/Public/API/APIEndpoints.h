@@ -6,12 +6,16 @@ namespace APISlice {
 
 namespace Endpoints {
 
+// C++11 type alias — all endpoint factories return ThunkAction<Result, FStoreState>.
+template <typename T>
+using Thunk = rtk::ThunkAction<T, FStoreState>;
+
 /**
  * Builds the endpoint thunk that fetches the NPC collection.
  * User Story: As NPC listing flows, I need a reusable endpoint thunk so the
  * SDK can load all NPCs without duplicating request wiring.
  */
-inline auto getNPCs() {
+inline Thunk<TArray<FAgent>> getNPCs() {
   TArray<FApiEndpointTag> Tags;
   Tags.Add(FApiEndpointTag{TEXT("NPC"), TEXT("LIST")});
   return Detail::MakeGet<TArray<FAgent>>(
@@ -23,7 +27,7 @@ inline auto getNPCs() {
  * User Story: As NPC detail flows, I need a reusable endpoint thunk so the SDK
  * can load one NPC record by identifier.
  */
-inline auto getNPC(const FString &NpcId) {
+inline Thunk<FAgent> getNPC(const FString &NpcId) {
   TArray<FApiEndpointTag> Tags;
   Tags.Add(FApiEndpointTag{TEXT("NPC"), NpcId});
   return Detail::MakeGet<FAgent>(TEXT("getNPC"), SDKConfig::GetApiUrl() +
@@ -37,7 +41,7 @@ inline auto getNPC(const FString &NpcId) {
  * User Story: As NPC authoring flows, I need a reusable endpoint thunk so NPC
  * definitions can be created or updated through one helper.
  */
-inline auto postNPC(const FAgentConfig &Config) {
+inline Thunk<FAgent> postNPC(const FAgentConfig &Config) {
   TArray<FApiEndpointTag> Invalidates;
   Invalidates.Add(FApiEndpointTag{TEXT("NPC"), TEXT("LIST")});
   if (!Config.Id.IsEmpty()) {
@@ -53,7 +57,7 @@ inline auto postNPC(const FAgentConfig &Config) {
  * User Story: As connectivity checks, I need a reusable endpoint thunk so the
  * runtime can confirm the remote API is reachable before deeper calls.
  */
-inline auto getApiStatus() {
+inline Thunk<FApiStatusResponse> getApiStatus() {
   return Detail::MakeGet<FApiStatusResponse>(
       TEXT("getApiStatus"), SDKConfig::GetApiUrl() + TEXT("/status"));
 }
@@ -63,7 +67,7 @@ inline auto getApiStatus() {
  * User Story: As model selection flows, I need a reusable endpoint thunk so
  * the SDK can enumerate available remote cortex models.
  */
-inline auto getCortexModels() {
+inline Thunk<TArray<FCortexModelInfo>> getCortexModels() {
   return Detail::MakeGet<TArray<FCortexModelInfo>>(
       TEXT("getCortexModels"), SDKConfig::GetApiUrl() + TEXT("/cortex/models"));
 }
@@ -73,7 +77,7 @@ inline auto getCortexModels() {
  * User Story: As cortex session setup, I need a reusable endpoint thunk so the
  * runtime can start a remote inference session predictably.
  */
-inline auto postCortexInit(const FCortexInitRequest &Request) {
+inline Thunk<FCortexInitResponse> postCortexInit(const FCortexInitRequest &Request) {
   return Detail::MakePost<FCortexInitRequest, FCortexInitResponse>(
       TEXT("postCortexInit"), SDKConfig::GetApiUrl() + TEXT("/cortex/init"),
       Request);
@@ -84,7 +88,7 @@ inline auto postCortexInit(const FCortexInitRequest &Request) {
  * User Story: As remote inference flows, I need a reusable endpoint thunk so a
  * configured cortex session can produce a completion from one helper.
  */
-inline auto postCortexComplete(const FString &CortexId,
+inline Thunk<FCortexResponse> postCortexComplete(const FString &CortexId,
                                const FCortexCompleteRequest &Request) {
   return Detail::MakeEndpoint<FCortexCompleteRequest, FCortexResponse>(
       TEXT("postCortexComplete"), Request,
@@ -101,7 +105,7 @@ inline auto postCortexComplete(const FString &CortexId,
  * User Story: As NPC processing flows, I need a reusable endpoint thunk so the
  * SDK can run one process turn against a remote NPC.
  */
-inline auto postNpcProcess(const FString &NpcId,
+inline Thunk<FNPCProcessResponse> postNpcProcess(const FString &NpcId,
                            const FNPCProcessRequest &Request) {
   return Detail::MakePostWithCodec<FNPCProcessRequest, FNPCProcessResponse>(
       TEXT("postNpcProcess"),
@@ -116,7 +120,7 @@ inline auto postNpcProcess(const FString &NpcId,
  * User Story: As directive generation flows, I need a reusable endpoint thunk
  * so the runtime can request directives for a specific NPC.
  */
-inline auto postDirective(const FString &NpcId,
+inline Thunk<FDirectiveResponse> postDirective(const FString &NpcId,
                           const FDirectiveRequest &Request) {
   return Detail::MakePostWithCodec<FDirectiveRequest, FDirectiveResponse>(
       TEXT("postDirective"),
@@ -130,7 +134,7 @@ inline auto postDirective(const FString &NpcId,
  * User Story: As context assembly flows, I need a reusable endpoint thunk so
  * the runtime can request composed context for a specific NPC.
  */
-inline auto postContext(const FString &NpcId, const FContextRequest &Request) {
+inline Thunk<FContextResponse> postContext(const FString &NpcId, const FContextRequest &Request) {
   return Detail::MakePostWithCodec<FContextRequest, FContextResponse>(
       TEXT("postContext"),
       SDKConfig::GetApiUrl() + TEXT("/npcs/") + Detail::Encode(NpcId) +
@@ -143,7 +147,7 @@ inline auto postContext(const FString &NpcId, const FContextRequest &Request) {
  * User Story: As verdict evaluation flows, I need a reusable endpoint thunk so
  * the runtime can validate turn outcomes for a specific NPC.
  */
-inline auto postVerdict(const FString &NpcId, const FVerdictRequest &Request) {
+inline Thunk<FVerdictResponse> postVerdict(const FString &NpcId, const FVerdictRequest &Request) {
   return Detail::MakePostWithCodec<FVerdictRequest, FVerdictResponse>(
       TEXT("postVerdict"),
       SDKConfig::GetApiUrl() + TEXT("/npcs/") + Detail::Encode(NpcId) +
@@ -156,7 +160,7 @@ inline auto postVerdict(const FString &NpcId, const FVerdictRequest &Request) {
  * User Story: As remote memory persistence flows, I need a reusable endpoint
  * thunk so memory items can be stored for a specific NPC.
  */
-inline auto postMemoryStore(const FString &NpcId,
+inline Thunk<rtk::FEmptyPayload> postMemoryStore(const FString &NpcId,
                             const FRemoteMemoryStoreRequest &Request) {
   TArray<FApiEndpointTag> Invalidates;
   Invalidates.Add(FApiEndpointTag{TEXT("Memory"), NpcId});
@@ -172,7 +176,7 @@ inline auto postMemoryStore(const FString &NpcId,
  * User Story: As remote memory browsing flows, I need a reusable endpoint
  * thunk so stored memories can be listed for a specific NPC.
  */
-inline auto getMemoryList(const FString &NpcId) {
+inline Thunk<TArray<FMemoryItem>> getMemoryList(const FString &NpcId) {
   TArray<FApiEndpointTag> Tags;
   Tags.Add(FApiEndpointTag{TEXT("Memory"), NpcId});
   return Detail::MakeGet<TArray<FMemoryItem>>(
@@ -186,7 +190,7 @@ inline auto getMemoryList(const FString &NpcId) {
  * User Story: As remote recall flows, I need a reusable endpoint thunk so the
  * runtime can fetch relevant memories for a specific NPC.
  */
-inline auto postMemoryRecall(const FString &NpcId,
+inline Thunk<TArray<FMemoryItem>> postMemoryRecall(const FString &NpcId,
                              const FRemoteMemoryRecallRequest &Request) {
   return Detail::MakePost<FRemoteMemoryRecallRequest, TArray<FMemoryItem>>(
       TEXT("postMemoryRecall"),
@@ -200,7 +204,7 @@ inline auto postMemoryRecall(const FString &NpcId,
  * User Story: As memory reset flows, I need a reusable endpoint thunk so the
  * runtime can clear stored remote memories for a specific NPC.
  */
-inline auto deleteMemoryClear(const FString &NpcId) {
+inline Thunk<rtk::FEmptyPayload> deleteMemoryClear(const FString &NpcId) {
   TArray<FApiEndpointTag> Invalidates;
   Invalidates.Add(FApiEndpointTag{TEXT("Memory"), NpcId});
   return Detail::MakeDelete<rtk::FEmptyPayload>(
@@ -215,7 +219,7 @@ inline auto deleteMemoryClear(const FString &NpcId) {
  * User Story: As raw bridge validation flows, I need a reusable endpoint thunk
  * so JSON payloads can be validated without building typed request objects.
  */
-inline auto postBridgeValidate(const FString &NpcId,
+inline Thunk<FValidationResult> postBridgeValidate(const FString &NpcId,
                                const FString &PayloadJson) {
   const FString Url = NpcId.IsEmpty()
                           ? SDKConfig::GetApiUrl() + TEXT("/bridge/validate")
@@ -231,7 +235,7 @@ inline auto postBridgeValidate(const FString &NpcId,
  * User Story: As typed bridge validation flows, I need a reusable endpoint
  * thunk so structured validation requests can be submitted consistently.
  */
-inline auto postBridgeValidate(const FString &NpcId,
+inline Thunk<FValidationResult> postBridgeValidate(const FString &NpcId,
                                const FBridgeValidateRequest &Request) {
   const FString Url = NpcId.IsEmpty()
                           ? SDKConfig::GetApiUrl() + TEXT("/bridge/validate")
@@ -247,7 +251,7 @@ inline auto postBridgeValidate(const FString &NpcId,
  * User Story: As bridge rule discovery, I need a reusable endpoint thunk so
  * the runtime can load the current validation rules from the API.
  */
-inline auto getBridgeRules() {
+inline Thunk<TArray<FBridgeRule>> getBridgeRules() {
   return Detail::MakeGetWithCodec<TArray<FBridgeRule>>(
       TEXT("getBridgeRules"), SDKConfig::GetApiUrl() + TEXT("/bridge/rules"),
       Detail::DecodeBridgeRulesResponse);
@@ -258,7 +262,7 @@ inline auto getBridgeRules() {
  * User Story: As bridge preset selection flows, I need a reusable endpoint
  * thunk so a named preset can be fetched on demand.
  */
-inline auto postBridgePreset(const FString &PresetName) {
+inline Thunk<FDirectiveRuleSet> postBridgePreset(const FString &PresetName) {
   return Detail::MakePostRawWithCodec<FDirectiveRuleSet>(
       TEXT("postBridgePreset"),
       SDKConfig::GetApiUrl() + TEXT("/rules/presets/") +
@@ -271,7 +275,7 @@ inline auto postBridgePreset(const FString &PresetName) {
  * User Story: As rules catalog flows, I need a reusable endpoint thunk so the
  * runtime can enumerate registered directive rulesets.
  */
-inline auto getRulesets() {
+inline Thunk<TArray<FDirectiveRuleSet>> getRulesets() {
   return Detail::MakeGetWithCodec<TArray<FDirectiveRuleSet>>(
       TEXT("getRulesets"), SDKConfig::GetApiUrl() + TEXT("/rules"),
       Detail::DecodeDirectiveRuleSetListResponse);
@@ -282,7 +286,7 @@ inline auto getRulesets() {
  * User Story: As preset discovery flows, I need a reusable endpoint thunk so
  * the runtime can enumerate available rule preset identifiers.
  */
-inline auto getRulePresets() {
+inline Thunk<TArray<FString>> getRulePresets() {
   return Detail::MakeGet<TArray<FString>>(
       TEXT("getRulePresets"), SDKConfig::GetApiUrl() + TEXT("/rules/presets"));
 }
@@ -292,7 +296,7 @@ inline auto getRulePresets() {
  * User Story: As rules authoring flows, I need a reusable endpoint thunk so a
  * ruleset can be created or updated through one helper.
  */
-inline auto postRuleRegister(const FDirectiveRuleSet &Ruleset) {
+inline Thunk<FDirectiveRuleSet> postRuleRegister(const FDirectiveRuleSet &Ruleset) {
   TArray<FApiEndpointTag> Invalidates;
   Invalidates.Add(FApiEndpointTag{TEXT("Rule"), TEXT("LIST")});
   return Detail::MakePostWithCodec<FDirectiveRuleSet, FDirectiveRuleSet>(
@@ -306,7 +310,7 @@ inline auto postRuleRegister(const FDirectiveRuleSet &Ruleset) {
  * User Story: As rules cleanup flows, I need a reusable endpoint thunk so an
  * obsolete ruleset can be removed by identifier.
  */
-inline auto deleteRule(const FString &RulesetId) {
+inline Thunk<rtk::FEmptyPayload> deleteRule(const FString &RulesetId) {
   TArray<FApiEndpointTag> Invalidates;
   Invalidates.Add(FApiEndpointTag{TEXT("Rule"), TEXT("LIST")});
   return Detail::MakeDelete<rtk::FEmptyPayload>(
@@ -320,7 +324,7 @@ inline auto deleteRule(const FString &RulesetId) {
  * User Story: As ghost test execution flows, I need a reusable endpoint thunk
  * so a fully specified ghost run can be started remotely.
  */
-inline auto postGhostRun(const FGhostRunRequest &Request) {
+inline Thunk<FGhostRunResponse> postGhostRun(const FGhostRunRequest &Request) {
   return Detail::MakePostWithCodec<FGhostRunRequest, FGhostRunResponse>(
       TEXT("postGhostRun"), SDKConfig::GetApiUrl() + TEXT("/ghost/run"),
       Request, Detail::ToJson<FGhostRunRequest>,
@@ -332,7 +336,7 @@ inline auto postGhostRun(const FGhostRunRequest &Request) {
  * User Story: As ghost test setup flows, I need a convenience endpoint thunk
  * so config values can be turned into a run request automatically.
  */
-inline auto postGhostRun(const FGhostConfig &Config) {
+inline Thunk<FGhostRunResponse> postGhostRun(const FGhostConfig &Config) {
   return postGhostRun(
       TypeFactory::GhostRunRequest(Config.TestSuite, Config.Duration));
 }
@@ -342,7 +346,7 @@ inline auto postGhostRun(const FGhostConfig &Config) {
  * User Story: As ghost monitoring flows, I need a reusable endpoint thunk so
  * the runtime can poll the status of a ghost session.
  */
-inline auto getGhostStatus(const FString &SessionId) {
+inline Thunk<FGhostStatusResponse> getGhostStatus(const FString &SessionId) {
   return Detail::MakeGetWithCodec<FGhostStatusResponse>(
       TEXT("getGhostStatus"),
       SDKConfig::GetApiUrl() + TEXT("/ghost/") + Detail::Encode(SessionId) +
@@ -355,7 +359,7 @@ inline auto getGhostStatus(const FString &SessionId) {
  * User Story: As ghost result retrieval, I need a reusable endpoint thunk so
  * completed ghost session output can be fetched by session id.
  */
-inline auto getGhostResults(const FString &SessionId) {
+inline Thunk<FGhostResultsResponse> getGhostResults(const FString &SessionId) {
   return Detail::MakeGetWithCodec<FGhostResultsResponse>(
       TEXT("getGhostResults"),
       SDKConfig::GetApiUrl() + TEXT("/ghost/") + Detail::Encode(SessionId) +
@@ -368,7 +372,7 @@ inline auto getGhostResults(const FString &SessionId) {
  * User Story: As ghost cancellation flows, I need a reusable endpoint thunk so
  * an active ghost session can be stopped from the runtime.
  */
-inline auto postGhostStop(const FString &SessionId) {
+inline Thunk<FGhostStopResponse> postGhostStop(const FString &SessionId) {
   return Detail::MakePostRawWithCodec<FGhostStopResponse>(
       TEXT("postGhostStop"),
       SDKConfig::GetApiUrl() + TEXT("/ghost/") + Detail::Encode(SessionId) +
@@ -381,7 +385,7 @@ inline auto postGhostStop(const FString &SessionId) {
  * User Story: As ghost run review flows, I need a reusable endpoint thunk so
  * recent ghost sessions can be listed with a limit.
  */
-inline auto getGhostHistory(int32 Limit = 10) {
+inline Thunk<FGhostHistoryResponse> getGhostHistory(int32 Limit = 10) {
   return Detail::MakeGetWithCodec<FGhostHistoryResponse>(
       TEXT("getGhostHistory"),
       SDKConfig::GetApiUrl() + TEXT("/ghost/history?limit=") +
@@ -394,7 +398,7 @@ inline auto getGhostHistory(int32 Limit = 10) {
  * User Story: As soul export flows, I need a reusable endpoint thunk so export
  * metadata can be created for a specific NPC.
  */
-inline auto postSoulExport(const FString &NpcId,
+inline Thunk<FSoulExportPhase1Response> postSoulExport(const FString &NpcId,
                            const FSoulExportPhase1Request &Request) {
   return Detail::MakePostWithCodec<FSoulExportPhase1Request,
                                    FSoulExportPhase1Response>(
@@ -410,7 +414,7 @@ inline auto postSoulExport(const FString &NpcId,
  * User Story: As soul export completion flows, I need a reusable endpoint
  * thunk so uploaded export artifacts can be confirmed with the API.
  */
-inline auto postSoulExportConfirm(const FString &NpcId,
+inline Thunk<FSoulExportResponse> postSoulExportConfirm(const FString &NpcId,
                                   const FSoulExportConfirmRequest &Request) {
   return Detail::MakePostWithCodec<FSoulExportConfirmRequest,
                                    FSoulExportResponse>(
@@ -426,7 +430,7 @@ inline auto postSoulExportConfirm(const FString &NpcId,
  * User Story: As soul catalog flows, I need a reusable endpoint thunk so the
  * runtime can enumerate remotely stored souls.
  */
-inline auto getSouls(int32 Limit = 50) {
+inline Thunk<FSoulListResponse> getSouls(int32 Limit = 50) {
   return Detail::MakeGet<FSoulListResponse>(
       TEXT("getSouls"),
       SDKConfig::GetApiUrl() + TEXT("/souls?limit=") + FString::FromInt(Limit));
@@ -437,7 +441,7 @@ inline auto getSouls(int32 Limit = 50) {
  * User Story: As soul import flows, I need a reusable endpoint thunk so the
  * runtime can load import metadata for a transaction id.
  */
-inline auto getSoulImport(const FString &TxId) {
+inline Thunk<FSoulImportPhase1Response> getSoulImport(const FString &TxId) {
   return Detail::MakeGet<FSoulImportPhase1Response>(
       TEXT("getSoulImport"),
       SDKConfig::GetApiUrl() + TEXT("/souls/") + Detail::Encode(TxId));
@@ -448,7 +452,7 @@ inline auto getSoulImport(const FString &TxId) {
  * User Story: As soul verification flows, I need a reusable endpoint thunk so
  * a remote soul transaction can be verified before import or trust decisions.
  */
-inline auto postSoulVerify(const FString &TxId) {
+inline Thunk<FSoulVerifyResult> postSoulVerify(const FString &TxId) {
   return Detail::MakePostRawWithCodec<FSoulVerifyResult>(
       TEXT("postSoulVerify"),
       SDKConfig::GetApiUrl() + TEXT("/souls/") + Detail::Encode(TxId) +
@@ -461,7 +465,7 @@ inline auto postSoulVerify(const FString &TxId) {
  * User Story: As NPC import flows, I need a reusable endpoint thunk so soul
  * import metadata can be created before the final import confirmation step.
  */
-inline auto postNpcImport(const FSoulImportPhase1Request &Request) {
+inline Thunk<FSoulImportPhase1Response> postNpcImport(const FSoulImportPhase1Request &Request) {
   return Detail::MakePostWithCodec<FSoulImportPhase1Request,
                                    FSoulImportPhase1Response>(
       TEXT("postNpcImport"), SDKConfig::GetApiUrl() + TEXT("/npcs/import"),
@@ -474,7 +478,7 @@ inline auto postNpcImport(const FSoulImportPhase1Request &Request) {
  * User Story: As NPC import completion flows, I need a reusable endpoint thunk
  * so a soul import can be finalized into an imported NPC record.
  */
-inline auto postNpcImportConfirm(const FSoulImportConfirmRequest &Request) {
+inline Thunk<FImportedNpc> postNpcImportConfirm(const FSoulImportConfirmRequest &Request) {
   return Detail::MakePostWithCodec<FSoulImportConfirmRequest, FImportedNpc>(
       TEXT("postNpcImportConfirm"),
       SDKConfig::GetApiUrl() + TEXT("/npcs/import/confirm"), Request,

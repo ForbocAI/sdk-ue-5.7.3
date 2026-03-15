@@ -190,8 +190,9 @@ inline AnyAction MemoryClear() { return MemoryClearActionCreator()(); }
  * recall actions share a single reducer definition.
  */
 inline Slice<FMemorySliceState> CreateMemorySlice() {
-  return SliceBuilder<FMemorySliceState>(TEXT("memory"), FMemorySliceState())
-      .addExtraCase(
+  return buildSlice(
+      sliceBuilder<FMemorySliceState>(TEXT("memory"), FMemorySliceState()) |
+      addExtraCase(
           Actions::MemoryStoreStartActionCreator(),
           [](const FMemorySliceState &State,
              const Action<rtk::FEmptyPayload> &Action) -> FMemorySliceState {
@@ -200,7 +201,7 @@ inline Slice<FMemorySliceState> CreateMemorySlice() {
             Next.Error.Empty();
             return Next;
           })
-      .addExtraCase(Actions::MemoryStoreSuccessActionCreator(),
+      | addExtraCase(Actions::MemoryStoreSuccessActionCreator(),
                     [](const FMemorySliceState &State,
                        const Action<FMemoryItem> &Action) -> FMemorySliceState {
                       FMemorySliceState Next = State;
@@ -208,16 +209,16 @@ inline Slice<FMemorySliceState> CreateMemorySlice() {
                       Next.Entities = GetMemoryAdapter().upsertOne(
                           Next.Entities, Action.PayloadValue);
                       return Next;
-                    })
-      .addExtraCase(Actions::MemoryStoreFailedActionCreator(),
+                    }) |
+      addExtraCase(Actions::MemoryStoreFailedActionCreator(),
                     [](const FMemorySliceState &State,
                        const Action<FString> &Action) -> FMemorySliceState {
                       FMemorySliceState Next = State;
                       Next.StorageStatus = TEXT("error");
                       Next.Error = Action.PayloadValue;
                       return Next;
-                    })
-      .addExtraCase(
+                    }) |
+      addExtraCase(
           Actions::MemoryRecallStartActionCreator(),
           [](const FMemorySliceState &State,
              const Action<rtk::FEmptyPayload> &Action) -> FMemorySliceState {
@@ -226,7 +227,7 @@ inline Slice<FMemorySliceState> CreateMemorySlice() {
             Next.Error.Empty();
             return Next;
           })
-      .addExtraCase(
+      | addExtraCase(
           Actions::MemoryRecallSuccessActionCreator(),
           [](const FMemorySliceState &State,
              const Action<TArray<FMemoryItem>> &Action) -> FMemorySliceState {
@@ -239,22 +240,21 @@ inline Slice<FMemorySliceState> CreateMemorySlice() {
               Next.LastRecalledIds.Add(Action.PayloadValue[Index].Id);
             }
             return Next;
-          })
-      .addExtraCase(Actions::MemoryRecallFailedActionCreator(),
+          }) |
+      addExtraCase(Actions::MemoryRecallFailedActionCreator(),
                     [](const FMemorySliceState &State,
                        const Action<FString> &Action) -> FMemorySliceState {
                       FMemorySliceState Next = State;
                       Next.RecallStatus = TEXT("error");
                       Next.Error = Action.PayloadValue;
                       return Next;
-                    })
-      .addExtraCase(
+                    }) |
+      addExtraCase(
           Actions::MemoryClearActionCreator(),
           [](const FMemorySliceState &State,
              const Action<rtk::FEmptyPayload> &Action) -> FMemorySliceState {
             return FMemorySliceState();
-          })
-      .build();
+          }));
 }
 
 /**

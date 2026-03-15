@@ -21,8 +21,8 @@ using namespace func;
  * actions update state through a single reducer contract.
  */
 inline Slice<FNPCSliceState> CreateNPCSlice() {
-  return SliceBuilder<FNPCSliceState>(TEXT("npc"), FNPCSliceState())
-      .addExtraCase(
+  return buildSlice(sliceBuilder<FNPCSliceState>(TEXT("npc"), FNPCSliceState()) |
+                    addExtraCase(
           Actions::SetNPCInfoActionCreator(),
           [](const FNPCSliceState &State,
              const Action<FNPCInternalState> &Action) -> FNPCSliceState {
@@ -33,15 +33,15 @@ inline Slice<FNPCSliceState> CreateNPCSlice() {
             Next.Entities = GetNPCAdapter().upsertOne(Next.Entities, NewNPC);
             Next.ActiveNpcId = NewNPC.Id;
             return Next;
-          })
-      .addExtraCase(Actions::SetActiveNPCActionCreator(),
+          }) |
+                    addExtraCase(Actions::SetActiveNPCActionCreator(),
                     [](const FNPCSliceState &State,
                        const Action<FString> &Action) -> FNPCSliceState {
                       FNPCSliceState Next = State;
                       Next.ActiveNpcId = Action.PayloadValue;
                       return Next;
-                    })
-      .addExtraCase(
+                    }) |
+                    addExtraCase(
           Actions::SetNPCStateActionCreator(),
           [](const FNPCSliceState &State,
              const Action<FSetNPCStatePayload> &Action) -> FNPCSliceState {
@@ -57,8 +57,8 @@ inline Slice<FNPCSliceState> CreateNPCSlice() {
                   return Updated;
                 });
             return Next;
-          })
-      .addExtraCase(
+          }) |
+                    addExtraCase(
           Actions::UpdateNPCStateActionCreator(),
           [](const FNPCSliceState &State,
              const Action<FUpdateNPCStatePayload> &Action) -> FNPCSliceState {
@@ -75,8 +75,8 @@ inline Slice<FNPCSliceState> CreateNPCSlice() {
                   return Updated;
                 });
             return Next;
-          })
-      .addExtraCase(
+          }) |
+                    addExtraCase(
           Actions::AddToHistoryActionCreator(),
           [](const FNPCSliceState &State,
              const Action<FAddToHistoryPayload> &Action) -> FNPCSliceState {
@@ -93,8 +93,8 @@ inline Slice<FNPCSliceState> CreateNPCSlice() {
                   return Updated;
                 });
             return Next;
-          })
-      .addExtraCase(
+          }) |
+                    addExtraCase(
           Actions::SetHistoryActionCreator(),
           [](const FNPCSliceState &State,
              const Action<FSetHistoryPayload> &Action) -> FNPCSliceState {
@@ -108,8 +108,8 @@ inline Slice<FNPCSliceState> CreateNPCSlice() {
                   return Updated;
                 });
             return Next;
-          })
-      .addExtraCase(
+          }) |
+                    addExtraCase(
           Actions::SetLastActionActionCreator(),
           [](const FNPCSliceState &State,
              const Action<FSetLastActionPayload> &Action) -> FNPCSliceState {
@@ -129,8 +129,8 @@ inline Slice<FNPCSliceState> CreateNPCSlice() {
                   return Updated;
                 });
             return Next;
-          })
-      .addExtraCase(
+          }) |
+                    addExtraCase(
           Actions::BlockActionActionCreator(),
           [](const FNPCSliceState &State,
              const Action<FBlockActionPayload> &Action) -> FNPCSliceState {
@@ -145,8 +145,8 @@ inline Slice<FNPCSliceState> CreateNPCSlice() {
                   return Updated;
                 });
             return Next;
-          })
-      .addExtraCase(Actions::ClearBlockActionCreator(),
+          }) |
+                    addExtraCase(Actions::ClearBlockActionCreator(),
                     [](const FNPCSliceState &State,
                        const Action<FString> &Action) -> FNPCSliceState {
                       FNPCSliceState Next = State;
@@ -159,8 +159,8 @@ inline Slice<FNPCSliceState> CreateNPCSlice() {
                             return Updated;
                           });
                       return Next;
-                    })
-      .addExtraCase(Actions::RemoveNPCActionCreator(),
+                    }) |
+                    addExtraCase(Actions::RemoveNPCActionCreator(),
                     [](const FNPCSliceState &State,
                        const Action<FString> &Action) -> FNPCSliceState {
                       FNPCSliceState Next = State;
@@ -170,8 +170,7 @@ inline Slice<FNPCSliceState> CreateNPCSlice() {
                         Next.ActiveNpcId.Empty();
                       }
                       return Next;
-                    })
-      .build();
+                    }));
 }
 
 /**

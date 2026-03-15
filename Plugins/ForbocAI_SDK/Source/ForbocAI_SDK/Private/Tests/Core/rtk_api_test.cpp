@@ -44,10 +44,10 @@ bool FRtkApiSliceTest::RunTest(const FString &Parameters) {
    * 2. Register Endpoint in ApiSlice
    * User Story: As a maintainer, I need this note so the surrounding code intent stays clear during maintenance and debugging.
    */
-  ApiSlice<FAppMockState> TestApi;
-  TestApi.ReducerPath = TEXT("testApi");
+  ApiSlice<FAppMockState> TestApi =
+      createApiSlice<FAppMockState>(TEXT("testApi"), TArray<FString>());
 
-  auto GetUserThunk = TestApi.injectEndpoint(GetUserEndpoint);
+  auto GetUserThunk = injectEndpoint(TestApi, GetUserEndpoint);
 
   TArray<FString> EventLog;
   std::function<AnyAction(const AnyAction &)> MockDispatch =

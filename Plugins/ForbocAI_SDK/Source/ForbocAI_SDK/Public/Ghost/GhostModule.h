@@ -151,34 +151,31 @@ inline GhostTypes::Lazy<FGhost> createLazyGhost(const FGhostConfig &config) {
  */
 inline GhostTypes::ValidationPipeline<FGhostConfig, FString>
 ghostConfigValidationPipeline() {
-  return func::validationPipeline<FGhostConfig, FString>()
-      .add([](const FGhostConfig &config)
-               -> GhostTypes::Either<FString, FGhostConfig> {
-        if (config.Agent.Id.IsEmpty() || config.Agent.Persona.IsEmpty()) {
-          return GhostTypes::make_left(
-              FString(TEXT("Agent must have valid Id and Persona")),
-              FGhostConfig{});
-        }
-        return GhostTypes::make_right(FString(), config);
-      })
-      .add([](const FGhostConfig &config)
-               -> GhostTypes::Either<FString, FGhostConfig> {
-        if (config.Scenarios.Num() == 0) {
-          return GhostTypes::make_left(
-              FString(TEXT("At least one test scenario must be provided")),
-              FGhostConfig{});
-        }
-        return GhostTypes::make_right(FString(), config);
-      })
-      .add([](const FGhostConfig &config)
-               -> GhostTypes::Either<FString, FGhostConfig> {
-        if (config.MaxIterations < 1) {
-          return GhostTypes::make_left(
-              FString(TEXT("Max iterations must be at least 1")),
-              FGhostConfig{});
-        }
-        return GhostTypes::make_right(FString(), config);
-      });
+  return func::validationPipeline<FGhostConfig, FString>() |
+         [](const FGhostConfig &config)
+             -> GhostTypes::Either<FString, FGhostConfig> {
+           return (config.Agent.Id.IsEmpty() || config.Agent.Persona.IsEmpty())
+                      ? GhostTypes::make_left(
+                            FString(TEXT("Agent must have valid Id and Persona")),
+                            FGhostConfig{})
+                      : GhostTypes::make_right(FString(), config);
+         } |
+         [](const FGhostConfig &config)
+             -> GhostTypes::Either<FString, FGhostConfig> {
+           return config.Scenarios.Num() == 0
+                      ? GhostTypes::make_left(
+                            FString(TEXT("At least one test scenario must be provided")),
+                            FGhostConfig{})
+                      : GhostTypes::make_right(FString(), config);
+         } |
+         [](const FGhostConfig &config)
+             -> GhostTypes::Either<FString, FGhostConfig> {
+           return config.MaxIterations < 1
+                      ? GhostTypes::make_left(
+                            FString(TEXT("Max iterations must be at least 1")),
+                            FGhostConfig{})
+                      : GhostTypes::make_right(FString(), config);
+         };
 }
 
 /**
@@ -195,9 +192,11 @@ inline GhostTypes::Pipeline<FGhost> ghostTestPipeline(const FGhost &ghost) {
  * User Story: As functional construction flows, I need a curried creator so
  * ghost initialization can participate in composable pipelines.
  */
-inline auto curriedGhostCreation()
-    -> decltype(func::curry<1>(
-        std::function<GhostTypes::GhostCreationResult(FGhostConfig)>())) {
+typedef decltype(func::curry<1>(
+    std::function<GhostTypes::GhostCreationResult(FGhostConfig)>()))
+    FCurriedGhostCreation;
+
+inline FCurriedGhostCreation curriedGhostCreation() {
   std::function<GhostTypes::GhostCreationResult(FGhostConfig)> Creator =
       [](FGhostConfig config) -> GhostTypes::GhostCreationResult {
     try {

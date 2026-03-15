@@ -110,7 +110,7 @@ inline ThunkAction<Result, FStoreState> MakeEndpoint(
   Endpoint.ProvidesTags = ProvidesTags;
   Endpoint.InvalidatesTags = InvalidatesTags;
   Endpoint.RequestBuilder = RequestBuilder;
-  return ForbocAiApi.injectEndpoint(Endpoint)(ArgValue);
+  return injectEndpoint(ForbocAiApi, Endpoint)(ArgValue);
 }
 
 /**

@@ -189,8 +189,9 @@ inline AnyAction ClearGhostSession() {
  * creation wires ghost actions and state transitions consistently.
  */
 inline Slice<FGhostSliceState> CreateGhostSlice() {
-  return SliceBuilder<FGhostSliceState>(TEXT("ghost"), FGhostSliceState())
-      .addExtraCase(Actions::GhostSessionStartedActionCreator(),
+  return buildSlice(sliceBuilder<FGhostSliceState>(TEXT("ghost"),
+                                                   FGhostSliceState()) |
+                    addExtraCase(Actions::GhostSessionStartedActionCreator(),
                     [](const FGhostSliceState &State,
                        const Action<FGhostSessionStartedPayload> &Action)
                         -> FGhostSliceState {
@@ -202,8 +203,8 @@ inline Slice<FGhostSliceState> CreateGhostSlice() {
                       Next.Error.Empty();
                       Next.bHasResults = false;
                       return Next;
-                    })
-      .addExtraCase(Actions::GhostSessionProgressActionCreator(),
+                    }) |
+                    addExtraCase(Actions::GhostSessionProgressActionCreator(),
                     [](const FGhostSliceState &State,
                        const Action<FGhostSessionProgressPayload> &Action)
                         -> FGhostSliceState {
@@ -212,8 +213,8 @@ inline Slice<FGhostSliceState> CreateGhostSlice() {
                       Next.Status = Action.PayloadValue.Status;
                       Next.Progress = Action.PayloadValue.Progress;
                       return Next;
-                    })
-      .addExtraCase(
+                    }) |
+                    addExtraCase(
           Actions::GhostSessionCompletedActionCreator(),
           [](const FGhostSliceState &State,
              const Action<FGhostTestReport> &Action) -> FGhostSliceState {
@@ -230,8 +231,8 @@ inline Slice<FGhostSliceState> CreateGhostSlice() {
                       : Next.ActiveSessionId;
             }
             return Next;
-          })
-      .addExtraCase(Actions::GhostSessionFailedActionCreator(),
+          }) |
+                    addExtraCase(Actions::GhostSessionFailedActionCreator(),
                     [](const FGhostSliceState &State,
                        const Action<FGhostSessionFailedPayload> &Action)
                         -> FGhostSliceState {
@@ -241,22 +242,21 @@ inline Slice<FGhostSliceState> CreateGhostSlice() {
                       Next.bLoading = false;
                       Next.Error = Action.PayloadValue.Error;
                       return Next;
-                    })
-      .addExtraCase(Actions::GhostHistoryLoadedActionCreator(),
+                    }) |
+                    addExtraCase(Actions::GhostHistoryLoadedActionCreator(),
                     [](const FGhostSliceState &State,
                        const Action<TArray<FGhostHistoryEntry>> &Action)
                         -> FGhostSliceState {
                       FGhostSliceState Next = State;
                       Next.History = Action.PayloadValue;
                       return Next;
-                    })
-      .addExtraCase(
+                    }) |
+                    addExtraCase(
           Actions::ClearGhostSessionActionCreator(),
           [](const FGhostSliceState &State,
              const Action<rtk::FEmptyPayload> &Action) -> FGhostSliceState {
             return FGhostSliceState();
-          })
-      .build();
+          }));
 }
 
 } // namespace GhostSlice
