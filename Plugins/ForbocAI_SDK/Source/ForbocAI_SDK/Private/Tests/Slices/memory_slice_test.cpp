@@ -5,7 +5,6 @@
 
 using namespace rtk;
 using namespace MemorySlice;
-namespace Actions = MemorySlice::Actions;
 
 /**
  * Test: MemoryStoreStart / Success / Failed lifecycle

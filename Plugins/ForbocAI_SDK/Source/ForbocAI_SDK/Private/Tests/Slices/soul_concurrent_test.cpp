@@ -5,7 +5,7 @@
 
 using namespace rtk;
 using namespace SoulSlice;
-namespace Actions = SoulSlice::Actions;
+namespace SoulActions = SoulSlice::Actions;
 
 /**
  * Test: Concurrent export and import — export pending then import pending
@@ -23,7 +23,7 @@ bool FSoulConcurrentExportImportTest::RunTest(const FString &Parameters) {
    * Start export
    * User Story: As a maintainer, I need this step note so I can follow the scenario progression and reason about the expected state changes.
    */
-  State = SSlice.Reducer(State, Actions::RemoteExportSoulPending());
+  State = SSlice.Reducer(State, SoulActions::RemoteExportSoulPending());
   TestEqual("ExportStatus exporting", State.ExportStatus,
             FString(TEXT("exporting")));
   TestEqual("ImportStatus idle", State.ImportStatus,
@@ -33,7 +33,7 @@ bool FSoulConcurrentExportImportTest::RunTest(const FString &Parameters) {
    * Start import while export is still pending
    * User Story: As a maintainer, I need this step note so I can follow the scenario progression and reason about the expected state changes.
    */
-  State = SSlice.Reducer(State, Actions::ImportSoulPending());
+  State = SSlice.Reducer(State, SoulActions::ImportSoulPending());
   TestEqual("ExportStatus still exporting", State.ExportStatus,
             FString(TEXT("exporting")));
   TestEqual("ImportStatus importing", State.ImportStatus,
@@ -45,7 +45,7 @@ bool FSoulConcurrentExportImportTest::RunTest(const FString &Parameters) {
    */
   FSoulExportResult ExportResult;
   ExportResult.TxId = TEXT("export_tx_concurrent");
-  State = SSlice.Reducer(State, Actions::RemoteExportSoulSuccess(ExportResult));
+  State = SSlice.Reducer(State, SoulActions::RemoteExportSoulSuccess(ExportResult));
   TestEqual("ExportStatus success", State.ExportStatus,
             FString(TEXT("success")));
   TestEqual("ImportStatus still importing", State.ImportStatus,
@@ -61,7 +61,7 @@ bool FSoulConcurrentExportImportTest::RunTest(const FString &Parameters) {
   FSoul ImportedSoul;
   ImportedSoul.Id = TEXT("import_soul_concurrent");
   ImportedSoul.Persona = TEXT("Concurrent Test Soul");
-  State = SSlice.Reducer(State, Actions::ImportSoulSuccess(ImportedSoul));
+  State = SSlice.Reducer(State, SoulActions::ImportSoulSuccess(ImportedSoul));
   TestEqual("ExportStatus still success", State.ExportStatus,
             FString(TEXT("success")));
   TestEqual("ImportStatus success", State.ImportStatus,
@@ -89,9 +89,9 @@ bool FSoulExportFailImportSucceedTest::RunTest(const FString &Parameters) {
    * Export fails
    * User Story: As a maintainer, I need this note so the surrounding code intent stays clear during maintenance and debugging.
    */
-  State = SSlice.Reducer(State, Actions::RemoteExportSoulPending());
+  State = SSlice.Reducer(State, SoulActions::RemoteExportSoulPending());
   State = SSlice.Reducer(State,
-                         Actions::RemoteExportSoulFailed(TEXT("Arweave down")));
+                         SoulActions::RemoteExportSoulFailed(TEXT("Arweave down")));
   TestEqual("ExportStatus failed", State.ExportStatus,
             FString(TEXT("failed")));
   TestEqual("Error set", State.Error, FString(TEXT("Arweave down")));
@@ -100,7 +100,7 @@ bool FSoulExportFailImportSucceedTest::RunTest(const FString &Parameters) {
    * Import starts — should clear the shared error
    * User Story: As a maintainer, I need this note so the surrounding code intent stays clear during maintenance and debugging.
    */
-  State = SSlice.Reducer(State, Actions::ImportSoulPending());
+  State = SSlice.Reducer(State, SoulActions::ImportSoulPending());
   TestTrue("Error cleared by import pending", State.Error.IsEmpty());
   TestEqual("ExportStatus still failed", State.ExportStatus,
             FString(TEXT("failed")));
@@ -111,7 +111,7 @@ bool FSoulExportFailImportSucceedTest::RunTest(const FString &Parameters) {
    */
   FSoul Soul;
   Soul.Id = TEXT("import_after_fail");
-  State = SSlice.Reducer(State, Actions::ImportSoulSuccess(Soul));
+  State = SSlice.Reducer(State, SoulActions::ImportSoulSuccess(Soul));
   TestEqual("ImportStatus success", State.ImportStatus,
             FString(TEXT("success")));
   TestEqual("ExportStatus still failed", State.ExportStatus,
@@ -136,9 +136,9 @@ bool FSoulImportFailExportSucceedTest::RunTest(const FString &Parameters) {
    * Import fails
    * User Story: As a maintainer, I need this note so the surrounding code intent stays clear during maintenance and debugging.
    */
-  State = SSlice.Reducer(State, Actions::ImportSoulPending());
+  State = SSlice.Reducer(State, SoulActions::ImportSoulPending());
   State = SSlice.Reducer(State,
-                         Actions::ImportSoulFailed(TEXT("Invalid TxId")));
+                         SoulActions::ImportSoulFailed(TEXT("Invalid TxId")));
   TestEqual("ImportStatus failed", State.ImportStatus,
             FString(TEXT("failed")));
 
@@ -146,7 +146,7 @@ bool FSoulImportFailExportSucceedTest::RunTest(const FString &Parameters) {
    * Export starts — should clear the shared error
    * User Story: As a maintainer, I need this note so the surrounding code intent stays clear during maintenance and debugging.
    */
-  State = SSlice.Reducer(State, Actions::RemoteExportSoulPending());
+  State = SSlice.Reducer(State, SoulActions::RemoteExportSoulPending());
   TestTrue("Error cleared by export pending", State.Error.IsEmpty());
 
   /**
@@ -155,7 +155,7 @@ bool FSoulImportFailExportSucceedTest::RunTest(const FString &Parameters) {
    */
   FSoulExportResult ExportResult;
   ExportResult.TxId = TEXT("export_after_import_fail");
-  State = SSlice.Reducer(State, Actions::RemoteExportSoulSuccess(ExportResult));
+  State = SSlice.Reducer(State, SoulActions::RemoteExportSoulSuccess(ExportResult));
   TestEqual("ExportStatus success", State.ExportStatus,
             FString(TEXT("success")));
   TestEqual("ImportStatus still failed", State.ImportStatus,
@@ -180,10 +180,10 @@ bool FSoulDoubleExportTest::RunTest(const FString &Parameters) {
    * First export
    * User Story: As a maintainer, I need this step note so I can follow the scenario progression and reason about the expected state changes.
    */
-  State = SSlice.Reducer(State, Actions::RemoteExportSoulPending());
+  State = SSlice.Reducer(State, SoulActions::RemoteExportSoulPending());
   FSoulExportResult Result1;
   Result1.TxId = TEXT("tx_first");
-  State = SSlice.Reducer(State, Actions::RemoteExportSoulSuccess(Result1));
+  State = SSlice.Reducer(State, SoulActions::RemoteExportSoulSuccess(Result1));
   TestEqual("First export TxId", State.LastExport.TxId,
             FString(TEXT("tx_first")));
 
@@ -191,7 +191,7 @@ bool FSoulDoubleExportTest::RunTest(const FString &Parameters) {
    * Second export
    * User Story: As a maintainer, I need this step note so I can follow the scenario progression and reason about the expected state changes.
    */
-  State = SSlice.Reducer(State, Actions::RemoteExportSoulPending());
+  State = SSlice.Reducer(State, SoulActions::RemoteExportSoulPending());
   TestEqual("Status back to exporting", State.ExportStatus,
             FString(TEXT("exporting")));
   /**
@@ -202,7 +202,7 @@ bool FSoulDoubleExportTest::RunTest(const FString &Parameters) {
 
   FSoulExportResult Result2;
   Result2.TxId = TEXT("tx_second");
-  State = SSlice.Reducer(State, Actions::RemoteExportSoulSuccess(Result2));
+  State = SSlice.Reducer(State, SoulActions::RemoteExportSoulSuccess(Result2));
   TestEqual("Second export TxId overwrites", State.LastExport.TxId,
             FString(TEXT("tx_second")));
 
@@ -225,11 +225,11 @@ bool FSoulDoubleImportTest::RunTest(const FString &Parameters) {
    * First import
    * User Story: As a maintainer, I need this step note so I can follow the scenario progression and reason about the expected state changes.
    */
-  State = SSlice.Reducer(State, Actions::ImportSoulPending());
+  State = SSlice.Reducer(State, SoulActions::ImportSoulPending());
   FSoul Soul1;
   Soul1.Id = TEXT("soul_first");
   Soul1.Persona = TEXT("First Persona");
-  State = SSlice.Reducer(State, Actions::ImportSoulSuccess(Soul1));
+  State = SSlice.Reducer(State, SoulActions::ImportSoulSuccess(Soul1));
   TestEqual("First import id", State.LastImport.Id,
             FString(TEXT("soul_first")));
 
@@ -237,11 +237,11 @@ bool FSoulDoubleImportTest::RunTest(const FString &Parameters) {
    * Second import
    * User Story: As a maintainer, I need this step note so I can follow the scenario progression and reason about the expected state changes.
    */
-  State = SSlice.Reducer(State, Actions::ImportSoulPending());
+  State = SSlice.Reducer(State, SoulActions::ImportSoulPending());
   FSoul Soul2;
   Soul2.Id = TEXT("soul_second");
   Soul2.Persona = TEXT("Second Persona");
-  State = SSlice.Reducer(State, Actions::ImportSoulSuccess(Soul2));
+  State = SSlice.Reducer(State, SoulActions::ImportSoulSuccess(Soul2));
   TestEqual("Second import overwrites", State.LastImport.Id,
             FString(TEXT("soul_second")));
   TestEqual("Persona updated", State.LastImport.Persona,

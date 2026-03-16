@@ -1,9 +1,11 @@
 #include "CLI/CliHandlers.h"
 #include "CLI/CliOperations.h"
+#include "Core/ThunkDetail.h"
 #include "NativeEngine.h"
 #include "RuntimeConfig.h"
 #include "HAL/PlatformProcess.h"
 #include "HAL/PlatformFileManager.h"
+#include "Misc/Guid.h"
 #include "Misc/FileHelper.h"
 #include "Misc/Paths.h"
 
@@ -19,6 +21,241 @@ namespace {
 static const TCHAR *SQLITE_VERSION = TEXT("3460100");
 static const TCHAR *SQLITE_VEC_VERSION = TEXT("v0.1.6");
 static const TCHAR *LLAMA_CPP_TAG = TEXT("b8191");
+static const TCHAR *MACOS_DEPLOYMENT_TARGET = TEXT("14.0");
+static const TCHAR *DEFAULT_CORTEX_MODEL_FILE =
+    TEXT("SmolLM2-135M-Instruct-Q4_K_M.gguf");
+static const TCHAR *DEFAULT_SMOKE_PROMPT = TEXT("Reply with the word ready.");
+
+struct FRuntimeCheckOptions {
+  bool bAllowDownload;
+  bool bSkipCortex;
+  bool bSkipVector;
+  bool bSkipMemory;
+  bool bCleanup;
+  FString CortexModel;
+  FString EmbeddingModel;
+  FString DatabasePath;
+  FString Prompt;
+};
+
+bool HasFlagRecursive(const TArray<FString> &Args, const FString &Flag,
+                      int32 Index = 0) {
+  return Index == Args.Num()
+             ? false
+             : Args[Index] == Flag ? true
+                                   : HasFlagRecursive(Args, Flag, Index + 1);
+}
+
+FString FindOptionRecursive(const TArray<FString> &Args, const FString &Prefix,
+                            int32 Index = 0) {
+  return Index == Args.Num()
+             ? TEXT("")
+             : Args[Index].StartsWith(Prefix)
+                   ? Args[Index].Mid(Prefix.Len())
+                   : FindOptionRecursive(Args, Prefix, Index + 1);
+}
+
+FRuntimeCheckOptions RuntimeCheckOptions(const TArray<FString> &Args) {
+  FRuntimeCheckOptions Options;
+  Options.bAllowDownload = HasFlagRecursive(Args, TEXT("--allow-download"));
+  Options.bSkipCortex = HasFlagRecursive(Args, TEXT("--skip-cortex"));
+  Options.bSkipVector = HasFlagRecursive(Args, TEXT("--skip-vector"));
+  Options.bSkipMemory = HasFlagRecursive(Args, TEXT("--skip-memory"));
+  Options.bCleanup = HasFlagRecursive(Args, TEXT("--cleanup"));
+  Options.CortexModel = FindOptionRecursive(Args, TEXT("--model="));
+  Options.EmbeddingModel =
+      FindOptionRecursive(Args, TEXT("--embedding-model="));
+  Options.DatabasePath = FindOptionRecursive(Args, TEXT("--database="));
+  Options.Prompt = FindOptionRecursive(Args, TEXT("--prompt="));
+  return Options;
+}
+
+FString DefaultCortexModelPath() {
+  return rtk::detail::GetLocalInfrastructureDir() + TEXT("models/") +
+         DEFAULT_CORTEX_MODEL_FILE;
+}
+
+FString RuntimeSmokeDatabasePath() {
+  return FPaths::Combine(FPaths::ProjectSavedDir(), TEXT("ForbocAI"),
+                         TEXT("runtime-smoke"),
+                         FString::Printf(TEXT("runtime-smoke-%s.db"),
+                                         *FGuid::NewGuid().ToString(
+                                             EGuidFormats::Digits)));
+}
+
+FString ResolveEmbeddingModelPath(const FRuntimeCheckOptions &Options,
+                                  IPlatformFile &PF) {
+  const FString DefaultPath = rtk::detail::DefaultEmbeddingModelPath();
+  return !Options.EmbeddingModel.IsEmpty()
+             ? Options.EmbeddingModel
+             : PF.FileExists(*DefaultPath) ? DefaultPath
+                                           : Options.bAllowDownload
+                                                 ? FString()
+                                                 : TEXT("");
+}
+
+FString ResolveCortexModelArg(const FRuntimeCheckOptions &Options,
+                              IPlatformFile &PF) {
+  const FString DefaultPath = DefaultCortexModelPath();
+  return !Options.CortexModel.IsEmpty()
+             ? Options.CortexModel
+             : PF.FileExists(*DefaultPath) ? DefaultPath
+                                           : Options.bAllowDownload
+                                                 ? FString()
+                                                 : TEXT("");
+}
+
+bool ContainsRecalledTextRecursive(const TArray<FMemoryItem> &Items,
+                                   const FString &ExpectedText, int32 Index) {
+  return Index == Items.Num()
+             ? false
+             : Items[Index].Text == ExpectedText
+                   ? true
+                   : ContainsRecalledTextRecursive(Items, ExpectedText,
+                                                   Index + 1);
+}
+
+void EnsureParentDirectory(const FString &Path) {
+  FPlatformFileManager::Get().GetPlatformFile().CreateDirectoryTree(
+      *FPaths::GetPath(Path));
+}
+
+void CleanupSmokeDatabase(rtk::EnhancedStore<FStoreState> &Store,
+                          const FString &DatabasePath) {
+  try {
+    Ops::ClearNodeMemory(Store);
+  } catch (const std::exception &) {
+  }
+  IFileManager::Get().Delete(*DatabasePath, false, true, true);
+}
+
+void CleanupSmokeDatabaseIfNeeded(rtk::EnhancedStore<FStoreState> &Store,
+                                  const FString &DatabasePath,
+                                  bool bShouldCleanup) {
+  if (bShouldCleanup) {
+    CleanupSmokeDatabase(Store, DatabasePath);
+  }
+}
+
+Result RunRuntimeSmokeCheck(rtk::EnhancedStore<FStoreState> &Store,
+                            const TArray<FString> &Args) {
+  IPlatformFile &PF = FPlatformFileManager::Get().GetPlatformFile();
+  const FRuntimeCheckOptions Options = RuntimeCheckOptions(Args);
+  const FString DatabasePath =
+      Options.DatabasePath.IsEmpty() ? RuntimeSmokeDatabasePath()
+                                     : FPaths::ConvertRelativePathToFull(
+                                           Options.DatabasePath);
+  const bool bOwnsDatabasePath = Options.DatabasePath.IsEmpty();
+  const FString EmbeddingModelPath =
+      ResolveEmbeddingModelPath(Options, PF);
+  const FString CortexModelArg = ResolveCortexModelArg(Options, PF);
+  const FString Prompt =
+      Options.Prompt.IsEmpty() ? FString(DEFAULT_SMOKE_PROMPT) : Options.Prompt;
+  const FString SmokeText =
+      FString::Printf(TEXT("runtime-smoke-%s"),
+                      *FGuid::NewGuid().ToString(EGuidFormats::Digits));
+  const bool bNeedsVectorModel =
+      !Options.bSkipVector || !Options.bSkipMemory;
+
+  EnsureParentDirectory(DatabasePath);
+
+  UE_LOG(LogTemp, Display, TEXT(""));
+  UE_LOG(LogTemp, Display, TEXT("=== ForbocAI Native Runtime Smoke Check ==="));
+  UE_LOG(LogTemp, Display, TEXT("  Database: %s"), *DatabasePath);
+  UE_LOG(LogTemp, Display, TEXT("  Cortex: %s"),
+         Options.bSkipCortex ? TEXT("skipped") : TEXT("enabled"));
+  UE_LOG(LogTemp, Display, TEXT("  Vector: %s"),
+         Options.bSkipVector ? TEXT("skipped") : TEXT("enabled"));
+  UE_LOG(LogTemp, Display, TEXT("  Memory: %s"),
+         Options.bSkipMemory ? TEXT("skipped") : TEXT("enabled"));
+
+  if (!WITH_FORBOC_SQLITE_VEC) {
+    return Result::Failure(
+        "setup_runtime_check requires WITH_FORBOC_SQLITE_VEC=1");
+  }
+
+  if (bNeedsVectorModel && !WITH_FORBOC_NATIVE) {
+    return Result::Failure(
+        "setup_runtime_check requires WITH_FORBOC_NATIVE=1 for vector or memory verification");
+  }
+
+  if (Options.bSkipVector && !Options.bSkipMemory) {
+    return Result::Failure(
+        "setup_runtime_check cannot verify memory storage while --skip-vector is set");
+  }
+
+  if (bNeedsVectorModel && EmbeddingModelPath.IsEmpty()) {
+    return Result::Failure(
+        "Embedding model missing. Re-run with --allow-download, --embedding-model=<path>, or --skip-vector --skip-memory.");
+  }
+
+  if (!Options.bSkipCortex && CortexModelArg.IsEmpty()) {
+    return Result::Failure(
+        "Cortex model missing. Re-run with --allow-download, --model=<path>, or --skip-cortex.");
+  }
+
+  try {
+    Ops::InitNodeMemory(Store, DatabasePath);
+    if (!PF.FileExists(*DatabasePath)) {
+      return Result::Failure("Node memory database was not created on disk");
+    }
+
+    UE_LOG(LogTemp, Display, TEXT("  [OK] node memory initialized"));
+
+    if (!Options.bSkipVector) {
+      Ops::WaitForResult(
+          Store.dispatch(rtk::initNodeVectorThunk(EmbeddingModelPath)), 180.0);
+      if (!Store.getState().Cortex.bEmbedderReady) {
+        return Result::Failure("Embedding model did not become ready");
+      }
+      UE_LOG(LogTemp, Display, TEXT("  [OK] embedding runtime initialized"));
+    }
+
+    if (!Options.bSkipMemory) {
+      Ops::StoreNodeMemory(Store, SmokeText, 0.95f);
+      const TArray<FMemoryItem> Recalled =
+          Ops::RecallNodeMemory(Store, SmokeText, 5, 0.0f);
+      if (!ContainsRecalledTextRecursive(Recalled, SmokeText, 0)) {
+        return Result::Failure(
+            "Stored smoke memory was not recalled from the local vector store");
+      }
+      UE_LOG(LogTemp, Display, TEXT("  [OK] memory store/recall verified"));
+    }
+
+    if (!Options.bSkipCortex) {
+      const FString ModelsDir = rtk::detail::GetLocalInfrastructureDir() +
+                                TEXT("models");
+      TArray<FString> ModelsBefore;
+      TArray<FString> ModelsAfter;
+      PF.FindFiles(ModelsBefore, *ModelsDir, TEXT(".gguf"));
+      const FCortexStatus Status = Ops::InitCortex(Store, CortexModelArg);
+      PF.FindFiles(ModelsAfter, *ModelsDir, TEXT(".gguf"));
+      if (!Status.bReady) {
+        return Result::Failure("Local cortex did not become ready");
+      }
+      if (Options.CortexModel.IsEmpty() && ModelsAfter.Num() == 0) {
+        return Result::Failure(
+            "Local cortex initialized without a GGUF artifact in local_infrastructure/models");
+      }
+      const FCortexResponse Response = Ops::CompleteCortex(Store, Prompt);
+      if (Response.Text.IsEmpty() || Response.Text.StartsWith(TEXT("Error:"))) {
+        return Result::Failure("Local cortex completion returned an error");
+      }
+      UE_LOG(LogTemp, Display,
+             TEXT("  [OK] cortex initialized and generated a completion"));
+      UE_LOG(LogTemp, Display, TEXT("  Models before: %d | after: %d"),
+             ModelsBefore.Num(), ModelsAfter.Num());
+    }
+  } catch (const std::exception &Error) {
+    CleanupSmokeDatabaseIfNeeded(Store, DatabasePath,
+                                 bOwnsDatabasePath || Options.bCleanup);
+    return Result::Failure(Error.what());
+  }
+
+  CleanupSmokeDatabaseIfNeeded(Store, DatabasePath,
+                               bOwnsDatabasePath || Options.bCleanup);
+  return Result::Success("Native runtime smoke check passed");
+}
 
 /**
  * Runs an external process synchronously.
@@ -539,9 +776,15 @@ Result BuildLlama(const TArray<FString> &Args) {
       FPaths::ProjectDir() / TEXT("local_infrastructure/tmp/llama-build");
 
   FString Tag = LLAMA_CPP_TAG;
+  FString DeploymentTarget = MACOS_DEPLOYMENT_TARGET;
   for (const FString &Arg : Args) {
     if (Arg.StartsWith(TEXT("--tag="))) {
       Tag = Arg.Mid(6);
+#if PLATFORM_MAC
+    } else if (Arg.StartsWith(TEXT("--macos-deployment-target="))) {
+      DeploymentTarget =
+          Arg.Mid(FString(TEXT("--macos-deployment-target=")).Len());
+#endif
     }
   }
 
@@ -570,6 +813,10 @@ Result BuildLlama(const TArray<FString> &Args) {
   UE_LOG(LogTemp, Display, TEXT(""));
   UE_LOG(LogTemp, Display, TEXT("=== Building llama.cpp (%s) ==="), *Tag);
   UE_LOG(LogTemp, Display, TEXT("  This may take several minutes..."));
+#if PLATFORM_MAC
+  UE_LOG(LogTemp, Display, TEXT("  macOS deployment target: %s"),
+         *DeploymentTarget);
+#endif
   UE_LOG(LogTemp, Display, TEXT(""));
 
   /**
@@ -628,6 +875,8 @@ Result BuildLlama(const TArray<FString> &Args) {
 
 #if PLATFORM_MAC
   CmakeConfigArgs += TEXT(" -DGGML_METAL=ON");
+  CmakeConfigArgs += FString::Printf(
+      TEXT(" -DCMAKE_OSX_DEPLOYMENT_TARGET=%s"), *DeploymentTarget);
 #endif
 
   Rc = RunProcess(CmakeExe, CmakeConfigArgs, CloneDir, 120.0f);
@@ -767,6 +1016,10 @@ HandlerResult HandleSetup(rtk::EnhancedStore<FStoreState> &Store,
   if (CommandKey == TEXT("setup_build_llama")) {
     (void)Store;
     return just(BuildLlama(Args));
+  }
+
+  if (CommandKey == TEXT("setup_runtime_check")) {
+    return just(RunRuntimeSmokeCheck(Store, Args));
   }
 
   return nothing<Result>();

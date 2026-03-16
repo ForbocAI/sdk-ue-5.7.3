@@ -6,7 +6,6 @@
 
 using namespace rtk;
 using namespace DirectiveSlice;
-namespace Actions = DirectiveSlice::Actions;
 
 /**
  * Test: Full happy path — Started → Received → ContextComposed → Validated

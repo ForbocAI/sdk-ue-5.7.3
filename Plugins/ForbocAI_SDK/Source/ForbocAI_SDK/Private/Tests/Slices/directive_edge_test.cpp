@@ -6,7 +6,6 @@
 
 using namespace rtk;
 using namespace DirectiveSlice;
-namespace Actions = DirectiveSlice::Actions;
 
 /**
  * Test: Rapid sequential failures on different directives

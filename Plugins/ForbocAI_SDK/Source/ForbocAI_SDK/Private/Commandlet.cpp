@@ -63,6 +63,18 @@ void AddIfPresent(TArray<FString> &Args, const FString &Value) {
 }
 
 /**
+ * Appends a flag argument when the raw params include the named switch.
+ * User Story: As commandlet parsing, I need boolean switches preserved so CLI
+ * handlers can receive the same flag-style arguments as the direct CLI path.
+ */
+void AddFlagIfPresent(TArray<FString> &Args, const FString &Params,
+                      const TCHAR *ParamName, const TCHAR *FlagValue) {
+  if (FParse::Param(*Params, ParamName)) {
+    Args.Add(FlagValue);
+  }
+}
+
+/**
  * Builds positional command arguments from raw Unreal commandlet params.
  * User Story: As command dispatch, I need raw commandlet params converted into
  * handler-friendly args so CLI routing can reuse the shared command handlers.
@@ -216,6 +228,59 @@ TArray<FString> BuildCommandArgs(const FString &Command, const FString &Params) 
     return Args;
   }
 
+  /**
+   * ---- Setup ----
+   * User Story: As setup command routing, I need commandlet params converted
+   * into setup flags so the commandlet path matches the direct CLI surface.
+   */
+  if (Command == TEXT("setup_build_llama")) {
+    AddIfPresent(
+        Args, ExtractParam(Params, TEXT("Tag=")).IsEmpty()
+                  ? TEXT("")
+                  : FString(TEXT("--tag=")) + ExtractParam(Params, TEXT("Tag=")));
+    AddIfPresent(
+        Args,
+        ExtractParam(Params, TEXT("MacOSDeploymentTarget=")).IsEmpty()
+            ? TEXT("")
+            : FString(TEXT("--macos-deployment-target=")) +
+                  ExtractParam(Params, TEXT("MacOSDeploymentTarget=")));
+    return Args;
+  }
+  if (Command == TEXT("setup") || Command == TEXT("setup_deps")) {
+    AddFlagIfPresent(Args, Params, TEXT("SqliteOnly"), TEXT("--sqlite-only"));
+    AddFlagIfPresent(Args, Params, TEXT("LlamaOnly"), TEXT("--llama-only"));
+    return Args;
+  }
+  if (Command == TEXT("setup_runtime_check")) {
+    AddIfPresent(
+        Args, ExtractParam(Params, TEXT("Model=")).IsEmpty()
+                  ? TEXT("")
+                  : FString(TEXT("--model=")) +
+                        ExtractParam(Params, TEXT("Model=")));
+    AddIfPresent(
+        Args, ExtractParam(Params, TEXT("EmbeddingModel=")).IsEmpty()
+                  ? TEXT("")
+                  : FString(TEXT("--embedding-model=")) +
+                        ExtractParam(Params, TEXT("EmbeddingModel=")));
+    AddIfPresent(
+        Args, ExtractParam(Params, TEXT("Database=")).IsEmpty()
+                  ? TEXT("")
+                  : FString(TEXT("--database=")) +
+                        ExtractParam(Params, TEXT("Database=")));
+    AddIfPresent(
+        Args, ExtractParam(Params, TEXT("Prompt=")).IsEmpty()
+                  ? TEXT("")
+                  : FString(TEXT("--prompt=")) +
+                        ExtractParam(Params, TEXT("Prompt=")));
+    AddFlagIfPresent(Args, Params, TEXT("AllowDownload"),
+                     TEXT("--allow-download"));
+    AddFlagIfPresent(Args, Params, TEXT("SkipCortex"), TEXT("--skip-cortex"));
+    AddFlagIfPresent(Args, Params, TEXT("SkipVector"), TEXT("--skip-vector"));
+    AddFlagIfPresent(Args, Params, TEXT("SkipMemory"), TEXT("--skip-memory"));
+    AddFlagIfPresent(Args, Params, TEXT("Cleanup"), TEXT("--cleanup"));
+    return Args;
+  }
+
   return Args;
 }
 
@@ -336,7 +401,10 @@ UForbocAICommandlet::commandValidationPipeline() {
             TEXT("soul_verify"),
             TEXT("config_set"),       TEXT("config_get"),
             TEXT("config_list"),
-            TEXT("vector_init")};
+            TEXT("vector_init"),
+            TEXT("setup"),            TEXT("setup_deps"),
+            TEXT("setup_check"),      TEXT("setup_verify"),
+            TEXT("setup_build_llama"), TEXT("setup_runtime_check")};
            return !ValidCommands.Contains(Command)
                       ? CLITypes::make_left(
                             FString::Printf(TEXT("Invalid command: %s"),

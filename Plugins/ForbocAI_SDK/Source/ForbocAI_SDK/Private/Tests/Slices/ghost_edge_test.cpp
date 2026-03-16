@@ -5,7 +5,6 @@
 
 using namespace rtk;
 using namespace GhostSlice;
-namespace Actions = GhostSlice::Actions;
 
 /**
  * Test: Progress update for wrong session is a no-op

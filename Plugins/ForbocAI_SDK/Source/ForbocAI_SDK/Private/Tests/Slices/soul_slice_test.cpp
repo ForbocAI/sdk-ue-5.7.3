@@ -5,7 +5,6 @@
 
 using namespace rtk;
 using namespace SoulSlice;
-namespace Actions = SoulSlice::Actions;
 
 /**
  * Test: SoulExport Pending / Success / Failed lifecycle

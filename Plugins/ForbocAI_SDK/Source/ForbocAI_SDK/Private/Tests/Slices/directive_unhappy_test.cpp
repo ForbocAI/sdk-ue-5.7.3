@@ -6,7 +6,6 @@
 
 using namespace rtk;
 using namespace DirectiveSlice;
-namespace Actions = DirectiveSlice::Actions;
 
 /**
  * Test: RunFailed on a non-existent directive is a no-op
