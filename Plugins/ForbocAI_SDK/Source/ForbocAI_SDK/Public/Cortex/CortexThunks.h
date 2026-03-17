@@ -5,6 +5,7 @@
  */
 
 #include "Core/ThunkDetail.h"
+#include "Core/functional_core.hpp"
 #include "Cortex/CortexSlice.h"
 #include "Errors.h"
 #include "RuntimeConfig.h"
@@ -53,14 +54,24 @@ initNodeCortexThunk(const FString &ModelPath) {
                    "Q4_K_M.gguf");
 
           FString EffectiveModel = ModelPath.IsEmpty() ? DefaultModelId : ModelPath;
-          FString Url;
-          if (EffectiveModel.Equals(TEXT("smollm2-135m"),
-                                    ESearchCase::IgnoreCase)) {
-            Url = SmolUrl;
-          } else if (EffectiveModel.Equals(TEXT("llama3-8b"),
-                                           ESearchCase::IgnoreCase)) {
-            Url = Llama3Url;
-          }
+          const FString Url = func::or_else(
+              func::multi_match<FString, FString>(
+                  EffectiveModel,
+                  {func::when<FString, FString>(
+                       [](const FString &M) {
+                         return M.Equals(TEXT("smollm2-135m"),
+                                         ESearchCase::IgnoreCase);
+                       },
+                       [&SmolUrl](const FString &) { return SmolUrl; }),
+                   func::when<FString, FString>(
+                       [](const FString &M) {
+                         return M.Equals(TEXT("llama3-8b"),
+                                         ESearchCase::IgnoreCase);
+                       },
+                       [&Llama3Url](const FString &) {
+                         return Llama3Url;
+                       })}),
+              FString());
 
           const FString ModelsDir =
               detail::GetLocalInfrastructureDir() + TEXT("models/");
@@ -74,10 +85,10 @@ initNodeCortexThunk(const FString &ModelPath) {
             Async(EAsyncExecution::Thread,
                   [LocalPath, EffectiveModel, Dispatch, Resolve, Reject]() {
                     Native::Llama::Context &Handle = detail::NodeCortexHandle();
-                    if (Handle) {
-                      Native::Llama::FreeModel(Handle);
-                      Handle = nullptr;
-                    }
+                    Handle
+                        ? (Native::Llama::FreeModel(Handle),
+                           (void)(Handle = nullptr))
+                        : (void)0;
 
                     Handle = Native::Llama::LoadModel(LocalPath);
 
@@ -93,66 +104,67 @@ initNodeCortexThunk(const FString &ModelPath) {
 
                     AsyncTask(ENamedThreads::GameThread,
                               [Dispatch, Resolve, Reject, Status]() {
-                                if (Status.bReady) {
-                                  Dispatch(CortexSlice::Actions::
-                                               CortexInitFulfilled(Status));
-                                  Resolve(Status);
-                                } else {
-                                  Dispatch(CortexSlice::Actions::
-                                               CortexInitRejected(Status.Error));
-                                  Reject(TCHAR_TO_UTF8(*Status.Error));
-                                }
+                                Status.bReady
+                                    ? (Dispatch(CortexSlice::Actions::
+                                                    CortexInitFulfilled(
+                                                        Status)),
+                                       Resolve(Status), void())
+                                    : (Dispatch(CortexSlice::Actions::
+                                                    CortexInitRejected(
+                                                        Status.Error)),
+                                       Reject(TCHAR_TO_UTF8(*Status.Error)),
+                                       void());
                               });
                   });
           };
 
           /**
-           * If we know a URL and the file is missing, download first.
+           * Download first when URL is known and file is missing.
            * User Story: As a maintainer, I need this note so the surrounding code intent stays clear during maintenance and debugging.
            */
-          if (!Url.IsEmpty() && !FPaths::FileExists(LocalPath)) {
-            /**
-             * G2: Dispatch download start
-             * User Story: As a maintainer, I need this step note so I can follow the scenario progression and reason about the expected state changes.
-             */
-            Dispatch(CortexSlice::Actions::SetDownloadState(true, 0.0f));
-            Native::File::DownloadBinary(Url, LocalPath)
-                .then([LoadOnWorker, Dispatch](const FString &) mutable {
-                  /**
-                   * G2: Dispatch download complete
-                   * User Story: As a maintainer, I need this step note so I can follow the scenario progression and reason about the expected state changes.
-                   */
-                  Dispatch(CortexSlice::Actions::SetDownloadState(false, 100.0f));
-                  LoadOnWorker();
-                })
-                .catch_([Dispatch, Reject](std::string Error) mutable {
-                  /**
-                   * G2: Clear download state on failure
-                   * User Story: As a maintainer, I need this step note so I can follow the scenario progression and reason about the expected state changes.
-                   */
-                  Dispatch(CortexSlice::Actions::SetDownloadState(false, 0.0f));
-                  const FString Msg = Error.empty()
-                                          ? TEXT("Model download failed")
-                                          : FString(UTF8_TO_TCHAR(Error.c_str()));
-                  Dispatch(CortexSlice::Actions::CortexInitRejected(Msg));
-                  Reject(TCHAR_TO_UTF8(*Msg));
-                })
-                .execute();
-          } else {
-            /**
-             * Either local path already exists, or user passed a custom path.
-             * User Story: As a maintainer, I need this note so the surrounding code intent stays clear during maintenance and debugging.
-             */
-            if (!FPaths::FileExists(LocalPath) && Url.IsEmpty()) {
-              /**
-               * Custom path without URL: use directly.
-               * User Story: As a maintainer, I need this note so the surrounding code intent stays clear during maintenance and debugging.
-               */
-              LoadOnWorker();
-            } else {
-              LoadOnWorker();
-            }
-          }
+          (!Url.IsEmpty() && !FPaths::FileExists(LocalPath))
+              ? (
+                    /**
+                     * G2: Dispatch download start
+                     * User Story: As a maintainer, I need this step note so I can follow the scenario progression and reason about the expected state changes.
+                     */
+                    Dispatch(
+                        CortexSlice::Actions::SetDownloadState(true, 0.0f)),
+                    Native::File::DownloadBinary(Url, LocalPath)
+                        .then([LoadOnWorker,
+                               Dispatch](const FString &) mutable {
+                          /**
+                           * G2: Dispatch download complete
+                           * User Story: As a maintainer, I need this step note so I can follow the scenario progression and reason about the expected state changes.
+                           */
+                          Dispatch(CortexSlice::Actions::SetDownloadState(
+                              false, 100.0f));
+                          LoadOnWorker();
+                        })
+                        .catch_([Dispatch,
+                                 Reject](std::string Error) mutable {
+                          /**
+                           * G2: Clear download state on failure
+                           * User Story: As a maintainer, I need this step note so I can follow the scenario progression and reason about the expected state changes.
+                           */
+                          Dispatch(CortexSlice::Actions::SetDownloadState(
+                              false, 0.0f));
+                          const FString Msg =
+                              Error.empty()
+                                  ? TEXT("Model download failed")
+                                  : FString(UTF8_TO_TCHAR(Error.c_str()));
+                          Dispatch(
+                              CortexSlice::Actions::CortexInitRejected(Msg));
+                          Reject(TCHAR_TO_UTF8(*Msg));
+                        })
+                        .execute(),
+                    void())
+              : (
+                    /**
+                     * Either local path already exists, or user passed a custom path.
+                     * User Story: As a maintainer, I need this note so the surrounding code intent stays clear during maintenance and debugging.
+                     */
+                    LoadOnWorker(), void());
 #else
           static_cast<void>(ModelPath);
           FCortexStatus Status;
@@ -182,25 +194,32 @@ completeNodeCortexThunk(const FString &Prompt, const FCortexConfig &Config) {
           Async(EAsyncExecution::Thread, [Prompt, Config, Dispatch, Resolve,
                                           Reject]() {
             Native::Llama::Context Handle = detail::NodeCortexHandle();
-            if (!Handle) {
-              const FString Error = TEXT("Local cortex is not initialized");
-              AsyncTask(ENamedThreads::GameThread, [Dispatch, Reject, Error]() {
-                Dispatch(CortexSlice::Actions::CortexCompleteRejected(Error));
-                Reject(TCHAR_TO_UTF8(*Error));
-              });
-              return;
-            }
+            !Handle
+                ? [&]() {
+                    const FString Error =
+                        TEXT("Local cortex is not initialized");
+                    AsyncTask(ENamedThreads::GameThread,
+                              [Dispatch, Reject, Error]() {
+                                Dispatch(CortexSlice::Actions::
+                                             CortexCompleteRejected(Error));
+                                Reject(TCHAR_TO_UTF8(*Error));
+                              });
+                  }()
+                : [&]() {
+                    FCortexResponse Response;
+                    Response.Id = FGuid::NewGuid().ToString();
+                    Response.Text =
+                        Native::Llama::Infer(Handle, Prompt, Config);
+                    Response.Stats = TEXT("local-node");
 
-            FCortexResponse Response;
-            Response.Id = FGuid::NewGuid().ToString();
-            Response.Text = Native::Llama::Infer(Handle, Prompt, Config);
-            Response.Stats = TEXT("local-node");
-
-            AsyncTask(ENamedThreads::GameThread, [Dispatch, Resolve,
-                                                  Response]() {
-              Dispatch(CortexSlice::Actions::CortexCompleteFulfilled(Response));
-              Resolve(Response);
-            });
+                    AsyncTask(ENamedThreads::GameThread,
+                              [Dispatch, Resolve, Response]() {
+                                Dispatch(CortexSlice::Actions::
+                                             CortexCompleteFulfilled(
+                                                 Response));
+                                Resolve(Response);
+                              });
+                  }();
           });
         });
   };
@@ -252,49 +271,53 @@ streamNodeCortexThunk(const FString &Prompt, const FCortexConfig &Config,
           Async(EAsyncExecution::Thread,
                 [Prompt, Config, OnToken, Dispatch, Resolve, Reject]() {
                   Native::Llama::Context Handle = detail::NodeCortexHandle();
-                  if (!Handle) {
-                    const FString Error =
-                        TEXT("Local cortex is not initialized");
-                    AsyncTask(ENamedThreads::GameThread,
-                              [Dispatch, Reject, Error]() {
-                                Dispatch(CortexSlice::Actions::
-                                             CortexCompleteRejected(Error));
-                                Reject(TCHAR_TO_UTF8(*Error));
+                  !Handle
+                      ? [&]() {
+                          const FString Error =
+                              TEXT("Local cortex is not initialized");
+                          AsyncTask(ENamedThreads::GameThread,
+                                    [Dispatch, Reject, Error]() {
+                                      Dispatch(CortexSlice::Actions::
+                                                   CortexCompleteRejected(
+                                                       Error));
+                                      Reject(TCHAR_TO_UTF8(*Error));
+                                    });
+                        }()
+                      : [&]() {
+                          FString FullText = Native::Llama::InferStream(
+                              Handle, Prompt, Config,
+                              [&Dispatch, &OnToken](const FString &Token) {
+                                /**
+                                 * Forward each token to game thread
+                                 * User Story: As a maintainer, I need this note so the surrounding code intent stays clear during maintenance and debugging.
+                                 */
+                                AsyncTask(
+                                    ENamedThreads::GameThread,
+                                    [Dispatch, OnToken, Token]() {
+                                      Dispatch(CortexSlice::Actions::
+                                                   CortexStreamToken(Token));
+                                      OnToken
+                                          ? (OnToken(Token), void())
+                                          : void();
+                                    });
                               });
-                    return;
-                  }
 
-                  FString FullText = Native::Llama::InferStream(
-                      Handle, Prompt, Config,
-                      [&Dispatch, &OnToken](const FString &Token) {
-                        /**
-                         * Forward each token to game thread
-                         * User Story: As a maintainer, I need this note so the surrounding code intent stays clear during maintenance and debugging.
-                         */
-                        AsyncTask(ENamedThreads::GameThread,
-                                  [Dispatch, OnToken, Token]() {
-                                    Dispatch(CortexSlice::Actions::
-                                                 CortexStreamToken(Token));
-                                    if (OnToken) {
-                                      OnToken(Token);
-                                    }
-                                  });
-                      });
+                          FCortexResponse Response;
+                          Response.Id = FGuid::NewGuid().ToString();
+                          Response.Text = FullText;
+                          Response.Stats = TEXT("local-node-stream");
 
-                  FCortexResponse Response;
-                  Response.Id = FGuid::NewGuid().ToString();
-                  Response.Text = FullText;
-                  Response.Stats = TEXT("local-node-stream");
-
-                  AsyncTask(ENamedThreads::GameThread,
-                            [Dispatch, Resolve, Response]() {
-                              Dispatch(CortexSlice::Actions::
-                                           CortexStreamComplete(
-                                               Response.Text));
-                              Dispatch(CortexSlice::Actions::
-                                           CortexCompleteFulfilled(Response));
-                              Resolve(Response);
-                            });
+                          AsyncTask(ENamedThreads::GameThread,
+                                    [Dispatch, Resolve, Response]() {
+                                      Dispatch(CortexSlice::Actions::
+                                                   CortexStreamComplete(
+                                                       Response.Text));
+                                      Dispatch(CortexSlice::Actions::
+                                                   CortexCompleteFulfilled(
+                                                       Response));
+                                      Resolve(Response);
+                                    });
+                        }();
                 });
         });
   };
@@ -312,10 +335,9 @@ listCortexModelsThunk() {
              -> func::AsyncResult<TArray<FCortexModelInfo>> {
     const auto ApiKeyError = Errors::requireApiKeyGuidance(
         SDKConfig::GetApiUrl(), SDKConfig::GetApiKey());
-    if (ApiKeyError.hasValue) {
-      return detail::RejectAsync<TArray<FCortexModelInfo>>(ApiKeyError.value);
-    }
-    return APISlice::Endpoints::getCortexModels()(Dispatch, GetState);
+    return ApiKeyError.hasValue
+        ? detail::RejectAsync<TArray<FCortexModelInfo>>(ApiKeyError.value)
+        : APISlice::Endpoints::getCortexModels()(Dispatch, GetState);
   };
 }
 
@@ -327,13 +349,10 @@ initRemoteCortexThunk(const FString &Model = TEXT("api-integrated"),
              -> func::AsyncResult<FCortexStatus> {
     const auto ApiKeyError = Errors::requireApiKeyGuidance(
         SDKConfig::GetApiUrl(), SDKConfig::GetApiKey());
-    if (ApiKeyError.hasValue) {
-      return detail::RejectAsync<FCortexStatus>(ApiKeyError.value);
-    }
-
-    Dispatch(CortexSlice::Actions::CortexInitPending(Model));
-
-    return func::AsyncChain::then<FCortexInitResponse, FCortexStatus>(
+    return ApiKeyError.hasValue
+        ? detail::RejectAsync<FCortexStatus>(ApiKeyError.value)
+        : (Dispatch(CortexSlice::Actions::CortexInitPending(Model)),
+           func::AsyncChain::then<FCortexInitResponse, FCortexStatus>(
                APISlice::Endpoints::postCortexInit(
                    TypeFactory::CortexInitRequest(Model, AuthKey))(Dispatch,
                                                                    GetState),
@@ -341,25 +360,26 @@ initRemoteCortexThunk(const FString &Model = TEXT("api-integrated"),
                  FCortexStatus Status;
                  Status.Id = Response.CortexId;
                  Status.Model = Model;
-                 Status.bReady = Response.State.Equals(TEXT("ready"),
-                                                       ESearchCase::IgnoreCase);
+                 Status.bReady = Response.State.Equals(
+                     TEXT("ready"), ESearchCase::IgnoreCase);
                  Status.Engine = ECortexEngine::Remote;
                  Status.DownloadProgress = Status.bReady ? 1.0f : 0.0f;
                  Status.Error = Status.bReady ? TEXT("") : Response.State;
-                 if (Status.bReady) {
-                   Dispatch(CortexSlice::Actions::CortexInitFulfilled(Status));
-                   return detail::ResolveAsync(Status);
-                 }
-                 Dispatch(
-                     CortexSlice::Actions::CortexInitRejected(Status.Error));
-                 return detail::RejectAsync<FCortexStatus>(
-                     Status.Error.IsEmpty() ? TEXT("Remote cortex init failed")
-                                            : Status.Error);
+                 return Status.bReady
+                     ? (Dispatch(CortexSlice::Actions::CortexInitFulfilled(
+                            Status)),
+                        detail::ResolveAsync(Status))
+                     : (Dispatch(CortexSlice::Actions::CortexInitRejected(
+                            Status.Error)),
+                        detail::RejectAsync<FCortexStatus>(
+                            Status.Error.IsEmpty()
+                                ? TEXT("Remote cortex init failed")
+                                : Status.Error));
                })
-        .catch_([Dispatch](std::string Error) {
-          Dispatch(CortexSlice::Actions::CortexInitRejected(
-              FString(UTF8_TO_TCHAR(Error.c_str()))));
-        });
+               .catch_([Dispatch](std::string Error) {
+                 Dispatch(CortexSlice::Actions::CortexInitRejected(
+                     FString(UTF8_TO_TCHAR(Error.c_str()))));
+               }));
   };
 }
 
@@ -377,12 +397,10 @@ completeRemoteThunk(const FString &CortexId, const FString &Prompt,
              -> func::AsyncResult<FCortexResponse> {
     const auto ApiKeyError = Errors::requireApiKeyGuidance(
         SDKConfig::GetApiUrl(), SDKConfig::GetApiKey());
-    if (ApiKeyError.hasValue) {
-      return detail::RejectAsync<FCortexResponse>(ApiKeyError.value);
-    }
-
-    Dispatch(CortexSlice::Actions::CortexCompletePending(Prompt));
-    return func::AsyncChain::then<FCortexResponse, FCortexResponse>(
+    return ApiKeyError.hasValue
+        ? detail::RejectAsync<FCortexResponse>(ApiKeyError.value)
+        : (Dispatch(CortexSlice::Actions::CortexCompletePending(Prompt)),
+           func::AsyncChain::then<FCortexResponse, FCortexResponse>(
                APISlice::Endpoints::postCortexComplete(
                    CortexId, TypeFactory::CortexCompleteRequest(
                                  Prompt, Config.MaxTokens, Config.Temperature,
@@ -393,10 +411,10 @@ completeRemoteThunk(const FString &CortexId, const FString &Prompt,
                      CortexSlice::Actions::CortexCompleteFulfilled(Response));
                  return detail::ResolveAsync(Response);
                })
-        .catch_([Dispatch](std::string Error) {
-          Dispatch(CortexSlice::Actions::CortexCompleteRejected(
-              FString(UTF8_TO_TCHAR(Error.c_str()))));
-        });
+               .catch_([Dispatch](std::string Error) {
+                 Dispatch(CortexSlice::Actions::CortexCompleteRejected(
+                     FString(UTF8_TO_TCHAR(Error.c_str()))));
+               }));
   };
 }
 

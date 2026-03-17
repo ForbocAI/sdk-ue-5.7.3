@@ -37,11 +37,12 @@ localValidateBridgeThunk(const FAgentAction &Action,
     FValidationResult Result =
         BridgeHelpers::RunLocalBridgeValidation(Action, Rules, Context);
 
-    if (Result.bValid) {
-      Dispatch(BridgeSlice::Actions::BridgeValidationSuccess(Result));
-    } else {
-      Dispatch(BridgeSlice::Actions::BridgeValidationFailure(Result.Reason));
-    }
+    Result.bValid
+        ? (Dispatch(BridgeSlice::Actions::BridgeValidationSuccess(Result)),
+           void())
+        : (Dispatch(
+               BridgeSlice::Actions::BridgeValidationFailure(Result.Reason)),
+           void());
     return detail::ResolveAsync(Result);
   };
 }
@@ -61,23 +62,22 @@ validateBridgeThunk(const FAgentAction &Action,
              -> func::AsyncResult<FValidationResult> {
     const auto ApiKeyError = Errors::requireApiKeyGuidance(
         SDKConfig::GetApiUrl(), SDKConfig::GetApiKey());
-    if (ApiKeyError.hasValue) {
-      return detail::RejectAsync<FValidationResult>(ApiKeyError.value);
-    }
-
-    Dispatch(BridgeSlice::Actions::BridgeValidationPending());
-    return func::AsyncChain::then<FValidationResult, FValidationResult>(
-        APISlice::Endpoints::postBridgeValidate(
-            NpcId, TypeFactory::BridgeValidateRequest(Action, Context))(
-            Dispatch, GetState),
-        [Dispatch](const FValidationResult &Result) {
-          Dispatch(BridgeSlice::Actions::BridgeValidationSuccess(Result));
-          return detail::ResolveAsync(Result);
-        })
-        .catch_([Dispatch](std::string Error) {
-          Dispatch(BridgeSlice::Actions::BridgeValidationFailure(
-              FString(UTF8_TO_TCHAR(Error.c_str()))));
-        });
+    return ApiKeyError.hasValue
+        ? detail::RejectAsync<FValidationResult>(ApiKeyError.value)
+        : (Dispatch(BridgeSlice::Actions::BridgeValidationPending()),
+           func::AsyncChain::then<FValidationResult, FValidationResult>(
+               APISlice::Endpoints::postBridgeValidate(
+                   NpcId, TypeFactory::BridgeValidateRequest(Action, Context))(
+                   Dispatch, GetState),
+               [Dispatch](const FValidationResult &Result) {
+                 Dispatch(
+                     BridgeSlice::Actions::BridgeValidationSuccess(Result));
+                 return detail::ResolveAsync(Result);
+               })
+               .catch_([Dispatch](std::string Error) {
+                 Dispatch(BridgeSlice::Actions::BridgeValidationFailure(
+                     FString(UTF8_TO_TCHAR(Error.c_str()))));
+               }));
   };
 }
 
@@ -93,20 +93,19 @@ loadBridgePresetThunk(const FString &PresetName) {
              -> func::AsyncResult<FDirectiveRuleSet> {
     const auto ApiKeyError = Errors::requireApiKeyGuidance(
         SDKConfig::GetApiUrl(), SDKConfig::GetApiKey());
-    if (ApiKeyError.hasValue) {
-      return detail::RejectAsync<FDirectiveRuleSet>(ApiKeyError.value);
-    }
-
-    return func::AsyncChain::then<FDirectiveRuleSet, FDirectiveRuleSet>(
-        APISlice::Endpoints::postBridgePreset(PresetName)(Dispatch, GetState),
-        [Dispatch, PresetName](const FDirectiveRuleSet &Ruleset) {
-          FDirectiveRuleSet ActiveRuleset = Ruleset;
-          if (ActiveRuleset.Id.IsEmpty()) {
-            ActiveRuleset.Id = PresetName;
-          }
-          Dispatch(BridgeSlice::Actions::AddActivePreset(ActiveRuleset));
-          return detail::ResolveAsync(Ruleset);
-        });
+    return ApiKeyError.hasValue
+        ? detail::RejectAsync<FDirectiveRuleSet>(ApiKeyError.value)
+        : func::AsyncChain::then<FDirectiveRuleSet, FDirectiveRuleSet>(
+              APISlice::Endpoints::postBridgePreset(PresetName)(Dispatch,
+                                                                GetState),
+              [Dispatch, PresetName](const FDirectiveRuleSet &Ruleset) {
+                FDirectiveRuleSet ActiveRuleset = Ruleset;
+                ActiveRuleset.Id = ActiveRuleset.Id.IsEmpty()
+                                       ? PresetName
+                                       : ActiveRuleset.Id;
+                Dispatch(BridgeSlice::Actions::AddActivePreset(ActiveRuleset));
+                return detail::ResolveAsync(Ruleset);
+              });
   };
 }
 
@@ -121,10 +120,9 @@ inline ThunkAction<TArray<FBridgeRule>, FStoreState> getBridgeRulesThunk() {
              -> func::AsyncResult<TArray<FBridgeRule>> {
     const auto ApiKeyError = Errors::requireApiKeyGuidance(
         SDKConfig::GetApiUrl(), SDKConfig::GetApiKey());
-    if (ApiKeyError.hasValue) {
-      return detail::RejectAsync<TArray<FBridgeRule>>(ApiKeyError.value);
-    }
-    return APISlice::Endpoints::getBridgeRules()(Dispatch, GetState);
+    return ApiKeyError.hasValue
+        ? detail::RejectAsync<TArray<FBridgeRule>>(ApiKeyError.value)
+        : APISlice::Endpoints::getBridgeRules()(Dispatch, GetState);
   };
 }
 
@@ -139,16 +137,16 @@ inline ThunkAction<TArray<FDirectiveRuleSet>, FStoreState> listRulesetsThunk() {
              -> func::AsyncResult<TArray<FDirectiveRuleSet>> {
     const auto ApiKeyError = Errors::requireApiKeyGuidance(
         SDKConfig::GetApiUrl(), SDKConfig::GetApiKey());
-    if (ApiKeyError.hasValue) {
-      return detail::RejectAsync<TArray<FDirectiveRuleSet>>(ApiKeyError.value);
-    }
-    return func::AsyncChain::then<TArray<FDirectiveRuleSet>,
+    return ApiKeyError.hasValue
+        ? detail::RejectAsync<TArray<FDirectiveRuleSet>>(ApiKeyError.value)
+        : func::AsyncChain::then<TArray<FDirectiveRuleSet>,
                                   TArray<FDirectiveRuleSet>>(
-        APISlice::Endpoints::getRulesets()(Dispatch, GetState),
-        [Dispatch](const TArray<FDirectiveRuleSet> &Rulesets) {
-          Dispatch(BridgeSlice::Actions::SetAvailableRulesets(Rulesets));
-          return detail::ResolveAsync(Rulesets);
-        });
+              APISlice::Endpoints::getRulesets()(Dispatch, GetState),
+              [Dispatch](const TArray<FDirectiveRuleSet> &Rulesets) {
+                Dispatch(
+                    BridgeSlice::Actions::SetAvailableRulesets(Rulesets));
+                return detail::ResolveAsync(Rulesets);
+              });
   };
 }
 
@@ -163,15 +161,15 @@ inline ThunkAction<TArray<FString>, FStoreState> listRulePresetsThunk() {
              -> func::AsyncResult<TArray<FString>> {
     const auto ApiKeyError = Errors::requireApiKeyGuidance(
         SDKConfig::GetApiUrl(), SDKConfig::GetApiKey());
-    if (ApiKeyError.hasValue) {
-      return detail::RejectAsync<TArray<FString>>(ApiKeyError.value);
-    }
-    return func::AsyncChain::then<TArray<FString>, TArray<FString>>(
-        APISlice::Endpoints::getRulePresets()(Dispatch, GetState),
-        [Dispatch](const TArray<FString> &PresetIds) {
-          Dispatch(BridgeSlice::Actions::SetAvailablePresetIds(PresetIds));
-          return detail::ResolveAsync(PresetIds);
-        });
+    return ApiKeyError.hasValue
+        ? detail::RejectAsync<TArray<FString>>(ApiKeyError.value)
+        : func::AsyncChain::then<TArray<FString>, TArray<FString>>(
+              APISlice::Endpoints::getRulePresets()(Dispatch, GetState),
+              [Dispatch](const TArray<FString> &PresetIds) {
+                Dispatch(
+                    BridgeSlice::Actions::SetAvailablePresetIds(PresetIds));
+                return detail::ResolveAsync(PresetIds);
+              });
   };
 }
 
@@ -187,27 +185,27 @@ registerRulesetThunk(const FDirectiveRuleSet &Ruleset) {
              -> func::AsyncResult<FDirectiveRuleSet> {
     const auto ApiKeyError = Errors::requireApiKeyGuidance(
         SDKConfig::GetApiUrl(), SDKConfig::GetApiKey());
-    if (ApiKeyError.hasValue) {
-      return detail::RejectAsync<FDirectiveRuleSet>(ApiKeyError.value);
-    }
-    return func::AsyncChain::then<FDirectiveRuleSet, FDirectiveRuleSet>(
-        APISlice::Endpoints::postRuleRegister(Ruleset)(Dispatch, GetState),
-        [Dispatch, GetState](const FDirectiveRuleSet &Registered) {
-          TArray<FDirectiveRuleSet> Rulesets = GetState().Bridge.AvailableRulesets;
-          bool bReplaced = false;
-          for (int32 Index = 0; Index < Rulesets.Num(); ++Index) {
-            if (Rulesets[Index].Id == Registered.Id) {
-              Rulesets[Index] = Registered;
-              bReplaced = true;
-              break;
-            }
-          }
-          if (!bReplaced) {
-            Rulesets.Add(Registered);
-          }
-          Dispatch(BridgeSlice::Actions::SetAvailableRulesets(Rulesets));
-          return detail::ResolveAsync(Registered);
-        });
+    return ApiKeyError.hasValue
+        ? detail::RejectAsync<FDirectiveRuleSet>(ApiKeyError.value)
+        : func::AsyncChain::then<FDirectiveRuleSet, FDirectiveRuleSet>(
+              APISlice::Endpoints::postRuleRegister(Ruleset)(Dispatch,
+                                                             GetState),
+              [Dispatch, GetState](const FDirectiveRuleSet &Registered) {
+                const TArray<FDirectiveRuleSet> Updated = [&]() {
+                  TArray<FDirectiveRuleSet> R =
+                      GetState().Bridge.AvailableRulesets;
+                  const int32 Found = R.IndexOfByPredicate(
+                      [&Registered](const FDirectiveRuleSet &X) {
+                        return X.Id == Registered.Id;
+                      });
+                  Found != INDEX_NONE ? (void)(R[Found] = Registered)
+                                      : (void)R.Add(Registered);
+                  return R;
+                }();
+                Dispatch(
+                    BridgeSlice::Actions::SetAvailableRulesets(Updated));
+                return detail::ResolveAsync(Registered);
+              });
   };
 }
 
@@ -223,19 +221,23 @@ deleteRulesetThunk(const FString &RulesetId) {
              -> func::AsyncResult<rtk::FEmptyPayload> {
     const auto ApiKeyError = Errors::requireApiKeyGuidance(
         SDKConfig::GetApiUrl(), SDKConfig::GetApiKey());
-    if (ApiKeyError.hasValue) {
-      return detail::RejectAsync<rtk::FEmptyPayload>(ApiKeyError.value);
-    }
-    return func::AsyncChain::then<rtk::FEmptyPayload, rtk::FEmptyPayload>(
-        APISlice::Endpoints::deleteRule(RulesetId)(Dispatch, GetState),
-        [Dispatch, GetState, RulesetId](const rtk::FEmptyPayload &Payload) {
-          TArray<FDirectiveRuleSet> Rulesets = GetState().Bridge.AvailableRulesets;
-          Rulesets.RemoveAll([RulesetId](const FDirectiveRuleSet &Ruleset) {
-            return Ruleset.Id == RulesetId || Ruleset.RulesetId == RulesetId;
-          });
-          Dispatch(BridgeSlice::Actions::SetAvailableRulesets(Rulesets));
-          return detail::ResolveAsync(Payload);
-        });
+    return ApiKeyError.hasValue
+        ? detail::RejectAsync<rtk::FEmptyPayload>(ApiKeyError.value)
+        : func::AsyncChain::then<rtk::FEmptyPayload, rtk::FEmptyPayload>(
+              APISlice::Endpoints::deleteRule(RulesetId)(Dispatch, GetState),
+              [Dispatch, GetState,
+               RulesetId](const rtk::FEmptyPayload &Payload) {
+                TArray<FDirectiveRuleSet> Rulesets =
+                    GetState().Bridge.AvailableRulesets;
+                Rulesets.RemoveAll(
+                    [RulesetId](const FDirectiveRuleSet &Ruleset) {
+                      return Ruleset.Id == RulesetId ||
+                             Ruleset.RulesetId == RulesetId;
+                    });
+                Dispatch(
+                    BridgeSlice::Actions::SetAvailableRulesets(Rulesets));
+                return detail::ResolveAsync(Payload);
+              });
   };
 }
 

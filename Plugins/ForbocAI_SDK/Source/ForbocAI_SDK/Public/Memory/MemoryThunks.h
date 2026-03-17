@@ -31,10 +31,9 @@ initNodeMemoryThunk(const FString &DatabasePath = TEXT("")) {
                        std::function<void(std::string)> Reject) {
           Async(EAsyncExecution::Thread, [DatabasePath, Resolve, Reject]() {
             Native::Sqlite::DB &Handle = detail::NodeMemoryHandle();
-            if (Handle) {
-              Native::Sqlite::Close(Handle);
-              Handle = nullptr;
-            }
+            Handle
+                ? (Native::Sqlite::Close(Handle), (void)(Handle = nullptr))
+                : (void)0;
 
             const FString Path = DatabasePath.IsEmpty()
                                      ? detail::DefaultNodeMemoryPath()
@@ -43,11 +42,10 @@ initNodeMemoryThunk(const FString &DatabasePath = TEXT("")) {
             Handle = Native::Sqlite::Open(Path);
 
             AsyncTask(ENamedThreads::GameThread, [Handle, Resolve, Reject]() {
-              if (Handle) {
-                Resolve(rtk::FEmptyPayload{});
-              } else {
-                Reject("Failed to initialize node memory database");
-              }
+              Handle
+                  ? (Resolve(rtk::FEmptyPayload{}), void())
+                  : (Reject("Failed to initialize node memory database"),
+                     void());
             });
           });
         });
@@ -66,32 +64,40 @@ nodeMemoryStoreThunk(const FMemoryItem &Item) {
                          std::function<void(std::string)> Reject) {
           Async(EAsyncExecution::Thread, [Item, Dispatch, Resolve, Reject]() {
             Native::Sqlite::DB Db = detail::EnsureNodeMemoryDatabase();
-            if (!Db) {
-              const FString Error = TEXT("Local memory is not initialized");
-              AsyncTask(ENamedThreads::GameThread, [Dispatch, Reject, Error]() {
-                Dispatch(MemorySlice::Actions::MemoryStoreFailed(Error));
-                Reject(TCHAR_TO_UTF8(*Error));
-              });
-              return;
-            }
+            !Db
+                ? [&]() {
+                    const FString Error =
+                        TEXT("Local memory is not initialized");
+                    AsyncTask(ENamedThreads::GameThread,
+                              [Dispatch, Reject, Error]() {
+                                Dispatch(MemorySlice::Actions::
+                                             MemoryStoreFailed(Error));
+                                Reject(TCHAR_TO_UTF8(*Error));
+                              });
+                  }()
+                : [&]() {
+                    FMemoryItem Stored = Item;
+                    Stored.Embedding = Native::Llama::Embed(
+                        detail::NodeEmbeddingHandle(), Stored.Text);
+                    const bool bStored =
+                        Native::Sqlite::Upsert(Db, Stored, Stored.Embedding);
 
-            FMemoryItem Stored = Item;
-            Stored.Embedding =
-                Native::Llama::Embed(detail::NodeEmbeddingHandle(), Stored.Text);
-            const bool bStored =
-                Native::Sqlite::Upsert(Db, Stored, Stored.Embedding);
-
-            AsyncTask(ENamedThreads::GameThread, [Dispatch, Resolve, Reject,
-                                                  Stored, bStored]() {
-              if (bStored) {
-                Dispatch(MemorySlice::Actions::MemoryStoreSuccess(Stored));
-                Resolve(Stored);
-              } else {
-                const FString Error = TEXT("Failed to store local memory");
-                Dispatch(MemorySlice::Actions::MemoryStoreFailed(Error));
-                Reject(TCHAR_TO_UTF8(*Error));
-              }
-            });
+                    AsyncTask(
+                        ENamedThreads::GameThread,
+                        [Dispatch, Resolve, Reject, Stored, bStored]() {
+                          bStored
+                              ? (Dispatch(MemorySlice::Actions::
+                                              MemoryStoreSuccess(Stored)),
+                                 Resolve(Stored), void())
+                              : [&]() {
+                                  const FString Error =
+                                      TEXT("Failed to store local memory");
+                                  Dispatch(MemorySlice::Actions::
+                                               MemoryStoreFailed(Error));
+                                  Reject(TCHAR_TO_UTF8(*Error));
+                                }();
+                        });
+                  }();
           });
         });
   };
@@ -110,31 +116,39 @@ nodeMemoryRecallThunk(const FMemoryRecallRequest &Request) {
           Async(EAsyncExecution::Thread, [Request, Dispatch, Resolve,
                                           Reject]() {
             Native::Sqlite::DB Db = detail::EnsureNodeMemoryDatabase();
-            if (!Db) {
-              const FString Error = TEXT("Local memory is not initialized");
-              AsyncTask(ENamedThreads::GameThread, [Dispatch, Reject, Error]() {
-                Dispatch(MemorySlice::Actions::MemoryRecallFailed(Error));
-                Reject(TCHAR_TO_UTF8(*Error));
-              });
-              return;
-            }
+            !Db
+                ? [&]() {
+                    const FString Error =
+                        TEXT("Local memory is not initialized");
+                    AsyncTask(ENamedThreads::GameThread,
+                              [Dispatch, Reject, Error]() {
+                                Dispatch(MemorySlice::Actions::
+                                             MemoryRecallFailed(Error));
+                                Reject(TCHAR_TO_UTF8(*Error));
+                              });
+                  }()
+                : [&]() {
+                    const TArray<float> QueryEmbedding =
+                        Native::Llama::Embed(detail::NodeEmbeddingHandle(),
+                                             Request.Query);
+                    TArray<FMemoryItem> Results =
+                        Native::Sqlite::Search(Db, QueryEmbedding,
+                                               Request.Limit);
 
-            const TArray<float> QueryEmbedding =
-                Native::Llama::Embed(detail::NodeEmbeddingHandle(), Request.Query);
-            TArray<FMemoryItem> Results =
-                Native::Sqlite::Search(Db, QueryEmbedding, Request.Limit);
+                    Request.Threshold > 0.0f
+                        ? (void)Results.RemoveAll(
+                              [Request](const FMemoryItem &Item) {
+                                return Item.Similarity < Request.Threshold;
+                              })
+                        : (void)0;
 
-            if (Request.Threshold > 0.0f) {
-              Results.RemoveAll([Request](const FMemoryItem &Item) {
-                return Item.Similarity < Request.Threshold;
-              });
-            }
-
-            AsyncTask(
-                ENamedThreads::GameThread, [Dispatch, Resolve, Results]() {
-                  Dispatch(MemorySlice::Actions::MemoryRecallSuccess(Results));
-                  Resolve(Results);
-                });
+                    AsyncTask(ENamedThreads::GameThread,
+                              [Dispatch, Resolve, Results]() {
+                                Dispatch(MemorySlice::Actions::
+                                             MemoryRecallSuccess(Results));
+                                Resolve(Results);
+                              });
+                  }();
           });
         });
   };
@@ -175,13 +189,11 @@ inline ThunkAction<rtk::FEmptyPayload, FStoreState> clearNodeMemoryThunk() {
           Async(EAsyncExecution::Thread, [Dispatch, Resolve]() {
             Native::Sqlite::DB &Handle = detail::NodeMemoryHandle();
             const FString Path = detail::NodeMemoryPathStorage();
-            if (Handle) {
-              Native::Sqlite::Clear(Handle);
-              Native::Sqlite::Close(Handle);
-              Handle = nullptr;
-            } else {
-              Native::Sqlite::ClearPath(Path);
-            }
+            Handle
+                ? (Native::Sqlite::Clear(Handle),
+                   Native::Sqlite::Close(Handle),
+                   (void)(Handle = nullptr))
+                : (void)Native::Sqlite::ClearPath(Path);
 
             IFileManager::Get().Delete(*Path, false, true, true);
             detail::NodeMemoryPathStorage() = detail::DefaultNodeMemoryPath();
@@ -216,45 +228,45 @@ initNodeVectorThunk(const FString &EmbeddingModelPath = TEXT("")) {
           auto LoadOnWorker = [Path, Dispatch, Resolve, Reject]() {
             Async(EAsyncExecution::Thread, [Path, Dispatch, Resolve, Reject]() {
               Native::Llama::Context &Handle = detail::NodeEmbeddingHandle();
-              if (Handle) {
-                Native::Llama::FreeModel(Handle);
-                Handle = nullptr;
-              }
+              Handle
+                  ? (Native::Llama::FreeModel(Handle),
+                     (void)(Handle = nullptr))
+                  : (void)0;
 
               Handle = Native::Llama::LoadEmbeddingModel(Path);
 
               AsyncTask(ENamedThreads::GameThread,
                         [Handle, Dispatch, Resolve, Reject]() {
-                          if (Handle) {
-                            /**
-                             * G3: Dispatch embedder readiness
-                             * User Story: As a maintainer, I need this step note so I can follow the scenario progression and reason about the expected state changes.
-                             */
-                            Dispatch(CortexSlice::Actions::SetEmbedderReady(true));
-                            Resolve(rtk::FEmptyPayload{});
-                          } else {
-                            Dispatch(
-                                CortexSlice::Actions::SetEmbedderReady(false));
-                            Reject("Failed to load embedding model");
-                          }
+                          Handle
+                              ? (
+                                    /**
+                                     * G3: Dispatch embedder readiness
+                                     * User Story: As a maintainer, I need this step note so I can follow the scenario progression and reason about the expected state changes.
+                                     */
+                                    Dispatch(CortexSlice::Actions::
+                                                 SetEmbedderReady(true)),
+                                    Resolve(rtk::FEmptyPayload{}), void())
+                              : (Dispatch(CortexSlice::Actions::
+                                              SetEmbedderReady(false)),
+                                 Reject("Failed to load embedding model"),
+                                 void());
                         });
             });
           };
 
-          if (!FPaths::FileExists(Path)) {
-            Native::File::DownloadBinary(EmbeddingUrl, Path)
-                .then([LoadOnWorker](const FString &) mutable { LoadOnWorker(); })
-                .catch_([Reject](std::string Error) mutable {
-                  if (Error.empty()) {
-                    Reject("Embedding download failed");
-                  } else {
-                    Reject(Error);
-                  }
-                })
-                .execute();
-          } else {
-            LoadOnWorker();
-          }
+          !FPaths::FileExists(Path)
+              ? (Native::File::DownloadBinary(EmbeddingUrl, Path)
+                     .then([LoadOnWorker](const FString &) mutable {
+                       LoadOnWorker();
+                     })
+                     .catch_([Reject](std::string Error) mutable {
+                       Reject(Error.empty()
+                                  ? std::string("Embedding download failed")
+                                  : Error);
+                     })
+                     .execute(),
+                 void())
+              : (LoadOnWorker(), void());
 #else
           static_cast<void>(EmbeddingModelPath);
           /**

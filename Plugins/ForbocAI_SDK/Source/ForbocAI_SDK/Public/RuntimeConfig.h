@@ -1,6 +1,7 @@
 #pragma once
 
 #include "CoreMinimal.h"
+#include "Core/functional_core.hpp"
 #include "Dom/JsonObject.h"
 #include "HAL/FileManager.h"
 #include "HAL/PlatformMisc.h"
@@ -136,9 +137,7 @@ inline void InitializeConfig();
  * work even if startup code did not initialize config explicitly.
  */
 inline void EnsureInitialized() {
-  if (!InitializedStorage()) {
-    InitializeConfig();
-  }
+  !InitializedStorage() ? (InitializeConfig(), void()) : void();
 }
 
 /**
@@ -225,9 +224,7 @@ inline FString GetSdkVersion() { return TEXT("0.6.3"); }
  */
 inline void SetApiConfig(const FString &ApiUrl, const FString &ApiKey) {
   EnsureInitialized();
-  if (!ApiUrl.IsEmpty()) {
-    ApiUrlStorage() = ApiUrl;
-  }
+  !ApiUrl.IsEmpty() ? (void)(ApiUrlStorage() = ApiUrl) : (void)0;
   ApiKeyStorage() = ApiKey;
 }
 
@@ -241,22 +238,28 @@ inline void SetConfigFilePathOverride(const FString &ConfigFilePath) {
 }
 
 /**
+ * Resolves the home directory from environment variables with project fallback.
+ * User Story: As config path helpers, I need a home directory resolver so
+ * config file location can be determined across platforms.
+ */
+inline FString ResolveHomeDir() {
+  const FString Home = FPlatformMisc::GetEnvironmentVariable(TEXT("HOME"));
+  const FString Profile =
+      FPlatformMisc::GetEnvironmentVariable(TEXT("USERPROFILE"));
+  return !Home.IsEmpty()
+      ? Home
+      : (!Profile.IsEmpty() ? Profile : FPaths::ProjectDir());
+}
+
+/**
  * Resolves the config file path, honoring any explicit override first.
  * User Story: As config file helpers, I need the effective path so reads and
  * writes target the correct config location.
  */
 inline FString GetConfigFilePath() {
-  if (!ConfigFilePathOverrideStorage().IsEmpty()) {
-    return ConfigFilePathOverrideStorage();
-  }
-
-  FString HomeDir = FPlatformMisc::GetEnvironmentVariable(TEXT("HOME"));
-  if (HomeDir.IsEmpty()) {
-    HomeDir = FPlatformMisc::GetEnvironmentVariable(TEXT("USERPROFILE"));
-  }
-
-  return FPaths::Combine(HomeDir.IsEmpty() ? FPaths::ProjectDir() : HomeDir,
-                         TEXT(".forbocai.json"));
+  return !ConfigFilePathOverrideStorage().IsEmpty()
+      ? ConfigFilePathOverrideStorage()
+      : FPaths::Combine(ResolveHomeDir(), TEXT(".forbocai.json"));
 }
 
 /**
@@ -267,19 +270,17 @@ inline FString GetConfigFilePath() {
 inline TSharedPtr<FJsonObject> LoadConfigJsonObject() {
   const FString ConfigPath = GetConfigFilePath();
   FString JsonString;
-  if (!FFileHelper::LoadFileToString(JsonString, *ConfigPath)) {
-    return MakeShared<FJsonObject>();
-  }
-
-  TSharedPtr<FJsonObject> JsonObject;
-  const TSharedRef<TJsonReader<>> Reader =
-      TJsonReaderFactory<>::Create(JsonString);
-  if (!FJsonSerializer::Deserialize(Reader, JsonObject) ||
-      !JsonObject.IsValid()) {
-    return MakeShared<FJsonObject>();
-  }
-
-  return JsonObject;
+  return !FFileHelper::LoadFileToString(JsonString, *ConfigPath)
+      ? MakeShared<FJsonObject>()
+      : [&JsonString]() {
+          TSharedPtr<FJsonObject> JsonObject;
+          const TSharedRef<TJsonReader<>> Reader =
+              TJsonReaderFactory<>::Create(JsonString);
+          return (FJsonSerializer::Deserialize(Reader, JsonObject) &&
+                  JsonObject.IsValid())
+              ? JsonObject
+              : MakeShared<FJsonObject>();
+        }();
 }
 
 /**
@@ -290,9 +291,9 @@ inline TSharedPtr<FJsonObject> LoadConfigJsonObject() {
 inline bool WriteConfigJsonObject(const TSharedRef<FJsonObject> &JsonObject) {
   const FString ConfigPath = GetConfigFilePath();
   const FString Directory = FPaths::GetPath(ConfigPath);
-  if (!Directory.IsEmpty()) {
-    IFileManager::Get().MakeDirectory(*Directory, true);
-  }
+  !Directory.IsEmpty()
+      ? (IFileManager::Get().MakeDirectory(*Directory, true), void())
+      : void();
 
   FString JsonString;
   const TSharedRef<TJsonWriter<>> Writer =
@@ -301,9 +302,7 @@ inline bool WriteConfigJsonObject(const TSharedRef<FJsonObject> &JsonObject) {
 
   const bool bSaved = FFileHelper::SaveStringToFile(JsonString, *ConfigPath);
 #if PLATFORM_MAC || PLATFORM_UNIX
-  if (bSaved) {
-    chmod(TCHAR_TO_UTF8(*ConfigPath), 0600);
-  }
+  bSaved ? (void)chmod(TCHAR_TO_UTF8(*ConfigPath), 0600) : (void)0;
 #endif
   return bSaved;
 }
@@ -314,41 +313,26 @@ inline bool WriteConfigJsonObject(const TSharedRef<FJsonObject> &JsonObject) {
  * so runtime settings can be injected without editing files.
  */
 inline void LoadFromEnvironment() {
-  const FString EnvApiUrl =
+  const FString U =
       FPlatformMisc::GetEnvironmentVariable(TEXT("FORBOCAI_API_URL"));
-  if (!EnvApiUrl.IsEmpty()) {
-    ApiUrlStorage() = EnvApiUrl;
-  }
-
-  const FString EnvApiKey =
+  const FString K =
       FPlatformMisc::GetEnvironmentVariable(TEXT("FORBOCAI_API_KEY"));
-  if (!EnvApiKey.IsEmpty()) {
-    ApiKeyStorage() = EnvApiKey;
-  }
-
-  const FString EnvModelPath =
+  const FString M =
       FPlatformMisc::GetEnvironmentVariable(TEXT("FORBOCAI_MODEL_PATH"));
-  if (!EnvModelPath.IsEmpty()) {
-    ModelPathStorage() = EnvModelPath;
-  }
-
-  const FString EnvDbPath =
+  const FString D =
       FPlatformMisc::GetEnvironmentVariable(TEXT("FORBOCAI_DATABASE_PATH"));
-  if (!EnvDbPath.IsEmpty()) {
-    DatabasePathStorage() = EnvDbPath;
-  }
-
-  const FString EnvVecDim =
+  const FString V =
       FPlatformMisc::GetEnvironmentVariable(TEXT("FORBOCAI_VECTOR_DIMENSION"));
-  if (!EnvVecDim.IsEmpty()) {
-    VectorDimensionStorage() = FCString::Atoi(*EnvVecDim);
-  }
-
-  const FString EnvMaxRecall =
+  const FString R =
       FPlatformMisc::GetEnvironmentVariable(TEXT("FORBOCAI_MAX_RECALL"));
-  if (!EnvMaxRecall.IsEmpty()) {
-    MaxRecallResultsStorage() = FCString::Atoi(*EnvMaxRecall);
-  }
+  !U.IsEmpty() ? (void)(ApiUrlStorage() = U) : (void)0;
+  !K.IsEmpty() ? (void)(ApiKeyStorage() = K) : (void)0;
+  !M.IsEmpty() ? (void)(ModelPathStorage() = M) : (void)0;
+  !D.IsEmpty() ? (void)(DatabasePathStorage() = D) : (void)0;
+  !V.IsEmpty() ? (void)(VectorDimensionStorage() = FCString::Atoi(*V))
+               : (void)0;
+  !R.IsEmpty() ? (void)(MaxRecallResultsStorage() = FCString::Atoi(*R))
+               : (void)0;
 }
 
 /**
@@ -357,34 +341,25 @@ inline void LoadFromEnvironment() {
  * runtime defaults can be overridden by the saved config file.
  */
 inline void LoadFromConfigFile() {
-  const TSharedPtr<FJsonObject> JsonObject = LoadConfigJsonObject();
-  if (!JsonObject.IsValid()) {
-    return;
-  }
-
-  FString Value;
-  if (JsonObject->TryGetStringField(TEXT("apiUrl"), Value) && !Value.IsEmpty()) {
-    ApiUrlStorage() = Value;
-  }
-  if (JsonObject->TryGetStringField(TEXT("apiKey"), Value) && !Value.IsEmpty()) {
-    ApiKeyStorage() = Value;
-  }
-  if (JsonObject->TryGetStringField(TEXT("modelPath"), Value) &&
-      !Value.IsEmpty()) {
-    ModelPathStorage() = Value;
-  }
-  if (JsonObject->TryGetStringField(TEXT("databasePath"), Value) &&
-      !Value.IsEmpty()) {
-    DatabasePathStorage() = Value;
-  }
-
-  int32 IntValue = 0;
-  if (JsonObject->TryGetNumberField(TEXT("vectorDimension"), IntValue)) {
-    VectorDimensionStorage() = IntValue;
-  }
-  if (JsonObject->TryGetNumberField(TEXT("maxRecallResults"), IntValue)) {
-    MaxRecallResultsStorage() = IntValue;
-  }
+  const TSharedPtr<FJsonObject> J = LoadConfigJsonObject();
+  !J.IsValid()
+      ? void()
+      : [&J]() {
+          FString S;
+          (J->TryGetStringField(TEXT("apiUrl"), S) && !S.IsEmpty())
+              ? (void)(ApiUrlStorage() = S) : (void)0;
+          (J->TryGetStringField(TEXT("apiKey"), S) && !S.IsEmpty())
+              ? (void)(ApiKeyStorage() = S) : (void)0;
+          (J->TryGetStringField(TEXT("modelPath"), S) && !S.IsEmpty())
+              ? (void)(ModelPathStorage() = S) : (void)0;
+          (J->TryGetStringField(TEXT("databasePath"), S) && !S.IsEmpty())
+              ? (void)(DatabasePathStorage() = S) : (void)0;
+          int32 I = 0;
+          J->TryGetNumberField(TEXT("vectorDimension"), I)
+              ? (void)(VectorDimensionStorage() = I) : (void)0;
+          J->TryGetNumberField(TEXT("maxRecallResults"), I)
+              ? (void)(MaxRecallResultsStorage() = I) : (void)0;
+        }();
 }
 
 /**
@@ -395,22 +370,19 @@ inline void LoadFromConfigFile() {
 inline bool SaveToConfigFile() {
   EnsureInitialized();
 
-  const TSharedRef<FJsonObject> JsonObject = MakeShared<FJsonObject>();
-  JsonObject->SetStringField(TEXT("apiUrl"), ApiUrlStorage());
-  if (!ApiKeyStorage().IsEmpty()) {
-    JsonObject->SetStringField(TEXT("apiKey"), ApiKeyStorage());
-  }
-  if (!ModelPathStorage().IsEmpty()) {
-    JsonObject->SetStringField(TEXT("modelPath"), ModelPathStorage());
-  }
-  if (!DatabasePathStorage().IsEmpty()) {
-    JsonObject->SetStringField(TEXT("databasePath"), DatabasePathStorage());
-  }
-  JsonObject->SetNumberField(TEXT("vectorDimension"), VectorDimensionStorage());
-  JsonObject->SetNumberField(TEXT("maxRecallResults"),
-                             MaxRecallResultsStorage());
+  const TSharedRef<FJsonObject> J = MakeShared<FJsonObject>();
+  J->SetStringField(TEXT("apiUrl"), ApiUrlStorage());
+  !ApiKeyStorage().IsEmpty()
+      ? J->SetStringField(TEXT("apiKey"), ApiKeyStorage()) : (void)0;
+  !ModelPathStorage().IsEmpty()
+      ? J->SetStringField(TEXT("modelPath"), ModelPathStorage()) : (void)0;
+  !DatabasePathStorage().IsEmpty()
+      ? J->SetStringField(TEXT("databasePath"), DatabasePathStorage())
+      : (void)0;
+  J->SetNumberField(TEXT("vectorDimension"), VectorDimensionStorage());
+  J->SetNumberField(TEXT("maxRecallResults"), MaxRecallResultsStorage());
 
-  return WriteConfigJsonObject(JsonObject);
+  return WriteConfigJsonObject(J);
 }
 
 /**
@@ -420,30 +392,55 @@ inline bool SaveToConfigFile() {
  */
 inline void SetConfigValue(const FString &Key, const FString &Value) {
   TSharedPtr<FJsonObject> JsonObject = LoadConfigJsonObject();
-  if (!JsonObject.IsValid()) {
-    JsonObject = MakeShared<FJsonObject>();
-  }
+  JsonObject = JsonObject.IsValid() ? JsonObject : MakeShared<FJsonObject>();
 
-  if (Key == TEXT("apiUrl")) {
-    JsonObject->SetStringField(TEXT("apiUrl"), Value);
-  } else if (Key == TEXT("apiKey")) {
-    JsonObject->SetStringField(TEXT("apiKey"), Value);
-  } else if (Key == TEXT("modelPath")) {
-    JsonObject->SetStringField(TEXT("modelPath"), Value);
-  } else if (Key == TEXT("databasePath")) {
-    JsonObject->SetStringField(TEXT("databasePath"), Value);
-  } else if (Key == TEXT("vectorDimension")) {
-    JsonObject->SetNumberField(TEXT("vectorDimension"), FCString::Atoi(*Value));
-  } else if (Key == TEXT("maxRecallResults")) {
-    JsonObject->SetNumberField(TEXT("maxRecallResults"),
-                               FCString::Atoi(*Value));
-  } else {
-    return;
-  }
+  const bool bHandled = func::or_else(
+      func::multi_match<FString, bool>(Key, {
+          func::when<FString, bool>(
+              func::equals<FString>(FString(TEXT("apiUrl"))),
+              [&](const FString &) {
+                JsonObject->SetStringField(TEXT("apiUrl"), Value);
+                return true;
+              }),
+          func::when<FString, bool>(
+              func::equals<FString>(FString(TEXT("apiKey"))),
+              [&](const FString &) {
+                JsonObject->SetStringField(TEXT("apiKey"), Value);
+                return true;
+              }),
+          func::when<FString, bool>(
+              func::equals<FString>(FString(TEXT("modelPath"))),
+              [&](const FString &) {
+                JsonObject->SetStringField(TEXT("modelPath"), Value);
+                return true;
+              }),
+          func::when<FString, bool>(
+              func::equals<FString>(FString(TEXT("databasePath"))),
+              [&](const FString &) {
+                JsonObject->SetStringField(TEXT("databasePath"), Value);
+                return true;
+              }),
+          func::when<FString, bool>(
+              func::equals<FString>(FString(TEXT("vectorDimension"))),
+              [&](const FString &) {
+                JsonObject->SetNumberField(TEXT("vectorDimension"),
+                                           FCString::Atoi(*Value));
+                return true;
+              }),
+          func::when<FString, bool>(
+              func::equals<FString>(FString(TEXT("maxRecallResults"))),
+              [&](const FString &) {
+                JsonObject->SetNumberField(TEXT("maxRecallResults"),
+                                           FCString::Atoi(*Value));
+                return true;
+              }),
+      }),
+      false);
 
-  if (WriteConfigJsonObject(JsonObject.ToSharedRef())) {
-    ReloadConfig();
-  }
+  bHandled
+      ? (WriteConfigJsonObject(JsonObject.ToSharedRef())
+            ? (ReloadConfig(), void()) : void())
+      : void();
 }
 
 /**
@@ -452,46 +449,65 @@ inline void SetConfigValue(const FString &Key, const FString &Value) {
  * CLI commands can print one value without loading call-site parsing logic.
  */
 inline FString GetConfigValue(const FString &Key) {
-  if (Key == TEXT("version")) {
-    return GetSdkVersion();
-  }
-
-  const TSharedPtr<FJsonObject> JsonObject = LoadConfigJsonObject();
-  if (!JsonObject.IsValid()) {
-    return TEXT("");
-  }
-
-  FString Value;
-  if (Key == TEXT("apiUrl")) {
-    return JsonObject->TryGetStringField(TEXT("apiUrl"), Value) ? Value
-                                                                : TEXT("");
-  }
-  if (Key == TEXT("apiKey")) {
-    return JsonObject->TryGetStringField(TEXT("apiKey"), Value) ? Value
-                                                                : TEXT("");
-  }
-  if (Key == TEXT("modelPath")) {
-    return JsonObject->TryGetStringField(TEXT("modelPath"), Value) ? Value
-                                                                   : TEXT("");
-  }
-  if (Key == TEXT("databasePath")) {
-    return JsonObject->TryGetStringField(TEXT("databasePath"), Value) ? Value
-                                                                      : TEXT("");
-  }
-
-  int32 IntValue = 0;
-  if (Key == TEXT("vectorDimension")) {
-    return JsonObject->TryGetNumberField(TEXT("vectorDimension"), IntValue)
-               ? FString::FromInt(IntValue)
-               : TEXT("");
-  }
-  if (Key == TEXT("maxRecallResults")) {
-    return JsonObject->TryGetNumberField(TEXT("maxRecallResults"), IntValue)
-               ? FString::FromInt(IntValue)
-               : TEXT("");
-  }
-
-  return TEXT("");
+  return Key == TEXT("version")
+      ? GetSdkVersion()
+      : [&Key]() {
+          const TSharedPtr<FJsonObject> J = LoadConfigJsonObject();
+          return !J.IsValid()
+              ? FString(TEXT(""))
+              : func::or_else(
+                    func::multi_match<FString, FString>(Key, {
+                        func::when<FString, FString>(
+                            func::equals<FString>(FString(TEXT("apiUrl"))),
+                            [&J](const FString &) {
+                              FString V;
+                              return J->TryGetStringField(TEXT("apiUrl"), V)
+                                  ? V : FString(TEXT(""));
+                            }),
+                        func::when<FString, FString>(
+                            func::equals<FString>(FString(TEXT("apiKey"))),
+                            [&J](const FString &) {
+                              FString V;
+                              return J->TryGetStringField(TEXT("apiKey"), V)
+                                  ? V : FString(TEXT(""));
+                            }),
+                        func::when<FString, FString>(
+                            func::equals<FString>(FString(TEXT("modelPath"))),
+                            [&J](const FString &) {
+                              FString V;
+                              return J->TryGetStringField(TEXT("modelPath"), V)
+                                  ? V : FString(TEXT(""));
+                            }),
+                        func::when<FString, FString>(
+                            func::equals<FString>(
+                                FString(TEXT("databasePath"))),
+                            [&J](const FString &) {
+                              FString V;
+                              return J->TryGetStringField(
+                                         TEXT("databasePath"), V)
+                                  ? V : FString(TEXT(""));
+                            }),
+                        func::when<FString, FString>(
+                            func::equals<FString>(
+                                FString(TEXT("vectorDimension"))),
+                            [&J](const FString &) {
+                              int32 V = 0;
+                              return J->TryGetNumberField(
+                                         TEXT("vectorDimension"), V)
+                                  ? FString::FromInt(V) : FString(TEXT(""));
+                            }),
+                        func::when<FString, FString>(
+                            func::equals<FString>(
+                                FString(TEXT("maxRecallResults"))),
+                            [&J](const FString &) {
+                              int32 V = 0;
+                              return J->TryGetNumberField(
+                                         TEXT("maxRecallResults"), V)
+                                  ? FString::FromInt(V) : FString(TEXT(""));
+                            }),
+                    }),
+                    FString(TEXT("")));
+        }();
 }
 
 /**
@@ -500,14 +516,10 @@ inline FString GetConfigValue(const FString &Key) {
  * defaults, file values, and environment overrides resolve predictably.
  */
 inline void InitializeConfig() {
-  if (InitializedStorage()) {
-    return;
-  }
-
-  ResetToDefaults();
-  LoadFromConfigFile();
-  LoadFromEnvironment();
-  InitializedStorage() = true;
+  InitializedStorage()
+      ? void()
+      : (ResetToDefaults(), LoadFromConfigFile(), LoadFromEnvironment(),
+         (void)(InitializedStorage() = true));
 }
 
 } // namespace SDKConfig

@@ -49,10 +49,8 @@ void UForbocAISubsystem::Deinitialize() {
  * config so gameplay code can point the runtime at the right backend.
  */
 void UForbocAISubsystem::Init(FString ApiKey, FString ApiUrl) {
-  if (ApiUrl.IsEmpty()) {
-    ApiUrl = SDKConfig::DEFAULT_API_URL;
-  }
-  SDKConfig::SetApiConfig(ApiUrl, ApiKey);
+  SDKConfig::SetApiConfig(
+      ApiUrl.IsEmpty() ? FString(SDKConfig::DEFAULT_API_URL) : ApiUrl, ApiKey);
 }
 
 /**
@@ -61,29 +59,28 @@ void UForbocAISubsystem::Init(FString ApiKey, FString ApiUrl) {
  * the subsystem so dialogue, typing, and action events are broadcast to game code.
  */
 void UForbocAISubsystem::ProcessNPC(FString NpcId, FString Input) {
-  if (!Store.IsValid())
-    return;
-
-  OnTypingStart.Broadcast();
-
-  Store->dispatch(
-              rtk::processNPC(NpcId, Input, TEXT("{}"), TEXT(""),
-                              FAgentState(), rtk::LocalProtocolRuntime()))
-      .then([this](const FAgentResponse &Result) {
-        if (!Result.Dialogue.IsEmpty()) {
-          OnMessageReceived.Broadcast(Result.Dialogue);
-          OnTTSRequested.Broadcast(Result.Dialogue);
-        }
-        if (!Result.Action.Type.IsEmpty()) {
-          OnNPCActionReceived.Broadcast(Result.Action);
-        }
-        OnTypingEnd.Broadcast();
-      })
-      .catch_([this](std::string Error) {
-        static_cast<void>(Error);
-        OnTypingEnd.Broadcast();
-      })
-      .execute();
+  !Store.IsValid()
+      ? void()
+      : (OnTypingStart.Broadcast(),
+         Store
+             ->dispatch(rtk::processNPC(NpcId, Input, TEXT("{}"), TEXT(""),
+                                        FAgentState(),
+                                        rtk::LocalProtocolRuntime()))
+             .then([this](const FAgentResponse &Result) {
+               !Result.Dialogue.IsEmpty()
+                   ? (OnMessageReceived.Broadcast(Result.Dialogue),
+                      OnTTSRequested.Broadcast(Result.Dialogue), void())
+                   : void();
+               !Result.Action.Type.IsEmpty()
+                   ? (OnNPCActionReceived.Broadcast(Result.Action), void())
+                   : void();
+               OnTypingEnd.Broadcast();
+             })
+             .catch_([this](std::string Error) {
+               static_cast<void>(Error);
+               OnTypingEnd.Broadcast();
+             })
+             .execute());
 }
 
 /**
@@ -92,14 +89,13 @@ void UForbocAISubsystem::ProcessNPC(FString NpcId, FString Input) {
  * events so game code can react when a soul has been published.
  */
 void UForbocAISubsystem::ExportSoul(FString AgentId) {
-  if (!Store.IsValid())
-    return;
-
-  Store->dispatch(rtk::exportSoulThunk(AgentId))
-      .then([this](const FSoulExportResult &Result) {
-        OnSoulExportComplete.Broadcast(Result.TxId);
-      })
-      .execute();
+  !Store.IsValid()
+      ? void()
+      : (void)Store->dispatch(rtk::exportSoulThunk(AgentId))
+            .then([this](const FSoulExportResult &Result) {
+              OnSoulExportComplete.Broadcast(Result.TxId);
+            })
+            .execute();
 }
 
 /**
@@ -108,15 +104,13 @@ void UForbocAISubsystem::ExportSoul(FString AgentId) {
  * subsystem so UI and logic can inspect current agent data.
  */
 FAgentState UForbocAISubsystem::GetNPCState(FString NpcId) const {
-  if (!Store.IsValid())
-    return FAgentState();
-
-  auto State = Store->getState();
-  auto NPC = NPCSlice::SelectNPCById(State.NPCs, NpcId);
-  if (NPC.hasValue) {
-    return NPC.value.State;
-  }
-  return FAgentState();
+  return !Store.IsValid()
+             ? FAgentState()
+             : func::or_else(
+                   func::fmap(
+                       NPCSlice::SelectNPCById(Store->getState().NPCs, NpcId),
+                       [](const FNPCInternalState &Npc) { return Npc.State; }),
+                   FAgentState());
 }
 
 /**
@@ -125,12 +119,9 @@ FAgentState UForbocAISubsystem::GetNPCState(FString NpcId) const {
  * systems can address the current actor consistently.
  */
 FString UForbocAISubsystem::GetActiveNPCId() const {
-  if (!Store.IsValid()) {
-    return FString();
-  }
-
-  const FStoreState State = Store->getState();
-  return NPCSlice::SelectActiveNpcId(State.NPCs);
+  return !Store.IsValid()
+             ? FString()
+             : NPCSlice::SelectActiveNpcId(Store->getState().NPCs);
 }
 
 /**
@@ -139,19 +130,15 @@ FString UForbocAISubsystem::GetActiveNPCId() const {
  * consumers can read the full runtime record without manual store access.
  */
 bool UForbocAISubsystem::GetActiveNPC(FNPCInternalState &OutNPC) const {
-  if (!Store.IsValid()) {
-    return false;
-  }
-
-  const FStoreState State = Store->getState();
-  const func::Maybe<FNPCInternalState> Active =
-      NPCSlice::SelectActiveNPC(State.NPCs);
-  if (!Active.hasValue) {
-    return false;
-  }
-
-  OutNPC = Active.value;
-  return true;
+  return !Store.IsValid()
+             ? false
+             : func::match(
+                   NPCSlice::SelectActiveNPC(Store->getState().NPCs),
+                   [&OutNPC](const FNPCInternalState &Active) {
+                     OutNPC = Active;
+                     return true;
+                   },
+                   []() { return false; });
 }
 
 /**
@@ -160,12 +147,10 @@ bool UForbocAISubsystem::GetActiveNPC(FNPCInternalState &OutNPC) const {
  * memory results can be rendered without reissuing the query.
  */
 TArray<FMemoryItem> UForbocAISubsystem::GetLastRecalledMemories() const {
-  if (!Store.IsValid()) {
-    return TArray<FMemoryItem>();
-  }
-
-  const FStoreState State = Store->getState();
-  return MemorySlice::SelectLastRecalledMemories(State.Memory);
+  return !Store.IsValid()
+             ? TArray<FMemoryItem>()
+             : MemorySlice::SelectLastRecalledMemories(
+                   Store->getState().Memory);
 }
 
 /**
@@ -175,17 +160,13 @@ TArray<FMemoryItem> UForbocAISubsystem::GetLastRecalledMemories() const {
  */
 bool UForbocAISubsystem::GetLastBridgeValidation(
     FValidationResult &OutResult) const {
-  if (!Store.IsValid()) {
-    return false;
-  }
-
-  const FStoreState State = Store->getState();
-  if (!State.Bridge.bHasLastValidation) {
-    return false;
-  }
-
-  OutResult = State.Bridge.LastValidation;
-  return true;
+  return !Store.IsValid() ? false
+                          : [this, &OutResult]() -> bool {
+    const FStoreState State = Store->getState();
+    return State.Bridge.bHasLastValidation
+               ? (OutResult = State.Bridge.LastValidation, true)
+               : false;
+  }();
 }
 
 /**
@@ -194,17 +175,13 @@ bool UForbocAISubsystem::GetLastBridgeValidation(
  * exposed so game tools can inspect the restored payload.
  */
 bool UForbocAISubsystem::GetLastImportedSoul(FSoul &OutSoul) const {
-  if (!Store.IsValid()) {
-    return false;
-  }
-
-  const FStoreState State = Store->getState();
-  if (!State.Soul.bHasLastImport) {
-    return false;
-  }
-
-  OutSoul = State.Soul.LastImport;
-  return true;
+  return !Store.IsValid() ? false
+                          : [this, &OutSoul]() -> bool {
+    const FStoreState State = Store->getState();
+    return State.Soul.bHasLastImport
+               ? (OutSoul = State.Soul.LastImport, true)
+               : false;
+  }();
 }
 
 /**
@@ -213,11 +190,13 @@ bool UForbocAISubsystem::GetLastImportedSoul(FSoul &OutSoul) const {
  * into delegates so blueprint and C++ subscribers can react to runtime changes.
  */
 void UForbocAISubsystem::HandleAction(const rtk::AnyAction &Action) {
-  if (NPCSlice::Actions::SetLastActionActionCreator().match(Action)) {
-    const auto Payload =
-        NPCSlice::Actions::SetLastActionActionCreator().extract(Action);
-    if (Payload.hasValue) {
-      OnNPCActionReceived.Broadcast(Payload.value.Action);
-    }
-  }
+  NPCSlice::Actions::SetLastActionActionCreator().match(Action)
+      ? [this, &Action]() {
+          const auto Payload =
+              NPCSlice::Actions::SetLastActionActionCreator().extract(Action);
+          Payload.hasValue
+              ? (OnNPCActionReceived.Broadcast(Payload.value.Action), void())
+              : void();
+        }()
+      : void();
 }

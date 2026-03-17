@@ -12,31 +12,34 @@ namespace {
  * so legacy scripts keep working with the renamed NPC command surface.
  */
 FString NormalizeCommand(const FString &Command) {
-  if (Command == TEXT("agent_list")) {
-    return TEXT("npc_list");
-  }
-  if (Command == TEXT("agent_create")) {
-    return TEXT("npc_create");
-  }
-  if (Command == TEXT("agent_process")) {
-    return TEXT("npc_process");
-  }
-  if (Command == TEXT("agent_active")) {
-    return TEXT("npc_active");
-  }
-  if (Command == TEXT("agent_state")) {
-    return TEXT("npc_state");
-  }
-  if (Command == TEXT("agent_update")) {
-    return TEXT("npc_update");
-  }
-  if (Command == TEXT("agent_import")) {
-    return TEXT("npc_import");
-  }
-  if (Command == TEXT("agent_chat")) {
-    return TEXT("npc_chat");
-  }
-  return Command;
+  return func::or_else(
+      func::multi_match<FString, FString>(
+          Command,
+          {func::when<FString, FString>(
+               func::equals<FString>(TEXT("agent_list")),
+               [](const FString &) { return FString(TEXT("npc_list")); }),
+           func::when<FString, FString>(
+               func::equals<FString>(TEXT("agent_create")),
+               [](const FString &) { return FString(TEXT("npc_create")); }),
+           func::when<FString, FString>(
+               func::equals<FString>(TEXT("agent_process")),
+               [](const FString &) { return FString(TEXT("npc_process")); }),
+           func::when<FString, FString>(
+               func::equals<FString>(TEXT("agent_active")),
+               [](const FString &) { return FString(TEXT("npc_active")); }),
+           func::when<FString, FString>(
+               func::equals<FString>(TEXT("agent_state")),
+               [](const FString &) { return FString(TEXT("npc_state")); }),
+           func::when<FString, FString>(
+               func::equals<FString>(TEXT("agent_update")),
+               [](const FString &) { return FString(TEXT("npc_update")); }),
+           func::when<FString, FString>(
+               func::equals<FString>(TEXT("agent_import")),
+               [](const FString &) { return FString(TEXT("npc_import")); }),
+           func::when<FString, FString>(
+               func::equals<FString>(TEXT("agent_chat")),
+               [](const FString &) { return FString(TEXT("npc_chat")); })}),
+      Command);
 }
 
 /**
@@ -57,9 +60,7 @@ FString ExtractParam(const FString &Params, const TCHAR *ParamName) {
  * present so handlers receive a clean positional argument list.
  */
 void AddIfPresent(TArray<FString> &Args, const FString &Value) {
-  if (!Value.IsEmpty()) {
-    Args.Add(Value);
-  }
+  !Value.IsEmpty() ? (void)Args.Add(Value) : (void)0;
 }
 
 /**
@@ -69,9 +70,138 @@ void AddIfPresent(TArray<FString> &Args, const FString &Value) {
  */
 void AddFlagIfPresent(TArray<FString> &Args, const FString &Params,
                       const TCHAR *ParamName, const TCHAR *FlagValue) {
-  if (FParse::Param(*Params, ParamName)) {
-    Args.Add(FlagValue);
-  }
+  FParse::Param(*Params, ParamName) ? (void)Args.Add(FlagValue) : (void)0;
+}
+
+/**
+ * Extracts a named param and prepends a flag prefix when the value is present.
+ * Returns empty string when the param is absent, so AddIfPresent will skip it.
+ * User Story: As commandlet parsing, I need prefixed flag construction so raw
+ * params translate into the --key=value format expected by CLI handlers.
+ */
+FString ExtractPrefixed(const FString &Params, const TCHAR *ParamName,
+                        const TCHAR *Prefix) {
+  const FString Raw = ExtractParam(Params, ParamName);
+  return Raw.IsEmpty() ? FString(TEXT("")) : FString(Prefix) + Raw;
+}
+
+/**
+ * Recursively appends extracted params to an args array.
+ * User Story: As commandlet parsing, I need recursive param extraction so
+ * multiple named params can be gathered without imperative loops.
+ */
+namespace detail {
+TArray<FString> buildParamsRecursive(const FString &Params,
+                                     const TCHAR *const *Names, int32 Count,
+                                     int32 Index, TArray<FString> Args) {
+  return Index >= Count
+             ? Args
+             : (AddIfPresent(Args, ExtractParam(Params, Names[Index])),
+                buildParamsRecursive(Params, Names, Count, Index + 1,
+                                    MoveTemp(Args)));
+}
+
+/**
+ * Recursively appends flag arguments when named switches are present.
+ * Takes parallel arrays of param names and flag values.
+ * User Story: As commandlet parsing, I need recursive flag extraction so
+ * multiple boolean switches can be gathered without imperative loops.
+ */
+TArray<FString> buildFlagsRecursive(const FString &Params,
+                                    const TCHAR *const *ParamNames,
+                                    const TCHAR *const *FlagValues,
+                                    int32 Count, int32 Index,
+                                    TArray<FString> Args) {
+  return Index >= Count
+             ? Args
+             : (AddFlagIfPresent(Args, Params, ParamNames[Index],
+                                 FlagValues[Index]),
+                buildFlagsRecursive(Params, ParamNames, FlagValues, Count,
+                                   Index + 1, MoveTemp(Args)));
+}
+
+/**
+ * Recursively appends prefixed params (--key=value) to an args array.
+ * Takes parallel arrays of param names and prefixes.
+ * User Story: As commandlet parsing, I need recursive prefixed extraction so
+ * multiple --key=value flags can be gathered without imperative loops.
+ */
+TArray<FString> buildPrefixedRecursive(const FString &Params,
+                                       const TCHAR *const *ParamNames,
+                                       const TCHAR *const *Prefixes,
+                                       int32 Count, int32 Index,
+                                       TArray<FString> Args) {
+  return Index >= Count
+             ? Args
+             : (AddIfPresent(Args,
+                             ExtractPrefixed(Params, ParamNames[Index],
+                                            Prefixes[Index])),
+                buildPrefixedRecursive(Params, ParamNames, Prefixes, Count,
+                                      Index + 1, MoveTemp(Args)));
+}
+
+/**
+ * Recursively appends elements from a source array into a destination array.
+ * User Story: As commandlet parsing, I need recursive array merging so
+ * separately built param and flag lists can be combined declaratively.
+ */
+TArray<FString> mergeArraysRecursive(TArray<FString> Dest,
+                                     const TArray<FString> &Src,
+                                     int32 Index) {
+  return Index >= Src.Num()
+             ? Dest
+             : (Dest.Add(Src[Index]),
+                mergeArraysRecursive(MoveTemp(Dest), Src, Index + 1));
+}
+} // namespace detail
+
+/**
+ * Extracts multiple named params and collects them into an args array.
+ * User Story: As commandlet parsing, I need batch param extraction so commands
+ * with several named params can build their args list declaratively.
+ */
+TArray<FString> BuildParams(const FString &Params,
+                            std::initializer_list<const TCHAR *> Names) {
+  return detail::buildParamsRecursive(Params, Names.begin(),
+                                     static_cast<int32>(Names.size()), 0,
+                                     TArray<FString>());
+}
+
+/**
+ * Extracts multiple boolean switches and collects them as flag args.
+ * User Story: As commandlet parsing, I need batch flag extraction so commands
+ * with several switches can build their args list declaratively.
+ */
+TArray<FString> BuildFlags(const FString &Params,
+                           std::initializer_list<const TCHAR *> ParamNames,
+                           std::initializer_list<const TCHAR *> FlagValues) {
+  return detail::buildFlagsRecursive(Params, ParamNames.begin(),
+                                    FlagValues.begin(),
+                                    static_cast<int32>(ParamNames.size()), 0,
+                                    TArray<FString>());
+}
+
+/**
+ * Extracts multiple named params with flag prefixes and collects them.
+ * User Story: As commandlet parsing, I need batch prefixed extraction so
+ * commands with --key=value flags can build their args list declaratively.
+ */
+TArray<FString> BuildPrefixed(const FString &Params,
+                              std::initializer_list<const TCHAR *> ParamNames,
+                              std::initializer_list<const TCHAR *> Prefixes) {
+  return detail::buildPrefixedRecursive(Params, ParamNames.begin(),
+                                       Prefixes.begin(),
+                                       static_cast<int32>(ParamNames.size()),
+                                       0, TArray<FString>());
+}
+
+/**
+ * Merges two args arrays into one via recursive append.
+ * User Story: As commandlet parsing, I need array merging so separately built
+ * param and flag lists can be combined into one args array declaratively.
+ */
+TArray<FString> MergeArgs(TArray<FString> Base, const TArray<FString> &Extra) {
+  return detail::mergeArraysRecursive(MoveTemp(Base), Extra, 0);
 }
 
 /**
@@ -79,209 +209,237 @@ void AddFlagIfPresent(TArray<FString> &Args, const FString &Params,
  * User Story: As command dispatch, I need raw commandlet params converted into
  * handler-friendly args so CLI routing can reuse the shared command handlers.
  */
-TArray<FString> BuildCommandArgs(const FString &Command, const FString &Params) {
-  TArray<FString> Args;
+TArray<FString> BuildCommandArgs(const FString &Command,
+                                 const FString &Params) {
+  return func::or_else(
+      func::multi_match<FString, TArray<FString>>(
+          Command,
+          {
+              /**
+               * ---- NPC ----
+               * User Story: As a maintainer, I need this note so the surrounding code intent stays clear during maintenance and debugging.
+               */
+              func::when<FString, TArray<FString>>(
+                  func::equals<FString>(TEXT("npc_create")),
+                  [&Params](const FString &) {
+                    TArray<FString> A;
+                    const FString Persona =
+                        ExtractParam(Params, TEXT("Persona="));
+                    A.Add(Persona.IsEmpty() ? TEXT("Default UE Persona")
+                                           : Persona);
+                    return A;
+                  }),
+              func::when<FString, TArray<FString>>(
+                  func::equals<FString>(TEXT("npc_process")),
+                  [&Params](const FString &) {
+                    return BuildParams(Params, {TEXT("Id="), TEXT("Input=")});
+                  }),
+              func::when<FString, TArray<FString>>(
+                  func::equals<FString>(TEXT("npc_update")),
+                  [&Params](const FString &) {
+                    return BuildParams(
+                        Params,
+                        {TEXT("Id="), TEXT("Mood="), TEXT("Inventory=")});
+                  }),
+              func::when<FString, TArray<FString>>(
+                  func::equals<FString>(TEXT("npc_import")),
+                  [&Params](const FString &) {
+                    return BuildParams(Params, {TEXT("TxId=")});
+                  }),
+              func::when<FString, TArray<FString>>(
+                  func::equals<FString>(TEXT("npc_chat")),
+                  [&Params](const FString &) {
+                    return BuildParams(Params,
+                                      {TEXT("Id="), TEXT("Message=")});
+                  }),
 
-  /**
-   * ---- NPC ----
-   * User Story: As a maintainer, I need this note so the surrounding code intent stays clear during maintenance and debugging.
-   */
-  if (Command == TEXT("npc_create")) {
-    FString Persona = ExtractParam(Params, TEXT("Persona="));
-    Args.Add(Persona.IsEmpty() ? TEXT("Default UE Persona") : Persona);
-    return Args;
-  }
-  if (Command == TEXT("npc_process")) {
-    AddIfPresent(Args, ExtractParam(Params, TEXT("Id=")));
-    AddIfPresent(Args, ExtractParam(Params, TEXT("Input=")));
-    return Args;
-  }
-  if (Command == TEXT("npc_update")) {
-    AddIfPresent(Args, ExtractParam(Params, TEXT("Id=")));
-    AddIfPresent(Args, ExtractParam(Params, TEXT("Mood=")));
-    AddIfPresent(Args, ExtractParam(Params, TEXT("Inventory=")));
-    return Args;
-  }
-  if (Command == TEXT("npc_import")) {
-    AddIfPresent(Args, ExtractParam(Params, TEXT("TxId=")));
-    return Args;
-  }
-  if (Command == TEXT("npc_chat")) {
-    AddIfPresent(Args, ExtractParam(Params, TEXT("Id=")));
-    AddIfPresent(Args, ExtractParam(Params, TEXT("Message=")));
-    return Args;
-  }
+              /**
+               * ---- Memory (remote) ----
+               * User Story: As a maintainer, I need this note so the surrounding code intent stays clear during maintenance and debugging.
+               */
+              func::when<FString, TArray<FString>>(
+                  [](const FString &C) {
+                    return C == TEXT("memory_list") ||
+                           C == TEXT("memory_clear") ||
+                           C == TEXT("memory_export");
+                  },
+                  [&Params](const FString &) {
+                    return BuildParams(Params, {TEXT("Id=")});
+                  }),
+              func::when<FString, TArray<FString>>(
+                  func::equals<FString>(TEXT("memory_recall")),
+                  [&Params](const FString &) {
+                    return BuildParams(Params,
+                                      {TEXT("Id="), TEXT("Query=")});
+                  }),
+              func::when<FString, TArray<FString>>(
+                  func::equals<FString>(TEXT("memory_store")),
+                  [&Params](const FString &) {
+                    return BuildParams(Params, {TEXT("Id="), TEXT("Obs=")});
+                  }),
 
-  /**
-   * ---- Memory (remote) ----
-   * User Story: As a maintainer, I need this note so the surrounding code intent stays clear during maintenance and debugging.
-   */
-  if (Command == TEXT("memory_list") || Command == TEXT("memory_clear") ||
-      Command == TEXT("memory_export")) {
-    AddIfPresent(Args, ExtractParam(Params, TEXT("Id=")));
-    return Args;
-  }
-  if (Command == TEXT("memory_recall")) {
-    AddIfPresent(Args, ExtractParam(Params, TEXT("Id=")));
-    AddIfPresent(Args, ExtractParam(Params, TEXT("Query=")));
-    return Args;
-  }
-  if (Command == TEXT("memory_store")) {
-    AddIfPresent(Args, ExtractParam(Params, TEXT("Id=")));
-    AddIfPresent(Args, ExtractParam(Params, TEXT("Obs=")));
-    return Args;
-  }
+              /**
+               * ---- Cortex ----
+               * User Story: As a maintainer, I need this note so the surrounding code intent stays clear during maintenance and debugging.
+               */
+              func::when<FString, TArray<FString>>(
+                  func::equals<FString>(TEXT("cortex_init")),
+                  [&Params](const FString &) {
+                    return BuildParams(Params, {TEXT("Model=")});
+                  }),
+              func::when<FString, TArray<FString>>(
+                  func::equals<FString>(TEXT("cortex_init_remote")),
+                  [&Params](const FString &) {
+                    return BuildParams(Params,
+                                      {TEXT("Model="), TEXT("Key=")});
+                  }),
+              func::when<FString, TArray<FString>>(
+                  func::equals<FString>(TEXT("cortex_complete")),
+                  [&Params](const FString &) {
+                    return BuildParams(Params,
+                                      {TEXT("Id="), TEXT("Prompt=")});
+                  }),
 
-  /**
-   * ---- Cortex ----
-   * User Story: As a maintainer, I need this note so the surrounding code intent stays clear during maintenance and debugging.
-   */
-  if (Command == TEXT("cortex_init")) {
-    AddIfPresent(Args, ExtractParam(Params, TEXT("Model=")));
-    return Args;
-  }
-  if (Command == TEXT("cortex_init_remote")) {
-    AddIfPresent(Args, ExtractParam(Params, TEXT("Model=")));
-    AddIfPresent(Args, ExtractParam(Params, TEXT("Key=")));
-    return Args;
-  }
-  if (Command == TEXT("cortex_complete")) {
-    AddIfPresent(Args, ExtractParam(Params, TEXT("Id=")));
-    AddIfPresent(Args, ExtractParam(Params, TEXT("Prompt=")));
-    return Args;
-  }
+              /**
+               * ---- Ghost ----
+               * User Story: As a maintainer, I need this note so the surrounding code intent stays clear during maintenance and debugging.
+               */
+              func::when<FString, TArray<FString>>(
+                  func::equals<FString>(TEXT("ghost_run")),
+                  [&Params](const FString &) {
+                    return BuildParams(Params,
+                                      {TEXT("Suite="), TEXT("Duration=")});
+                  }),
+              func::when<FString, TArray<FString>>(
+                  [](const FString &C) {
+                    return C == TEXT("ghost_status") ||
+                           C == TEXT("ghost_results") ||
+                           C == TEXT("ghost_stop");
+                  },
+                  [&Params](const FString &) {
+                    return BuildParams(Params, {TEXT("SessionId=")});
+                  }),
+              func::when<FString, TArray<FString>>(
+                  func::equals<FString>(TEXT("ghost_history")),
+                  [&Params](const FString &) {
+                    return BuildParams(Params, {TEXT("Limit=")});
+                  }),
 
-  /**
-   * ---- Ghost ----
-   * User Story: As a maintainer, I need this note so the surrounding code intent stays clear during maintenance and debugging.
-   */
-  if (Command == TEXT("ghost_run")) {
-    AddIfPresent(Args, ExtractParam(Params, TEXT("Suite=")));
-    AddIfPresent(Args, ExtractParam(Params, TEXT("Duration=")));
-    return Args;
-  }
-  if (Command == TEXT("ghost_status") || Command == TEXT("ghost_results") ||
-      Command == TEXT("ghost_stop")) {
-    AddIfPresent(Args, ExtractParam(Params, TEXT("SessionId=")));
-    return Args;
-  }
-  if (Command == TEXT("ghost_history")) {
-    AddIfPresent(Args, ExtractParam(Params, TEXT("Limit=")));
-    return Args;
-  }
+              /**
+               * ---- Bridge ----
+               * User Story: As a maintainer, I need this note so the surrounding code intent stays clear during maintenance and debugging.
+               */
+              func::when<FString, TArray<FString>>(
+                  func::equals<FString>(TEXT("bridge_validate")),
+                  [&Params](const FString &) {
+                    return BuildParams(Params, {TEXT("Action=")});
+                  }),
+              func::when<FString, TArray<FString>>(
+                  func::equals<FString>(TEXT("bridge_preset")),
+                  [&Params](const FString &) {
+                    return BuildParams(Params, {TEXT("Name=")});
+                  }),
 
-  /**
-   * ---- Bridge ----
-   * User Story: As a maintainer, I need this note so the surrounding code intent stays clear during maintenance and debugging.
-   */
-  if (Command == TEXT("bridge_validate")) {
-    AddIfPresent(Args, ExtractParam(Params, TEXT("Action=")));
-    return Args;
-  }
-  if (Command == TEXT("bridge_preset")) {
-    AddIfPresent(Args, ExtractParam(Params, TEXT("Name=")));
-    return Args;
-  }
+              /**
+               * ---- Rules ----
+               * User Story: As a maintainer, I need this note so the surrounding code intent stays clear during maintenance and debugging.
+               */
+              func::when<FString, TArray<FString>>(
+                  func::equals<FString>(TEXT("rules_register")),
+                  [&Params](const FString &) {
+                    return BuildParams(Params, {TEXT("Json=")});
+                  }),
+              func::when<FString, TArray<FString>>(
+                  func::equals<FString>(TEXT("rules_delete")),
+                  [&Params](const FString &) {
+                    return BuildParams(Params, {TEXT("Id=")});
+                  }),
 
-  /**
-   * ---- Rules ----
-   * User Story: As a maintainer, I need this note so the surrounding code intent stays clear during maintenance and debugging.
-   */
-  if (Command == TEXT("rules_register")) {
-    AddIfPresent(Args, ExtractParam(Params, TEXT("Json=")));
-    return Args;
-  }
-  if (Command == TEXT("rules_delete")) {
-    AddIfPresent(Args, ExtractParam(Params, TEXT("Id=")));
-    return Args;
-  }
+              /**
+               * ---- Soul ----
+               * User Story: As a maintainer, I need this note so the surrounding code intent stays clear during maintenance and debugging.
+               */
+              func::when<FString, TArray<FString>>(
+                  func::equals<FString>(TEXT("soul_export")),
+                  [&Params](const FString &) {
+                    return BuildParams(Params, {TEXT("Id=")});
+                  }),
+              func::when<FString, TArray<FString>>(
+                  [](const FString &C) {
+                    return C == TEXT("soul_import") ||
+                           C == TEXT("soul_import_npc") ||
+                           C == TEXT("soul_verify");
+                  },
+                  [&Params](const FString &) {
+                    return BuildParams(Params, {TEXT("TxId=")});
+                  }),
+              func::when<FString, TArray<FString>>(
+                  func::equals<FString>(TEXT("soul_list")),
+                  [&Params](const FString &) {
+                    return BuildParams(Params, {TEXT("Limit=")});
+                  }),
 
-  /**
-   * ---- Soul ----
-   * User Story: As a maintainer, I need this note so the surrounding code intent stays clear during maintenance and debugging.
-   */
-  if (Command == TEXT("soul_export")) {
-    AddIfPresent(Args, ExtractParam(Params, TEXT("Id=")));
-    return Args;
-  }
-  if (Command == TEXT("soul_import") || Command == TEXT("soul_import_npc") ||
-      Command == TEXT("soul_verify")) {
-    AddIfPresent(Args, ExtractParam(Params, TEXT("TxId=")));
-    return Args;
-  }
-  if (Command == TEXT("soul_list")) {
-    AddIfPresent(Args, ExtractParam(Params, TEXT("Limit=")));
-    return Args;
-  }
+              /**
+               * ---- Config ----
+               * User Story: As a maintainer, I need this note so the surrounding code intent stays clear during maintenance and debugging.
+               */
+              func::when<FString, TArray<FString>>(
+                  func::equals<FString>(TEXT("config_set")),
+                  [&Params](const FString &) {
+                    return BuildParams(Params,
+                                      {TEXT("Key="), TEXT("Value=")});
+                  }),
+              func::when<FString, TArray<FString>>(
+                  func::equals<FString>(TEXT("config_get")),
+                  [&Params](const FString &) {
+                    return BuildParams(Params, {TEXT("Key=")});
+                  }),
 
-  /**
-   * ---- Config ----
-   * User Story: As a maintainer, I need this note so the surrounding code intent stays clear during maintenance and debugging.
-   */
-  if (Command == TEXT("config_set")) {
-    AddIfPresent(Args, ExtractParam(Params, TEXT("Key=")));
-    AddIfPresent(Args, ExtractParam(Params, TEXT("Value=")));
-    return Args;
-  }
-  if (Command == TEXT("config_get")) {
-    AddIfPresent(Args, ExtractParam(Params, TEXT("Key=")));
-    return Args;
-  }
-
-  /**
-   * ---- Setup ----
-   * User Story: As setup command routing, I need commandlet params converted
-   * into setup flags so the commandlet path matches the direct CLI surface.
-   */
-  if (Command == TEXT("setup_build_llama")) {
-    AddIfPresent(
-        Args, ExtractParam(Params, TEXT("Tag=")).IsEmpty()
-                  ? TEXT("")
-                  : FString(TEXT("--tag=")) + ExtractParam(Params, TEXT("Tag=")));
-    AddIfPresent(
-        Args,
-        ExtractParam(Params, TEXT("MacOSDeploymentTarget=")).IsEmpty()
-            ? TEXT("")
-            : FString(TEXT("--macos-deployment-target=")) +
-                  ExtractParam(Params, TEXT("MacOSDeploymentTarget=")));
-    return Args;
-  }
-  if (Command == TEXT("setup") || Command == TEXT("setup_deps")) {
-    AddFlagIfPresent(Args, Params, TEXT("SqliteOnly"), TEXT("--sqlite-only"));
-    AddFlagIfPresent(Args, Params, TEXT("LlamaOnly"), TEXT("--llama-only"));
-    return Args;
-  }
-  if (Command == TEXT("setup_runtime_check")) {
-    AddIfPresent(
-        Args, ExtractParam(Params, TEXT("Model=")).IsEmpty()
-                  ? TEXT("")
-                  : FString(TEXT("--model=")) +
-                        ExtractParam(Params, TEXT("Model=")));
-    AddIfPresent(
-        Args, ExtractParam(Params, TEXT("EmbeddingModel=")).IsEmpty()
-                  ? TEXT("")
-                  : FString(TEXT("--embedding-model=")) +
-                        ExtractParam(Params, TEXT("EmbeddingModel=")));
-    AddIfPresent(
-        Args, ExtractParam(Params, TEXT("Database=")).IsEmpty()
-                  ? TEXT("")
-                  : FString(TEXT("--database=")) +
-                        ExtractParam(Params, TEXT("Database=")));
-    AddIfPresent(
-        Args, ExtractParam(Params, TEXT("Prompt=")).IsEmpty()
-                  ? TEXT("")
-                  : FString(TEXT("--prompt=")) +
-                        ExtractParam(Params, TEXT("Prompt=")));
-    AddFlagIfPresent(Args, Params, TEXT("AllowDownload"),
-                     TEXT("--allow-download"));
-    AddFlagIfPresent(Args, Params, TEXT("SkipCortex"), TEXT("--skip-cortex"));
-    AddFlagIfPresent(Args, Params, TEXT("SkipVector"), TEXT("--skip-vector"));
-    AddFlagIfPresent(Args, Params, TEXT("SkipMemory"), TEXT("--skip-memory"));
-    AddFlagIfPresent(Args, Params, TEXT("Cleanup"), TEXT("--cleanup"));
-    return Args;
-  }
-
-  return Args;
+              /**
+               * ---- Setup ----
+               * User Story: As setup command routing, I need commandlet params converted
+               * into setup flags so the commandlet path matches the direct CLI surface.
+               */
+              func::when<FString, TArray<FString>>(
+                  func::equals<FString>(TEXT("setup_build_llama")),
+                  [&Params](const FString &) {
+                    return BuildPrefixed(
+                        Params,
+                        {TEXT("Tag="), TEXT("MacOSDeploymentTarget=")},
+                        {TEXT("--tag="),
+                         TEXT("--macos-deployment-target=")});
+                  }),
+              func::when<FString, TArray<FString>>(
+                  [](const FString &C) {
+                    return C == TEXT("setup") || C == TEXT("setup_deps");
+                  },
+                  [&Params](const FString &) {
+                    return BuildFlags(
+                        Params,
+                        {TEXT("SqliteOnly"), TEXT("LlamaOnly")},
+                        {TEXT("--sqlite-only"), TEXT("--llama-only")});
+                  }),
+              func::when<FString, TArray<FString>>(
+                  func::equals<FString>(TEXT("setup_runtime_check")),
+                  [&Params](const FString &) {
+                    return MergeArgs(
+                        BuildPrefixed(
+                            Params,
+                            {TEXT("Model="), TEXT("EmbeddingModel="),
+                             TEXT("Database="), TEXT("Prompt=")},
+                            {TEXT("--model="), TEXT("--embedding-model="),
+                             TEXT("--database="), TEXT("--prompt=")}),
+                        BuildFlags(
+                            Params,
+                            {TEXT("AllowDownload"), TEXT("SkipCortex"),
+                             TEXT("SkipVector"), TEXT("SkipMemory"),
+                             TEXT("Cleanup")},
+                            {TEXT("--allow-download"), TEXT("--skip-cortex"),
+                             TEXT("--skip-vector"), TEXT("--skip-memory"),
+                             TEXT("--cleanup")}));
+                  }),
+          }),
+      TArray<FString>());
 }
 
 } // namespace
@@ -311,10 +469,12 @@ int32 UForbocAICommandlet::Main(const FString &Params) {
   FString ApiKey;
   FParse::Value(*Params, TEXT("ApiKey="), ApiKey);
 
-  if (!ApiUrl.IsEmpty() || !ApiKey.IsEmpty()) {
-    SDKConfig::SetApiConfig(ApiUrl.IsEmpty() ? SDKConfig::GetApiUrl() : ApiUrl,
-                            ApiKey.IsEmpty() ? SDKConfig::GetApiKey() : ApiKey);
-  }
+  (!ApiUrl.IsEmpty() || !ApiKey.IsEmpty())
+      ? (SDKConfig::SetApiConfig(
+             ApiUrl.IsEmpty() ? SDKConfig::GetApiUrl() : ApiUrl,
+             ApiKey.IsEmpty() ? SDKConfig::GetApiKey() : ApiKey),
+         void())
+      : void();
 
   UE_LOG(LogTemp, Display, TEXT("ForbocAI CLI (UE5) - Command: %s"),
          *Command);
@@ -346,24 +506,25 @@ UForbocAICommandlet::createCommandPipeline(const FString &Command,
 
         const auto Validation =
             func::runValidation(commandValidationPipeline(), Command);
-        if (Validation.isLeft) {
-          RejectFString(Validation.left);
-          return;
-        }
-
-        const CommandResult Result = executeCommand(Command, Args);
-        if (Result.isSuccessful()) {
-          Resolve();
-          return;
-        }
-
-        const FString ResultMessage =
-            Result.message.empty()
-                ? FString()
-                : FString(UTF8_TO_TCHAR(Result.message.c_str()));
-        RejectFString(ResultMessage.IsEmpty()
-                          ? FString::Printf(TEXT("Command failed: %s"), *Command)
-                          : ResultMessage);
+        func::ematch(
+            Validation,
+            [&RejectFString](const FString &Err) { RejectFString(Err); },
+            [this, &Command, &Args, &Resolve,
+             &RejectFString](const FString &) {
+              const CommandResult Result = executeCommand(Command, Args);
+              const FString ResultMessage =
+                  Result.message.empty()
+                      ? FString()
+                      : FString(UTF8_TO_TCHAR(Result.message.c_str()));
+              Result.isSuccessful()
+                  ? (Resolve(), void())
+                  : (RejectFString(
+                         ResultMessage.IsEmpty()
+                             ? FString::Printf(TEXT("Command failed: %s"),
+                                               *Command)
+                             : ResultMessage),
+                     void());
+            });
       });
 }
 

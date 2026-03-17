@@ -5,27 +5,96 @@
 #include "Serialization/JsonReader.h"
 #include "Serialization/JsonSerializer.h"
 #include "Types.h"
+#include "Core/functional_core.hpp"
 
 namespace JsonInterop {
+
+namespace detail {
+
+/**
+ * Sets a string field only when the value is non-empty.
+ * User Story: As a maintainer, I need this note so the surrounding code intent
+ * stays clear during maintenance and debugging.
+ */
+inline void SetIfNonEmpty(const TSharedRef<FJsonObject> &Object,
+                          const FString &FieldName, const FString &Value) {
+  !Value.IsEmpty() ? (Object->SetStringField(FieldName, Value), void())
+                   : void();
+}
+
+/**
+ * Tries to read a number field and cast it to the target type.
+ * User Story: As a maintainer, I need this note so the surrounding code intent
+ * stays clear during maintenance and debugging.
+ */
+template <typename T>
+inline T TryGetNumberAs(const TSharedPtr<FJsonObject> &Object,
+                        const FString &FieldName, T Default) {
+  double Value = static_cast<double>(Default);
+  return Object->TryGetNumberField(FieldName, Value) ? static_cast<T>(Value)
+                                                     : Default;
+}
+
+/**
+ * Tries to read a bool field, returning the default when absent.
+ * User Story: As a maintainer, I need this note so the surrounding code intent
+ * stays clear during maintenance and debugging.
+ */
+inline bool TryGetBoolAs(const TSharedPtr<FJsonObject> &Object,
+                         const FString &FieldName, bool Default) {
+  bool Value = Default;
+  return Object->TryGetBoolField(FieldName, Value) ? Value : Default;
+}
+
+/**
+ * Recursively builds a JSON value array from a string array.
+ * User Story: As a maintainer, I need this note so the surrounding code intent
+ * stays clear during maintenance and debugging.
+ */
+inline void BuildStopValuesRecursive(const TArray<FString> &Source,
+                                     TArray<TSharedPtr<FJsonValue>> &Out,
+                                     int32 Index) {
+  Index < Source.Num()
+      ? (Out.Add(MakeShared<FJsonValueString>(Source[Index])),
+         BuildStopValuesRecursive(Source, Out, Index + 1), void())
+      : void();
+}
+
+/**
+ * Recursively extracts strings from a JSON value array with validity check.
+ * User Story: As a maintainer, I need this note so the surrounding code intent
+ * stays clear during maintenance and debugging.
+ */
+inline void ExtractStopValuesRecursive(
+    const TArray<TSharedPtr<FJsonValue>> &Source, TArray<FString> &Out,
+    int32 Index) {
+  Index < Source.Num()
+      ? (Source[Index].IsValid()
+             ? (Out.Add(Source[Index]->AsString()), void())
+             : void(),
+         ExtractStopValuesRecursive(Source, Out, Index + 1), void())
+      : void();
+}
+
+} // namespace detail
 
 /**
  * Parses a JSON object string, defaulting to an empty object on blank input.
  * User Story: As JSON-backed runtime parsing, I need safe object parsing so
  * blank or malformed payloads do not crash reducers and thunks.
  */
-inline bool ParseJsonObject(const FString &Json, TSharedPtr<FJsonObject> &OutObject) {
-  if (Json.IsEmpty()) {
-    OutObject = MakeShared<FJsonObject>();
-    return true;
-  }
-
-  TSharedRef<TJsonReader<>> Reader = TJsonReaderFactory<>::Create(Json);
-  if (FJsonSerializer::Deserialize(Reader, OutObject) && OutObject.IsValid()) {
-    return true;
-  }
-
-  OutObject = MakeShared<FJsonObject>();
-  return false;
+inline bool ParseJsonObject(const FString &Json,
+                             TSharedPtr<FJsonObject> &OutObject) {
+  return Json.IsEmpty()
+             ? (OutObject = MakeShared<FJsonObject>(), true)
+             : [&]() -> bool {
+                 TSharedRef<TJsonReader<>> Reader =
+                     TJsonReaderFactory<>::Create(Json);
+                 return (FJsonSerializer::Deserialize(Reader, OutObject) &&
+                         OutObject.IsValid())
+                            ? true
+                            : (OutObject = MakeShared<FJsonObject>(), false);
+               }();
 }
 
 /**
@@ -47,14 +116,10 @@ inline bool ParseJsonArray(const FString &Json,
 inline FString StringifyObject(const TSharedPtr<FJsonObject> &Object) {
   FString Json;
   const TSharedRef<TJsonWriter<>> Writer = TJsonWriterFactory<>::Create(&Json);
-  if (Object.IsValid()) {
-    FJsonSerializer::Serialize(Object.ToSharedRef(), Writer);
-  } else {
-    Writer->WriteObjectStart();
-    Writer->WriteObjectEnd();
-    Writer->Close();
-  }
-  return Json;
+  return Object.IsValid()
+             ? (FJsonSerializer::Serialize(Object.ToSharedRef(), Writer), Json)
+             : (Writer->WriteObjectStart(), Writer->WriteObjectEnd(),
+                Writer->Close(), Json);
 }
 
 /**
@@ -75,31 +140,41 @@ inline FString StringifyArray(const TArray<TSharedPtr<FJsonValue>> &Array) {
  * mixed-type fields can be preserved without custom branching everywhere.
  */
 inline FString StringifyValue(const TSharedPtr<FJsonValue> &Value) {
-  if (!Value.IsValid()) {
-    return TEXT("null");
-  }
-
-  if (Value->Type == EJson::Object) {
-    return StringifyObject(Value->AsObject());
-  }
-
-  if (Value->Type == EJson::Array) {
-    return StringifyArray(Value->AsArray());
-  }
-
-  if (Value->Type == EJson::String) {
-    return FString::Printf(TEXT("\"%s\""), *Value->AsString());
-  }
-
-  if (Value->Type == EJson::Boolean) {
-    return Value->AsBool() ? TEXT("true") : TEXT("false");
-  }
-
-  if (Value->Type == EJson::Number) {
-    return FString::SanitizeFloat(Value->AsNumber());
-  }
-
-  return TEXT("null");
+  return !Value.IsValid()
+             ? FString(TEXT("null"))
+             : func::or_else(
+                   func::multi_match<EJson, FString>(
+                       Value->Type,
+                       {func::when<EJson, FString>(
+                            func::equals<EJson>(EJson::Object),
+                            [&](const EJson &) {
+                              return StringifyObject(Value->AsObject());
+                            }),
+                        func::when<EJson, FString>(
+                            func::equals<EJson>(EJson::Array),
+                            [&](const EJson &) {
+                              return StringifyArray(Value->AsArray());
+                            }),
+                        func::when<EJson, FString>(
+                            func::equals<EJson>(EJson::String),
+                            [&](const EJson &) {
+                              return FString::Printf(TEXT("\"%s\""),
+                                                     *Value->AsString());
+                            }),
+                        func::when<EJson, FString>(
+                            func::equals<EJson>(EJson::Boolean),
+                            [&](const EJson &) {
+                              return Value->AsBool()
+                                         ? FString(TEXT("true"))
+                                         : FString(TEXT("false"));
+                            }),
+                        func::when<EJson, FString>(
+                            func::equals<EJson>(EJson::Number),
+                            [&](const EJson &) {
+                              return FString::SanitizeFloat(
+                                  Value->AsNumber());
+                            })}),
+                   FString(TEXT("null")));
 }
 
 /**
@@ -109,12 +184,13 @@ inline FString StringifyValue(const TSharedPtr<FJsonValue> &Value) {
  */
 inline bool HasNonNullField(const TSharedPtr<FJsonObject> &Object,
                             const FString &FieldName) {
-  if (!Object.IsValid() || !Object->HasField(FieldName)) {
-    return false;
-  }
-
-  const TSharedPtr<FJsonValue> Value = Object->TryGetField(FieldName);
-  return Value.IsValid() && Value->Type != EJson::Null;
+  return (!Object.IsValid() || !Object->HasField(FieldName))
+             ? false
+             : [&]() -> bool {
+                 const TSharedPtr<FJsonValue> Value =
+                     Object->TryGetField(FieldName);
+                 return Value.IsValid() && Value->Type != EJson::Null;
+               }();
 }
 
 /**
@@ -125,20 +201,17 @@ inline bool HasNonNullField(const TSharedPtr<FJsonObject> &Object,
 inline FString OptionalStringFromField(const TSharedPtr<FJsonObject> &Object,
                                        const FString &FieldName,
                                        const FString &Fallback = TEXT("")) {
-  if (!HasNonNullField(Object, FieldName)) {
-    return Fallback;
-  }
-
-  const TSharedPtr<FJsonValue> Value = Object->TryGetField(FieldName);
-  if (!Value.IsValid()) {
-    return Fallback;
-  }
-
-  if (Value->Type == EJson::String) {
-    return Value->AsString();
-  }
-
-  return StringifyValue(Value);
+  return !HasNonNullField(Object, FieldName)
+             ? Fallback
+             : [&]() -> FString {
+                 const TSharedPtr<FJsonValue> Value =
+                     Object->TryGetField(FieldName);
+                 return !Value.IsValid()
+                            ? Fallback
+                            : (Value->Type == EJson::String
+                                   ? Value->AsString()
+                                   : StringifyValue(Value));
+               }();
 }
 
 /**
@@ -160,24 +233,20 @@ inline TSharedPtr<FJsonObject> ParseJsonObjectOrEmpty(const FString &Json) {
 inline FString JsonStringFromField(const TSharedPtr<FJsonObject> &Object,
                                    const FString &FieldName,
                                    const FString &Fallback = TEXT("{}")) {
-  if (!Object.IsValid() || !Object->HasField(FieldName)) {
-    return Fallback;
-  }
-
-  const TSharedPtr<FJsonValue> Value = Object->TryGetField(FieldName);
-  if (!Value.IsValid() || Value->Type == EJson::Null) {
-    return Fallback;
-  }
-
-  if (Value->Type == EJson::Object || Value->Type == EJson::Array) {
-    return StringifyValue(Value);
-  }
-
-  if (Value->Type == EJson::String) {
-    return Value->AsString();
-  }
-
-  return StringifyValue(Value);
+  return (!Object.IsValid() || !Object->HasField(FieldName))
+             ? Fallback
+             : [&]() -> FString {
+                 const TSharedPtr<FJsonValue> Value =
+                     Object->TryGetField(FieldName);
+                 return (!Value.IsValid() || Value->Type == EJson::Null)
+                            ? Fallback
+                            : ((Value->Type == EJson::Object ||
+                                Value->Type == EJson::Array)
+                                   ? StringifyValue(Value)
+                                   : (Value->Type == EJson::String
+                                          ? Value->AsString()
+                                          : StringifyValue(Value)));
+               }();
 }
 
 /**
@@ -189,28 +258,25 @@ inline void SetFieldFromJsonString(const TSharedRef<FJsonObject> &Object,
                                    const FString &FieldName,
                                    const FString &JsonString,
                                    bool bOmitWhenEmpty = true) {
-  if (JsonString.IsEmpty()) {
-    if (!bOmitWhenEmpty) {
-      Object->SetObjectField(FieldName, MakeShared<FJsonObject>());
-    }
-    return;
-  }
-
-  TSharedPtr<FJsonObject> JsonObject;
-  if (ParseJsonObject(JsonString, JsonObject) && JsonObject.IsValid()) {
-    Object->SetObjectField(FieldName, JsonObject);
-    return;
-  }
-
-  TArray<TSharedPtr<FJsonValue>> JsonArray;
-  if (ParseJsonArray(JsonString, JsonArray)) {
-    Object->SetArrayField(FieldName, JsonArray);
-    return;
-  }
-
-  if (!bOmitWhenEmpty || !JsonString.IsEmpty()) {
-    Object->SetStringField(FieldName, JsonString);
-  }
+  JsonString.IsEmpty()
+      ? (bOmitWhenEmpty
+             ? void()
+             : (Object->SetObjectField(FieldName, MakeShared<FJsonObject>()),
+                void()))
+      : [&]() {
+          TSharedPtr<FJsonObject> JsonObject;
+          (ParseJsonObject(JsonString, JsonObject) && JsonObject.IsValid())
+              ? (Object->SetObjectField(FieldName, JsonObject), void())
+              : [&]() {
+                  TArray<TSharedPtr<FJsonValue>> JsonArray;
+                  ParseJsonArray(JsonString, JsonArray)
+                      ? (Object->SetArrayField(FieldName, JsonArray), void())
+                      : ((!bOmitWhenEmpty || !JsonString.IsEmpty())
+                             ? (Object->SetStringField(FieldName, JsonString),
+                                void())
+                             : void());
+                }();
+        }();
 }
 
 /**
@@ -248,23 +314,30 @@ inline TSharedPtr<FJsonObject> StateToObject(const FAgentState &State) {
  */
 inline TSharedRef<FJsonObject> ActionToObject(const FAgentAction &Action) {
   const TSharedRef<FJsonObject> Object = MakeShared<FJsonObject>();
-  if (!Action.Type.IsEmpty()) {
-    Object->SetStringField(TEXT("type"), Action.Type);
-  }
-  if (!Action.Target.IsEmpty()) {
-    Object->SetStringField(TEXT("target"), Action.Target);
-  }
-  if (!Action.Reason.IsEmpty()) {
-    Object->SetStringField(TEXT("reason"), Action.Reason);
-  }
-  if (!FMath::IsNearlyEqual(Action.Confidence, 1.0f) || !Action.Type.IsEmpty()) {
-    Object->SetNumberField(TEXT("confidence"), Action.Confidence);
-  }
-  if (!Action.Signature.IsEmpty()) {
-    Object->SetStringField(TEXT("signature"), Action.Signature);
-  }
-  SetFieldFromJsonString(Object, TEXT("payload"), Action.PayloadJson);
-  return Object;
+  return (detail::SetIfNonEmpty(Object, TEXT("type"), Action.Type),
+          detail::SetIfNonEmpty(Object, TEXT("target"), Action.Target),
+          detail::SetIfNonEmpty(Object, TEXT("reason"), Action.Reason),
+          (!FMath::IsNearlyEqual(Action.Confidence, 1.0f) ||
+           !Action.Type.IsEmpty())
+              ? (Object->SetNumberField(TEXT("confidence"), Action.Confidence),
+                 void())
+              : void(),
+          detail::SetIfNonEmpty(Object, TEXT("signature"), Action.Signature),
+          SetFieldFromJsonString(Object, TEXT("payload"), Action.PayloadJson),
+          Object);
+}
+
+/**
+ * Extracts a string field with a primary name, falling back to an alias.
+ * User Story: As a maintainer, I need this note so the surrounding code intent
+ * stays clear during maintenance and debugging.
+ */
+inline FString ExtractWithAlias(const TSharedPtr<FJsonObject> &Object,
+                                const FString &Primary,
+                                const FString &Alias) {
+  const FString PrimaryValue = OptionalStringFromField(Object, Primary);
+  return !PrimaryValue.IsEmpty() ? PrimaryValue
+                                 : OptionalStringFromField(Object, Alias);
 }
 
 /**
@@ -274,35 +347,21 @@ inline TSharedRef<FJsonObject> ActionToObject(const FAgentAction &Action) {
  */
 inline FAgentAction ActionFromObject(const TSharedPtr<FJsonObject> &Object) {
   FAgentAction Action;
-  if (!Object.IsValid()) {
-    return Action;
-  }
-
-  /**
-   * Normalize API field names: the Haskell API may return gaType/actionTarget/
-   * actionReason instead of type/target/reason. Match TS postVerdict transform.
-   * User Story: As a maintainer, I need this note so the surrounding code intent stays clear during maintenance and debugging.
-   */
-  Action.Type = OptionalStringFromField(Object, TEXT("gaType"));
-  if (Action.Type.IsEmpty()) {
-    Action.Type = OptionalStringFromField(Object, TEXT("type"));
-  }
-  Action.Target = OptionalStringFromField(Object, TEXT("actionTarget"));
-  if (Action.Target.IsEmpty()) {
-    Action.Target = OptionalStringFromField(Object, TEXT("target"));
-  }
-  Action.Reason = OptionalStringFromField(Object, TEXT("actionReason"));
-  if (Action.Reason.IsEmpty()) {
-    Action.Reason = OptionalStringFromField(Object, TEXT("reason"));
-  }
-
-  double Confidence = 1.0;
-  if (Object->TryGetNumberField(TEXT("confidence"), Confidence)) {
-    Action.Confidence = static_cast<float>(Confidence);
-  }
-  Action.Signature = OptionalStringFromField(Object, TEXT("signature"));
-  Action.PayloadJson = JsonStringFromField(Object, TEXT("payload"), TEXT("{}"));
-  return Action;
+  return !Object.IsValid()
+             ? Action
+             : (Action.Type =
+                    ExtractWithAlias(Object, TEXT("gaType"), TEXT("type")),
+                Action.Target =
+                    ExtractWithAlias(Object, TEXT("actionTarget"), TEXT("target")),
+                Action.Reason =
+                    ExtractWithAlias(Object, TEXT("actionReason"), TEXT("reason")),
+                Action.Confidence = detail::TryGetNumberAs<float>(
+                    Object, TEXT("confidence"), Action.Confidence),
+                Action.Signature =
+                    OptionalStringFromField(Object, TEXT("signature")),
+                Action.PayloadJson =
+                    JsonStringFromField(Object, TEXT("payload"), TEXT("{}")),
+                Action);
 }
 
 /**
@@ -313,10 +372,10 @@ inline FAgentAction ActionFromObject(const TSharedPtr<FJsonObject> &Object) {
 inline TSharedRef<FJsonObject>
 MemoryStoreInstructionToObject(const FMemoryStoreInstruction &Instruction) {
   const TSharedRef<FJsonObject> Object = MakeShared<FJsonObject>();
-  Object->SetStringField(TEXT("text"), Instruction.Text);
-  Object->SetStringField(TEXT("type"), Instruction.Type);
-  Object->SetNumberField(TEXT("importance"), Instruction.Importance);
-  return Object;
+  return (Object->SetStringField(TEXT("text"), Instruction.Text),
+          Object->SetStringField(TEXT("type"), Instruction.Type),
+          Object->SetNumberField(TEXT("importance"), Instruction.Importance),
+          Object);
 }
 
 /**
@@ -327,17 +386,13 @@ MemoryStoreInstructionToObject(const FMemoryStoreInstruction &Instruction) {
 inline FMemoryStoreInstruction
 MemoryStoreInstructionFromObject(const TSharedPtr<FJsonObject> &Object) {
   FMemoryStoreInstruction Instruction;
-  if (!Object.IsValid()) {
-    return Instruction;
-  }
-
-  Instruction.Text = Object->GetStringField(TEXT("text"));
-  Instruction.Type = Object->GetStringField(TEXT("type"));
-  double Importance = Instruction.Importance;
-  if (Object->TryGetNumberField(TEXT("importance"), Importance)) {
-    Instruction.Importance = static_cast<float>(Importance);
-  }
-  return Instruction;
+  return !Object.IsValid()
+             ? Instruction
+             : (Instruction.Text = Object->GetStringField(TEXT("text")),
+                Instruction.Type = Object->GetStringField(TEXT("type")),
+                Instruction.Importance = detail::TryGetNumberAs<float>(
+                    Object, TEXT("importance"), Instruction.Importance),
+                Instruction);
 }
 
 /**
@@ -345,13 +400,14 @@ MemoryStoreInstructionFromObject(const TSharedPtr<FJsonObject> &Object) {
  * User Story: As recall payload builders, I need recalled memories encoded so
  * context assembly can include structured memory data.
  */
-inline TSharedRef<FJsonObject> RecalledMemoryToObject(const FRecalledMemory &Memory) {
+inline TSharedRef<FJsonObject>
+RecalledMemoryToObject(const FRecalledMemory &Memory) {
   const TSharedRef<FJsonObject> Object = MakeShared<FJsonObject>();
-  Object->SetStringField(TEXT("text"), Memory.Text);
-  Object->SetStringField(TEXT("type"), Memory.Type);
-  Object->SetNumberField(TEXT("importance"), Memory.Importance);
-  Object->SetNumberField(TEXT("similarity"), Memory.Similarity);
-  return Object;
+  return (Object->SetStringField(TEXT("text"), Memory.Text),
+          Object->SetStringField(TEXT("type"), Memory.Type),
+          Object->SetNumberField(TEXT("importance"), Memory.Importance),
+          Object->SetNumberField(TEXT("similarity"), Memory.Similarity),
+          Object);
 }
 
 /**
@@ -359,23 +415,18 @@ inline TSharedRef<FJsonObject> RecalledMemoryToObject(const FRecalledMemory &Mem
  * User Story: As recall response readers, I need recalled memories decoded so
  * prompt builders can consume similarity-ranked memory data.
  */
-inline FRecalledMemory RecalledMemoryFromObject(const TSharedPtr<FJsonObject> &Object) {
+inline FRecalledMemory
+RecalledMemoryFromObject(const TSharedPtr<FJsonObject> &Object) {
   FRecalledMemory Memory;
-  if (!Object.IsValid()) {
-    return Memory;
-  }
-
-  Memory.Text = Object->GetStringField(TEXT("text"));
-  Memory.Type = Object->GetStringField(TEXT("type"));
-  double Importance = Memory.Importance;
-  double Similarity = Memory.Similarity;
-  if (Object->TryGetNumberField(TEXT("importance"), Importance)) {
-    Memory.Importance = static_cast<float>(Importance);
-  }
-  if (Object->TryGetNumberField(TEXT("similarity"), Similarity)) {
-    Memory.Similarity = static_cast<float>(Similarity);
-  }
-  return Memory;
+  return !Object.IsValid()
+             ? Memory
+             : (Memory.Text = Object->GetStringField(TEXT("text")),
+                Memory.Type = Object->GetStringField(TEXT("type")),
+                Memory.Importance = detail::TryGetNumberAs<float>(
+                    Object, TEXT("importance"), Memory.Importance),
+                Memory.Similarity = detail::TryGetNumberAs<float>(
+                    Object, TEXT("similarity"), Memory.Similarity),
+                Memory);
 }
 
 /**
@@ -385,15 +436,14 @@ inline FRecalledMemory RecalledMemoryFromObject(const TSharedPtr<FJsonObject> &O
  */
 inline TSharedRef<FJsonObject> MemoryItemToObject(const FMemoryItem &Memory) {
   const TSharedRef<FJsonObject> Object = MakeShared<FJsonObject>();
-  if (!Memory.Id.IsEmpty()) {
-    Object->SetStringField(TEXT("id"), Memory.Id);
-  }
-  Object->SetStringField(TEXT("text"), Memory.Text);
-  Object->SetStringField(TEXT("type"), Memory.Type);
-  Object->SetNumberField(TEXT("importance"), Memory.Importance);
-  Object->SetNumberField(TEXT("similarity"), Memory.Similarity);
-  Object->SetNumberField(TEXT("timestamp"), static_cast<double>(Memory.Timestamp));
-  return Object;
+  return (detail::SetIfNonEmpty(Object, TEXT("id"), Memory.Id),
+          Object->SetStringField(TEXT("text"), Memory.Text),
+          Object->SetStringField(TEXT("type"), Memory.Type),
+          Object->SetNumberField(TEXT("importance"), Memory.Importance),
+          Object->SetNumberField(TEXT("similarity"), Memory.Similarity),
+          Object->SetNumberField(TEXT("timestamp"),
+                                 static_cast<double>(Memory.Timestamp)),
+          Object);
 }
 
 /**
@@ -403,26 +453,19 @@ inline TSharedRef<FJsonObject> MemoryItemToObject(const FMemoryItem &Memory) {
  */
 inline FMemoryItem MemoryItemFromObject(const TSharedPtr<FJsonObject> &Object) {
   FMemoryItem Memory;
-  if (!Object.IsValid()) {
-    return Memory;
-  }
-
-  Memory.Id = Object->GetStringField(TEXT("id"));
-  Memory.Text = Object->GetStringField(TEXT("text"));
-  Memory.Type = Object->GetStringField(TEXT("type"));
-  double Importance = Memory.Importance;
-  double Similarity = Memory.Similarity;
-  double Timestamp = static_cast<double>(Memory.Timestamp);
-  if (Object->TryGetNumberField(TEXT("importance"), Importance)) {
-    Memory.Importance = static_cast<float>(Importance);
-  }
-  if (Object->TryGetNumberField(TEXT("similarity"), Similarity)) {
-    Memory.Similarity = static_cast<float>(Similarity);
-  }
-  if (Object->TryGetNumberField(TEXT("timestamp"), Timestamp)) {
-    Memory.Timestamp = static_cast<int64>(Timestamp);
-  }
-  return Memory;
+  return !Object.IsValid()
+             ? Memory
+             : (Memory.Id = Object->GetStringField(TEXT("id")),
+                Memory.Text = Object->GetStringField(TEXT("text")),
+                Memory.Type = Object->GetStringField(TEXT("type")),
+                Memory.Importance = detail::TryGetNumberAs<float>(
+                    Object, TEXT("importance"), Memory.Importance),
+                Memory.Similarity = detail::TryGetNumberAs<float>(
+                    Object, TEXT("similarity"), Memory.Similarity),
+                Memory.Timestamp = detail::TryGetNumberAs<int64>(
+                    Object, TEXT("timestamp"),
+                    static_cast<int64>(Memory.Timestamp)),
+                Memory);
 }
 
 /**
@@ -430,27 +473,26 @@ inline FMemoryItem MemoryItemFromObject(const TSharedPtr<FJsonObject> &Object) {
  * User Story: As cortex request builders, I need generation config encoded so
  * remote and local completion requests share the same config shape.
  */
-inline TSharedRef<FJsonObject> CortexConfigToObject(const FCortexConfig &Config) {
+inline TSharedRef<FJsonObject>
+CortexConfigToObject(const FCortexConfig &Config) {
   const TSharedRef<FJsonObject> Object = MakeShared<FJsonObject>();
-  if (!Config.Model.IsEmpty()) {
-    Object->SetStringField(TEXT("model"), Config.Model);
-  }
-  Object->SetBoolField(TEXT("useGPU"), Config.UseGPU);
-  Object->SetNumberField(TEXT("maxTokens"), Config.MaxTokens);
-  Object->SetNumberField(TEXT("temperature"), Config.Temperature);
-  Object->SetNumberField(TEXT("topK"), Config.TopK);
-  Object->SetNumberField(TEXT("topP"), Config.TopP);
-
-  if (Config.Stop.Num() > 0) {
-    TArray<TSharedPtr<FJsonValue>> StopValues;
-    for (const FString &Value : Config.Stop) {
-      StopValues.Add(MakeShared<FJsonValueString>(Value));
-    }
-    Object->SetArrayField(TEXT("stop"), StopValues);
-  }
-
-  SetFieldFromJsonString(Object, TEXT("jsonSchema"), Config.JsonSchemaJson);
-  return Object;
+  return (detail::SetIfNonEmpty(Object, TEXT("model"), Config.Model),
+          Object->SetBoolField(TEXT("useGPU"), Config.UseGPU),
+          Object->SetNumberField(TEXT("maxTokens"), Config.MaxTokens),
+          Object->SetNumberField(TEXT("temperature"), Config.Temperature),
+          Object->SetNumberField(TEXT("topK"), Config.TopK),
+          Object->SetNumberField(TEXT("topP"), Config.TopP),
+          Config.Stop.Num() > 0
+              ? [&]() {
+                  TArray<TSharedPtr<FJsonValue>> StopValues;
+                  StopValues.Reserve(Config.Stop.Num());
+                  detail::BuildStopValuesRecursive(Config.Stop, StopValues, 0);
+                  Object->SetArrayField(TEXT("stop"), StopValues);
+                }()
+              : void(),
+          SetFieldFromJsonString(Object, TEXT("jsonSchema"),
+                                 Config.JsonSchemaJson),
+          Object);
 }
 
 /**
@@ -458,44 +500,36 @@ inline TSharedRef<FJsonObject> CortexConfigToObject(const FCortexConfig &Config)
  * User Story: As cortex response readers, I need generation config decoded so
  * returned settings can be reapplied or inspected in runtime state.
  */
-inline FCortexConfig CortexConfigFromObject(const TSharedPtr<FJsonObject> &Object) {
+inline FCortexConfig
+CortexConfigFromObject(const TSharedPtr<FJsonObject> &Object) {
   FCortexConfig Config;
-  if (!Object.IsValid()) {
-    return Config;
-  }
-
-  Config.Model = OptionalStringFromField(Object, TEXT("model"));
-  bool bUseGpu = Config.UseGPU;
-  if (Object->TryGetBoolField(TEXT("useGPU"), bUseGpu)) {
-    Config.UseGPU = bUseGpu;
-  }
-
-  double NumericValue = 0.0;
-  if (Object->TryGetNumberField(TEXT("maxTokens"), NumericValue)) {
-    Config.MaxTokens = static_cast<int32>(NumericValue);
-  }
-  if (Object->TryGetNumberField(TEXT("temperature"), NumericValue)) {
-    Config.Temperature = static_cast<float>(NumericValue);
-  }
-  if (Object->TryGetNumberField(TEXT("topK"), NumericValue)) {
-    Config.TopK = static_cast<int32>(NumericValue);
-  }
-  if (Object->TryGetNumberField(TEXT("topP"), NumericValue)) {
-    Config.TopP = static_cast<float>(NumericValue);
-  }
-
-  const TArray<TSharedPtr<FJsonValue>> *StopValues = nullptr;
-  if (Object->TryGetArrayField(TEXT("stop"), StopValues) && StopValues) {
-    Config.Stop.Empty(StopValues->Num());
-    for (const TSharedPtr<FJsonValue> &Value : *StopValues) {
-      if (Value.IsValid()) {
-        Config.Stop.Add(Value->AsString());
-      }
-    }
-  }
-
-  Config.JsonSchemaJson = JsonStringFromField(Object, TEXT("jsonSchema"), TEXT(""));
-  return Config;
+  return !Object.IsValid()
+             ? Config
+             : (Config.Model =
+                    OptionalStringFromField(Object, TEXT("model")),
+                Config.UseGPU = detail::TryGetBoolAs(Object, TEXT("useGPU"),
+                                                     Config.UseGPU),
+                Config.MaxTokens = detail::TryGetNumberAs<int32>(
+                    Object, TEXT("maxTokens"), Config.MaxTokens),
+                Config.Temperature = detail::TryGetNumberAs<float>(
+                    Object, TEXT("temperature"), Config.Temperature),
+                Config.TopK = detail::TryGetNumberAs<int32>(
+                    Object, TEXT("topK"), Config.TopK),
+                Config.TopP = detail::TryGetNumberAs<float>(
+                    Object, TEXT("topP"), Config.TopP),
+                [&]() {
+                  const TArray<TSharedPtr<FJsonValue>> *StopValues = nullptr;
+                  (Object->TryGetArrayField(TEXT("stop"), StopValues) &&
+                   StopValues)
+                      ? (Config.Stop.Empty(StopValues->Num()),
+                         detail::ExtractStopValuesRecursive(
+                             *StopValues, Config.Stop, 0),
+                         void())
+                      : void();
+                }(),
+                Config.JsonSchemaJson = JsonStringFromField(
+                    Object, TEXT("jsonSchema"), TEXT("")),
+                Config);
 }
 
 /**
@@ -506,10 +540,13 @@ inline FCortexConfig CortexConfigFromObject(const TSharedPtr<FJsonObject> &Objec
 inline TSharedRef<FJsonObject>
 ValidationContextToObject(const FBridgeValidationContext &Context) {
   const TSharedRef<FJsonObject> Object = MakeShared<FJsonObject>();
-  SetFieldFromJsonString(Object, TEXT("npcState"), Context.NpcStateJson);
-  SetFieldFromJsonString(Object, TEXT("worldState"), Context.WorldStateJson);
-  SetFieldFromJsonString(Object, TEXT("constraints"), Context.ConstraintsJson);
-  return Object;
+  return (SetFieldFromJsonString(Object, TEXT("npcState"),
+                                 Context.NpcStateJson),
+          SetFieldFromJsonString(Object, TEXT("worldState"),
+                                 Context.WorldStateJson),
+          SetFieldFromJsonString(Object, TEXT("constraints"),
+                                 Context.ConstraintsJson),
+          Object);
 }
 
 /**
@@ -520,22 +557,19 @@ ValidationContextToObject(const FBridgeValidationContext &Context) {
 inline FValidationResult
 ValidationResultFromObject(const TSharedPtr<FJsonObject> &Object) {
   FValidationResult Result;
-  if (!Object.IsValid()) {
-    Result.bValid = false;
-    Result.Reason = TEXT("Invalid validation response");
-    return Result;
-  }
-
-  bool bValid = Result.bValid;
-  if (Object->TryGetBoolField(TEXT("valid"), bValid)) {
-    Result.bValid = bValid;
-  }
-  Result.Reason = OptionalStringFromField(Object, TEXT("reason"));
-  if (Object->HasTypedField<EJson::Object>(TEXT("correctedAction"))) {
-    Result.CorrectedAction =
-        ActionFromObject(Object->GetObjectField(TEXT("correctedAction")));
-  }
-  return Result;
+  return !Object.IsValid()
+             ? (Result.bValid = false,
+                Result.Reason = TEXT("Invalid validation response"), Result)
+             : (Result.bValid = detail::TryGetBoolAs(Object, TEXT("valid"),
+                                                     Result.bValid),
+                Result.Reason =
+                    OptionalStringFromField(Object, TEXT("reason")),
+                Object->HasTypedField<EJson::Object>(TEXT("correctedAction"))
+                    ? (Result.CorrectedAction = ActionFromObject(
+                           Object->GetObjectField(TEXT("correctedAction"))),
+                       void())
+                    : void(),
+                Result);
 }
 
 /**
@@ -546,17 +580,17 @@ ValidationResultFromObject(const TSharedPtr<FJsonObject> &Object) {
 inline FArweaveUploadInstruction
 UploadInstructionFromObject(const TSharedPtr<FJsonObject> &Object) {
   FArweaveUploadInstruction Instruction;
-  if (!Object.IsValid()) {
-    return Instruction;
-  }
-
-  Instruction.UploadUrl = OptionalStringFromField(Object, TEXT("auiEndpoint"));
-  Instruction.ContentType =
-      OptionalStringFromField(Object, TEXT("auiContentType"));
-  Instruction.AuiAuthHeader =
-      OptionalStringFromField(Object, TEXT("auiAuthHeader"));
-  Instruction.PayloadJson = JsonStringFromField(Object, TEXT("auiPayload"), TEXT("{}"));
-  return Instruction;
+  return !Object.IsValid()
+             ? Instruction
+             : (Instruction.UploadUrl = OptionalStringFromField(
+                    Object, TEXT("auiEndpoint")),
+                Instruction.ContentType = OptionalStringFromField(
+                    Object, TEXT("auiContentType")),
+                Instruction.AuiAuthHeader = OptionalStringFromField(
+                    Object, TEXT("auiAuthHeader")),
+                Instruction.PayloadJson = JsonStringFromField(
+                    Object, TEXT("auiPayload"), TEXT("{}")),
+                Instruction);
 }
 
 /**
@@ -567,14 +601,14 @@ UploadInstructionFromObject(const TSharedPtr<FJsonObject> &Object) {
 inline TSharedRef<FJsonObject>
 UploadResultToObject(const FArweaveUploadResult &Result) {
   const TSharedRef<FJsonObject> Object = MakeShared<FJsonObject>();
-  Object->SetStringField(TEXT("aurTxId"), Result.TxId);
-  Object->SetNumberField(TEXT("aurStatus"),
-                         Result.StatusCode > 0 ? Result.StatusCode : FCString::Atoi(*Result.Status));
-  Object->SetBoolField(TEXT("aurSuccess"), Result.bSuccess);
-  if (!Result.Error.IsEmpty()) {
-    Object->SetStringField(TEXT("aurError"), Result.Error);
-  }
-  return Object;
+  return (Object->SetStringField(TEXT("aurTxId"), Result.TxId),
+          Object->SetNumberField(
+              TEXT("aurStatus"),
+              Result.StatusCode > 0 ? Result.StatusCode
+                                    : FCString::Atoi(*Result.Status)),
+          Object->SetBoolField(TEXT("aurSuccess"), Result.bSuccess),
+          detail::SetIfNonEmpty(Object, TEXT("aurError"), Result.Error),
+          Object);
 }
 
 /**
@@ -585,15 +619,13 @@ UploadResultToObject(const FArweaveUploadResult &Result) {
 inline FArweaveDownloadInstruction
 DownloadInstructionFromObject(const TSharedPtr<FJsonObject> &Object) {
   FArweaveDownloadInstruction Instruction;
-  if (!Object.IsValid()) {
-    return Instruction;
-  }
-
-  Instruction.GatewayUrl =
-      OptionalStringFromField(Object, TEXT("adiGatewayUrl"));
-  Instruction.TxId = OptionalStringFromField(Object, TEXT("adiExpectedTxId"));
-  Instruction.ExpectedTxId = Instruction.TxId;
-  return Instruction;
+  return !Object.IsValid()
+             ? Instruction
+             : (Instruction.GatewayUrl = OptionalStringFromField(
+                    Object, TEXT("adiGatewayUrl")),
+                Instruction.TxId = OptionalStringFromField(
+                    Object, TEXT("adiExpectedTxId")),
+                Instruction.ExpectedTxId = Instruction.TxId, Instruction);
 }
 
 /**
@@ -604,16 +636,33 @@ DownloadInstructionFromObject(const TSharedPtr<FJsonObject> &Object) {
 inline TSharedRef<FJsonObject>
 DownloadResultToObject(const FArweaveDownloadResult &Result) {
   const TSharedRef<FJsonObject> Object = MakeShared<FJsonObject>();
-  SetFieldFromJsonString(
-      Object, TEXT("adrBody"),
-      !Result.BodyJson.IsEmpty() ? Result.BodyJson : Result.Payload, false);
-  Object->SetNumberField(TEXT("adrStatus"), Result.StatusCode);
-  Object->SetBoolField(TEXT("adrSuccess"), Result.bSuccess);
-  if (!Result.Error.IsEmpty()) {
-    Object->SetStringField(TEXT("adrError"), Result.Error);
-  }
-  return Object;
+  return (SetFieldFromJsonString(
+              Object, TEXT("adrBody"),
+              !Result.BodyJson.IsEmpty() ? Result.BodyJson : Result.Payload,
+              false),
+          Object->SetNumberField(TEXT("adrStatus"), Result.StatusCode),
+          Object->SetBoolField(TEXT("adrSuccess"), Result.bSuccess),
+          detail::SetIfNonEmpty(Object, TEXT("adrError"), Result.Error),
+          Object);
 }
+
+/**
+ * Recursively extracts memory items from a JSON value array.
+ * User Story: As a maintainer, I need this note so the surrounding code intent
+ * stays clear during maintenance and debugging.
+ */
+namespace detail {
+inline void ExtractMemoryItemsRecursive(
+    const TArray<TSharedPtr<FJsonValue>> &Source, TArray<FMemoryItem> &Out,
+    int32 Index) {
+  Index < Source.Num()
+      ? ((Source[Index].IsValid() && Source[Index]->Type == EJson::Object)
+             ? (Out.Add(MemoryItemFromObject(Source[Index]->AsObject())), void())
+             : void(),
+         ExtractMemoryItemsRecursive(Source, Out, Index + 1), void())
+      : void();
+}
+} // namespace detail
 
 /**
  * Deserializes a soul payload from API JSON.
@@ -622,27 +671,28 @@ DownloadResultToObject(const FArweaveDownloadResult &Result) {
  */
 inline FSoul SoulFromObject(const TSharedPtr<FJsonObject> &Object) {
   FSoul Soul;
-  if (!Object.IsValid()) {
-    return Soul;
-  }
-
-  Soul.Id = OptionalStringFromField(Object, TEXT("id"));
-  Soul.Version = OptionalStringFromField(Object, TEXT("version"));
-  Soul.Name = OptionalStringFromField(Object, TEXT("name"));
-  Soul.Persona = OptionalStringFromField(Object, TEXT("persona"));
-  Soul.Signature = OptionalStringFromField(Object, TEXT("signature"));
-  Soul.State = StateFromField(Object, TEXT("state"));
-
-  const TArray<TSharedPtr<FJsonValue>> *MemoryValues = nullptr;
-  if (Object->TryGetArrayField(TEXT("memories"), MemoryValues) && MemoryValues) {
-    Soul.Memories.Empty(MemoryValues->Num());
-    for (const TSharedPtr<FJsonValue> &Value : *MemoryValues) {
-      if (Value.IsValid() && Value->Type == EJson::Object) {
-        Soul.Memories.Add(MemoryItemFromObject(Value->AsObject()));
-      }
-    }
-  }
-  return Soul;
+  return !Object.IsValid()
+             ? Soul
+             : (Soul.Id = OptionalStringFromField(Object, TEXT("id")),
+                Soul.Version =
+                    OptionalStringFromField(Object, TEXT("version")),
+                Soul.Name = OptionalStringFromField(Object, TEXT("name")),
+                Soul.Persona =
+                    OptionalStringFromField(Object, TEXT("persona")),
+                Soul.Signature =
+                    OptionalStringFromField(Object, TEXT("signature")),
+                Soul.State = StateFromField(Object, TEXT("state")),
+                [&]() {
+                  const TArray<TSharedPtr<FJsonValue>> *MemoryValues = nullptr;
+                  (Object->TryGetArrayField(TEXT("memories"), MemoryValues) &&
+                   MemoryValues)
+                      ? (Soul.Memories.Empty(MemoryValues->Num()),
+                         detail::ExtractMemoryItemsRecursive(
+                             *MemoryValues, Soul.Memories, 0),
+                         void())
+                      : void();
+                }(),
+                Soul);
 }
 
 /**
@@ -650,16 +700,16 @@ inline FSoul SoulFromObject(const TSharedPtr<FJsonObject> &Object) {
  * User Story: As soul import flows, I need imported NPC results decoded so the
  * terminal and runtime can inspect the created NPC record.
  */
-inline FImportedNpc ImportedNpcFromObject(const TSharedPtr<FJsonObject> &Object) {
+inline FImportedNpc
+ImportedNpcFromObject(const TSharedPtr<FJsonObject> &Object) {
   FImportedNpc Npc;
-  if (!Object.IsValid()) {
-    return Npc;
-  }
-
-  Npc.NpcId = OptionalStringFromField(Object, TEXT("npcId"));
-  Npc.Persona = OptionalStringFromField(Object, TEXT("persona"));
-  Npc.DataJson = JsonStringFromField(Object, TEXT("data"));
-  return Npc;
+  return !Object.IsValid()
+             ? Npc
+             : (Npc.NpcId =
+                    OptionalStringFromField(Object, TEXT("npcId")),
+                Npc.Persona =
+                    OptionalStringFromField(Object, TEXT("persona")),
+                Npc.DataJson = JsonStringFromField(Object, TEXT("data")), Npc);
 }
 
 } // namespace JsonInterop
