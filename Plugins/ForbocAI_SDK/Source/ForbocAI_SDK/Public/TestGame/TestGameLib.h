@@ -8,6 +8,7 @@
 #include "CoreMinimal.h"
 #include "TestGame/TestGameStore.h"
 #include "TestGame/TestGameTypes.h"
+#include "Core/functional_core.hpp"
 
 namespace TestGame {
 
@@ -38,9 +39,9 @@ inline FCommandResult RunCommand(const FCommandSpec &Command) {
    */
   FString Executable;
   FString Args;
-  if (!Command.Command.Split(TEXT(" "), &Executable, &Args)) {
-    Executable = Command.Command;
-  }
+  (!Command.Command.Split(TEXT(" "), &Executable, &Args))
+      ? (void)(Executable = Command.Command)
+      : (void)0;
 
   void *ReadPipe = nullptr;
   void *WritePipe = nullptr;
@@ -50,34 +51,43 @@ inline FCommandResult RunCommand(const FCommandSpec &Command) {
       *Executable, *Args, false, true, true, nullptr, 0, nullptr, WritePipe,
       ReadPipe);
 
-  if (Proc.IsValid()) {
-    /**
-     * Wait with 10s timeout
-     * User Story: As a maintainer, I need this note so the surrounding code intent stays clear during maintenance and debugging.
-     */
-    const double StartTime = FPlatformTime::Seconds();
-    while (FPlatformProcess::IsProcRunning(Proc)) {
-      if (FPlatformTime::Seconds() - StartTime > 10.0) {
-        FPlatformProcess::TerminateProc(Proc, true);
-        break;
-      }
-      StdOut += FPlatformProcess::ReadPipe(ReadPipe);
-      FPlatformProcess::Sleep(0.01f);
+  /**
+   * Poll process with 10s timeout — recursive helper replaces while loop
+   * User Story: As a maintainer, I need this note so the surrounding code intent stays clear during maintenance and debugging.
+   */
+  struct ProcPoller {
+    static void Poll(FProcHandle &Proc, void *ReadPipe, FString &StdOut,
+                     double StartTime) {
+      return !FPlatformProcess::IsProcRunning(Proc)
+                 ? (void)0
+                 : (FPlatformTime::Seconds() - StartTime > 10.0)
+                       ? (FPlatformProcess::TerminateProc(Proc, true), void())
+                       : (StdOut += FPlatformProcess::ReadPipe(ReadPipe),
+                          FPlatformProcess::Sleep(0.01f),
+                          Poll(Proc, ReadPipe, StdOut, StartTime));
     }
-    StdOut += FPlatformProcess::ReadPipe(ReadPipe);
-    FPlatformProcess::GetProcReturnCode(Proc, &ReturnCode);
-    FPlatformProcess::CloseProc(Proc);
-  }
+  };
+
+  Proc.IsValid()
+      ? [&]() {
+          const double StartTime = FPlatformTime::Seconds();
+          ProcPoller::Poll(Proc, ReadPipe, StdOut, StartTime);
+          StdOut += FPlatformProcess::ReadPipe(ReadPipe);
+          FPlatformProcess::GetProcReturnCode(Proc, &ReturnCode);
+          FPlatformProcess::CloseProc(Proc);
+        }()
+      : (void)0;
 
   FPlatformProcess::ClosePipe(ReadPipe);
   FPlatformProcess::ClosePipe(WritePipe);
 
-  if (ReturnCode == 0) {
-    return {ETranscriptStatus::Ok,
-            StdOut.IsEmpty() ? TEXT("Command completed.") : StdOut.TrimEnd()};
-  }
-  return {ETranscriptStatus::Error,
-          StdOut.IsEmpty() ? TEXT("Command failed.") : StdOut.TrimEnd()};
+  return ReturnCode == 0
+             ? FCommandResult{ETranscriptStatus::Ok,
+                              StdOut.IsEmpty() ? FString(TEXT("Command completed."))
+                                               : StdOut.TrimEnd()}
+             : FCommandResult{ETranscriptStatus::Error,
+                              StdOut.IsEmpty() ? FString(TEXT("Command failed."))
+                                               : StdOut.TrimEnd()};
 }
 
 /**
@@ -85,35 +95,58 @@ inline FCommandResult RunCommand(const FCommandSpec &Command) {
  * User Story: As ASCII rendering, I need one cell resolver so the grid view
  * can show blocked tiles, the player, and NPCs consistently.
  */
+
+/**
+ * Recursive helper — scans blocked positions for a match.
+ * User Story: As a maintainer, I need this note so the surrounding code intent stays clear during maintenance and debugging.
+ */
+namespace detail {
+inline bool IsBlocked(const TArray<FPosition> &Blocked, const FPosition &Pos,
+                      int32 Index) {
+  return Index >= Blocked.Num()
+             ? false
+             : (Blocked[Index] == Pos ? true
+                                      : IsBlocked(Blocked, Pos, Index + 1));
+}
+
+/**
+ * Recursive helper — scans NPCs for a position match and returns the cell char.
+ * User Story: As a maintainer, I need this note so the surrounding code intent stays clear during maintenance and debugging.
+ */
+inline TCHAR NpcCellAt(const TArray<FGameNPC> &Npcs, const FPosition &Pos,
+                       int32 Index) {
+  return Index >= Npcs.Num()
+             ? TEXT('.')
+             : (Npcs[Index].Position == Pos
+                    ? (Npcs[Index].Id == TEXT("miller")
+                           ? TEXT('M')
+                           : (Npcs[Index].Id == TEXT("doomguard") ? TEXT('D')
+                                                                  : TEXT('N')))
+                    : NpcCellAt(Npcs, Pos, Index + 1));
+}
+} // namespace detail
+
 inline TCHAR CellAt(const FPosition &Pos, const FTestGameState &State) {
   /**
    * Check blocked
    * User Story: As a maintainer, I need this note so the surrounding code intent stays clear during maintenance and debugging.
    */
-  for (const FPosition &B : State.Grid.Blocked) {
-    if (B == Pos) return TEXT('#');
-  }
-
-  /**
-   * Check player
-   * User Story: As a maintainer, I need this note so the surrounding code intent stays clear during maintenance and debugging.
-   */
-  if (State.Player.Position == Pos) return TEXT('P');
-
-  /**
-   * Check NPCs
-   * User Story: As a maintainer, I need this note so the surrounding code intent stays clear during maintenance and debugging.
-   */
-  auto AllNpcs = GetNPCAdapter().getSelectors().selectAll(State.NPCs.Entities);
-  for (const FGameNPC &Npc : AllNpcs) {
-    if (Npc.Position == Pos) {
-      if (Npc.Id == TEXT("miller")) return TEXT('M');
-      if (Npc.Id == TEXT("doomguard")) return TEXT('D');
-      return TEXT('N');
-    }
-  }
-
-  return TEXT('.');
+  return detail::IsBlocked(State.Grid.Blocked, Pos, 0)
+             ? TEXT('#')
+             /**
+              * Check player
+              * User Story: As a maintainer, I need this note so the surrounding code intent stays clear during maintenance and debugging.
+              */
+             : (State.Player.Position == Pos
+                    ? TEXT('P')
+                    /**
+                     * Check NPCs
+                     * User Story: As a maintainer, I need this note so the surrounding code intent stays clear during maintenance and debugging.
+                     */
+                    : detail::NpcCellAt(
+                          GetNPCAdapter().getSelectors().selectAll(
+                              State.NPCs.Entities),
+                          Pos, 0));
 }
 
 /**
@@ -121,16 +154,38 @@ inline TCHAR CellAt(const FPosition &Pos, const FTestGameState &State) {
  * User Story: As terminal rendering, I need the full grid rendered so scenario
  * output can show the current world state in text form.
  */
+namespace detail {
+inline FString RenderRow(const FTestGameState &State, int32 X, int32 Width,
+                         const FString &Acc) {
+  return X >= Width
+             ? Acc
+             : RenderRow(State, X + 1, Width,
+                         Acc + (X > 0 ? FString(TEXT(" ")) : FString()) +
+                             CellAt(FPosition(X, (int32)0), State));
+}
+
+inline FString RenderRowAt(const FTestGameState &State, int32 Y, int32 X,
+                            int32 Width, const FString &Acc) {
+  return X >= Width
+             ? Acc
+             : RenderRowAt(State, Y, X + 1, Width,
+                            Acc + (X > 0 ? FString(TEXT(" ")) : FString()) +
+                                CellAt(FPosition(X, Y), State));
+}
+
+inline FString RenderRows(const FTestGameState &State, int32 Y, int32 Height,
+                           const FString &Acc) {
+  return Y >= Height
+             ? Acc
+             : RenderRows(State, Y + 1, Height,
+                           Acc + (Y > 0 ? FString(TEXT("\n")) : FString()) +
+                               RenderRowAt(State, Y, 0, State.Grid.Width,
+                                           FString()));
+}
+} // namespace detail
+
 inline FString RenderGrid(const FTestGameState &State) {
-  FString Result;
-  for (int32 Y = 0; Y < State.Grid.Height; ++Y) {
-    if (Y > 0) Result += TEXT("\n");
-    for (int32 X = 0; X < State.Grid.Width; ++X) {
-      if (X > 0) Result += TEXT(" ");
-      Result += CellAt(FPosition(X, Y), State);
-    }
-  }
-  return Result;
+  return detail::RenderRows(State, 0, State.Grid.Height, FString());
 }
 
 /**
@@ -170,13 +225,11 @@ inline bool CheckRuntimeConnectivity(
  * test game can prefer local runtime and fall back to remote API cleanly.
  */
 inline FString ResolveRuntimeUrl() {
-  if (CheckRuntimeConnectivity(TEXT("http://localhost:8080/status"))) {
-    return TEXT("http://localhost:8080");
-  }
-  if (CheckRuntimeConnectivity(TEXT("https://api.forboc.ai/status"))) {
-    return TEXT("https://api.forboc.ai");
-  }
-  return FString();
+  return CheckRuntimeConnectivity(TEXT("http://localhost:8080/status"))
+             ? FString(TEXT("http://localhost:8080"))
+             : (CheckRuntimeConnectivity(TEXT("https://api.forboc.ai/status"))
+                    ? FString(TEXT("https://api.forboc.ai"))
+                    : FString());
 }
 
 } // namespace TestGame

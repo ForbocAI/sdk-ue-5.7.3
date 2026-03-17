@@ -44,12 +44,12 @@ inline Thunk<FAgent> getNPC(const FString &NpcId) {
 inline Thunk<FAgent> postNPC(const FAgentConfig &Config) {
   TArray<FApiEndpointTag> Invalidates;
   Invalidates.Add(FApiEndpointTag{TEXT("NPC"), TEXT("LIST")});
-  if (!Config.Id.IsEmpty()) {
-    Invalidates.Add(FApiEndpointTag{TEXT("NPC"), Config.Id});
-  }
-  return Detail::MakePost<FAgentConfig, FAgent>(
+  return (!Config.Id.IsEmpty()
+              ? (Invalidates.Add(FApiEndpointTag{TEXT("NPC"), Config.Id}), void())
+              : void(),
+          Detail::MakePost<FAgentConfig, FAgent>(
       TEXT("postNPC"), SDKConfig::GetApiUrl() + TEXT("/npcs"), Config,
-      Invalidates);
+      Invalidates));
 }
 
 /**

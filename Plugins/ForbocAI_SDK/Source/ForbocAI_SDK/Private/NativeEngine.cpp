@@ -242,14 +242,16 @@ Context LoadEmbeddingModel(const FString &Path) {
  * local inference and embedding do not leak native resources.
  */
 void FreeModel(Context Ctx) {
-  if (!Ctx) {
-    return;
-  }
-
+  !Ctx ? void()
+       :
 #if WITH_FORBOC_NATIVE
-  LlamaFacade::FreeContext(
-      reinterpret_cast<struct llama_facade_context *>(Ctx));
+       (LlamaFacade::FreeContext(
+            reinterpret_cast<struct llama_facade_context *>(Ctx)),
+        void())
+#else
+       void()
 #endif
+      ;
 }
 
 /**
@@ -259,19 +261,29 @@ void FreeModel(Context Ctx) {
  */
 TArray<float> Embed(Context Ctx, const FString &Text) {
 #if WITH_FORBOC_NATIVE
-  if (Ctx) {
-    TArray<float> Out;
-    Out.SetNum(EmbeddingDimensions);
-    auto Utf8 = StringCast<UTF8CHAR>(*Text);
-    if (LlamaFacade::Embed(
-            reinterpret_cast<struct llama_facade_context *>(Ctx),
-            Utf8Bytes(Utf8.Get()), Out.GetData(), EmbeddingDimensions)) {
-      return Out;
-    }
-  }
-#endif
+  return Ctx
+             ? [&]() -> TArray<float> {
+                 TArray<float> Out;
+                 Out.SetNum(EmbeddingDimensions);
+                 auto Utf8 = StringCast<UTF8CHAR>(*Text);
+                 return LlamaFacade::Embed(
+                            reinterpret_cast<struct llama_facade_context *>(Ctx),
+                            Utf8Bytes(Utf8.Get()), Out.GetData(),
+                            EmbeddingDimensions)
+                            ? Out
+                            : (UE_LOG(LogTemp, Error,
+                                      TEXT("ForbocAI: Embed failed — native "
+                                           "embedding model required.")),
+                               TArray<float>());
+               }()
+             : (UE_LOG(LogTemp, Error,
+                       TEXT("ForbocAI: Embed failed — native embedding model "
+                            "required.")),
+                TArray<float>());
+#else
   UE_LOG(LogTemp, Error, TEXT("ForbocAI: Embed failed — native embedding model required."));
   return TArray<float>();
+#endif
 }
 
 /**
@@ -280,25 +292,29 @@ TArray<float> Embed(Context Ctx, const FString &Text) {
  * prompts can be completed even without advanced config options.
  */
 FString Infer(Context Ctx, const FString &Prompt, int32 MaxTokens) {
-  if (!Ctx) {
-    return TEXT("Error: Model not loaded");
-  }
-
+  return !Ctx
+             ? TEXT("Error: Model not loaded")
+             :
 #if WITH_FORBOC_NATIVE
-  auto Utf8Prompt = StringCast<UTF8CHAR>(*Prompt);
-  char *Result = LlamaFacade::Infer(
-      reinterpret_cast<struct llama_facade_context *>(Ctx),
-      Utf8Bytes(Utf8Prompt.Get()), MaxTokens, 0.8f);
-  if (Result) {
-    FString Out(UTF8_TO_TCHAR(Result));
-    free(Result);
-    return Out;
-  }
-  return TEXT("Error: Inference failed");
+             [&]() -> FString {
+               auto Utf8Prompt = StringCast<UTF8CHAR>(*Prompt);
+               char *Result = LlamaFacade::Infer(
+                   reinterpret_cast<struct llama_facade_context *>(Ctx),
+                   Utf8Bytes(Utf8Prompt.Get()), MaxTokens, 0.8f);
+               return Result ? [&]() -> FString {
+                 FString Out(UTF8_TO_TCHAR(Result));
+                 free(Result);
+                 return Out;
+               }()
+                              : TEXT("Error: Inference failed");
+             }()
 #else
-  UE_LOG(LogTemp, Error, TEXT("ForbocAI: Infer requires WITH_FORBOC_NATIVE=1. Native libs not available."));
-  return TEXT("Error: Native inference not available");
+             (UE_LOG(LogTemp, Error,
+                     TEXT("ForbocAI: Infer requires WITH_FORBOC_NATIVE=1. "
+                          "Native libs not available.")),
+              FString(TEXT("Error: Native inference not available")))
 #endif
+      ;
 }
 
 /**
@@ -309,30 +325,36 @@ FString Infer(Context Ctx, const FString &Prompt, int32 MaxTokens) {
  * truncation is applied.
  */
 FString Infer(Context Ctx, const FString &Prompt, const FCortexConfig &Config) {
-  if (!Config.GbnfGrammar.IsEmpty()) {
+  return !Config.GbnfGrammar.IsEmpty()
+             ?
 #if WITH_FORBOC_NATIVE
-    if (!Ctx) {
-      return TEXT("Error: Model not loaded");
-    }
-    auto Utf8Prompt = StringCast<UTF8CHAR>(*Prompt);
-    auto Utf8Grammar = StringCast<UTF8CHAR>(*Config.GbnfGrammar);
-    char *Result = LlamaFacade::InferWithGrammar(
-        reinterpret_cast<struct llama_facade_context *>(Ctx),
-        Utf8Bytes(Utf8Prompt.Get()), Config.MaxTokens,
-        Config.Temperature > 0.0f ? Config.Temperature : 0.8f,
-        Utf8Bytes(Utf8Grammar.Get()));
-    if (Result) {
-      FString Out(UTF8_TO_TCHAR(Result));
-      free(Result);
-      return ApplyStopTokens(Out, Config.Stop);
-    }
-    return TEXT("Error: Grammar-constrained inference failed");
+             (!Ctx ? TEXT("Error: Model not loaded")
+                   : [&]() -> FString {
+                       auto Utf8Prompt = StringCast<UTF8CHAR>(*Prompt);
+                       auto Utf8Grammar =
+                           StringCast<UTF8CHAR>(*Config.GbnfGrammar);
+                       char *Result = LlamaFacade::InferWithGrammar(
+                           reinterpret_cast<struct llama_facade_context *>(Ctx),
+                           Utf8Bytes(Utf8Prompt.Get()), Config.MaxTokens,
+                           Config.Temperature > 0.0f ? Config.Temperature
+                                                     : 0.8f,
+                           Utf8Bytes(Utf8Grammar.Get()));
+                       return Result ? [&]() -> FString {
+                         FString Out(UTF8_TO_TCHAR(Result));
+                         free(Result);
+                         return ApplyStopTokens(Out, Config.Stop);
+                       }()
+                                     : TEXT("Error: Grammar-constrained "
+                                            "inference failed");
+                     }())
 #else
-    UE_LOG(LogTemp, Error, TEXT("ForbocAI: Grammar-constrained inference requires WITH_FORBOC_NATIVE=1."));
-    return TEXT("Error: Native inference not available");
+             (UE_LOG(LogTemp, Error,
+                     TEXT("ForbocAI: Grammar-constrained inference requires "
+                          "WITH_FORBOC_NATIVE=1.")),
+              FString(TEXT("Error: Native inference not available")))
 #endif
-  }
-  return ApplyStopTokens(Infer(Ctx, Prompt, Config.MaxTokens), Config.Stop);
+             : ApplyStopTokens(Infer(Ctx, Prompt, Config.MaxTokens),
+                               Config.Stop);
 }
 
 /**
@@ -344,42 +366,50 @@ FString Infer(Context Ctx, const FString &Prompt, const FCortexConfig &Config) {
 FString InferStream(Context Ctx, const FString &Prompt,
                     const FCortexConfig &Config,
                     const TokenCallback &OnToken) {
-  if (!Ctx) {
-    return TEXT("Error: Model not loaded");
-  }
-
+  return !Ctx
+             ? TEXT("Error: Model not loaded")
+             :
 #if WITH_FORBOC_NATIVE
-  struct StreamState {
-    FString Accumulated;
-    TokenCallback Callback;
-    TArray<FString> StopTokens;
-    bool bStopped;
-  };
-  StreamState State;
-  State.Callback = OnToken;
-  State.StopTokens = Config.Stop;
-  State.bStopped = false;
+             [&]() -> FString {
+               struct StreamState {
+                 FString Accumulated;
+                 TokenCallback Callback;
+                 TArray<FString> StopTokens;
+                 bool bStopped;
+               };
+               StreamState State;
+               State.Callback = OnToken;
+               State.StopTokens = Config.Stop;
+               State.bStopped = false;
 
-  auto Utf8Prompt = StringCast<UTF8CHAR>(*Prompt);
-  LlamaFacade::InferStream(
-      reinterpret_cast<struct llama_facade_context *>(Ctx),
-      Utf8Bytes(Utf8Prompt.Get()), Config.MaxTokens, 0.8f,
-      [](const char *TokenUtf8, int Len, void *UserData) {
-        StreamState *S = static_cast<StreamState *>(UserData);
-        if (S->bStopped) return;
-        FString Token(Len, UTF8_TO_TCHAR(TokenUtf8));
-        S->Accumulated += Token;
-        S->bStopped = ContainsStopTokenRecursive(S->Accumulated, S->StopTokens, 0);
-        if (S->bStopped) return;
-        S->Callback(Token);
-      },
-      &State);
+               auto Utf8Prompt = StringCast<UTF8CHAR>(*Prompt);
+               LlamaFacade::InferStream(
+                   reinterpret_cast<struct llama_facade_context *>(Ctx),
+                   Utf8Bytes(Utf8Prompt.Get()), Config.MaxTokens, 0.8f,
+                   [](const char *TokenUtf8, int Len, void *UserData) {
+                     StreamState *S = static_cast<StreamState *>(UserData);
+                     !S->bStopped
+                         ? [&]() {
+                             FString Token(Len, UTF8_TO_TCHAR(TokenUtf8));
+                             S->Accumulated += Token;
+                             S->bStopped = ContainsStopTokenRecursive(
+                                 S->Accumulated, S->StopTokens, 0);
+                             !S->bStopped ? (S->Callback(Token), void())
+                                          : void();
+                           }()
+                         : void();
+                   },
+                   &State);
 
-  return ApplyStopTokens(State.Accumulated, Config.Stop);
+               return ApplyStopTokens(State.Accumulated, Config.Stop);
+             }()
 #else
-  UE_LOG(LogTemp, Error, TEXT("ForbocAI: InferStream requires WITH_FORBOC_NATIVE=1. Native libs not available."));
-  return TEXT("Error: Native inference not available");
+             (UE_LOG(LogTemp, Error,
+                     TEXT("ForbocAI: InferStream requires "
+                          "WITH_FORBOC_NATIVE=1. Native libs not available.")),
+              FString(TEXT("Error: Native inference not available")))
 #endif
+      ;
 }
 
 } // namespace Llama
@@ -422,35 +452,42 @@ DB Open(const FString &Path) {
                                      ? TEXT(":memory:")
                                      : FPaths::ConvertRelativePathToFull(Path);
 
-  if (NormalizedPath != TEXT(":memory:") && NormalizedPath.Contains(TEXT(".."))) {
-    UE_LOG(LogTemp, Error,
-           TEXT("ForbocAI: Rejected database path containing '..': %s"),
-           *NormalizedPath);
-    return nullptr;
-  }
-
+  return (NormalizedPath != TEXT(":memory:") &&
+          NormalizedPath.Contains(TEXT("..")))
+             ? (UE_LOG(LogTemp, Error,
+                       TEXT("ForbocAI: Rejected database path containing "
+                            "'..': %s"),
+                       *NormalizedPath),
+                static_cast<DB>(nullptr))
+             :
 #if WITH_FORBOC_SQLITE_VEC
-  sqlite3 *Db = nullptr;
-  const int Rc =
-      sqlite3_open(TCHAR_TO_UTF8(*NormalizedPath), &Db);
-  if (Rc != SQLITE_OK || !Db) {
-    if (Db) {
-      sqlite3_close(Db);
-    }
-    return nullptr;
-  }
-
-  const char *CreateSql =
-      "CREATE VIRTUAL TABLE IF NOT EXISTS memories USING "
-      "vec0(embedding float[384], "
-      "id TEXT, text TEXT, type TEXT, importance REAL, timestamp INTEGER);";
-  sqlite3_exec(Db, CreateSql, nullptr, nullptr, nullptr);
-
-  return reinterpret_cast<DB>(Db);
+             [&]() -> DB {
+               sqlite3 *Db = nullptr;
+               const int Rc =
+                   sqlite3_open(TCHAR_TO_UTF8(*NormalizedPath), &Db);
+               return (Rc != SQLITE_OK || !Db)
+                          ? (Db ? (sqlite3_close(Db), static_cast<DB>(nullptr))
+                                : static_cast<DB>(nullptr))
+                          : [&]() -> DB {
+                              const char *CreateSql =
+                                  "CREATE VIRTUAL TABLE IF NOT EXISTS memories "
+                                  "USING "
+                                  "vec0(embedding float[384], "
+                                  "id TEXT, text TEXT, type TEXT, importance "
+                                  "REAL, timestamp INTEGER);";
+                              sqlite3_exec(Db, CreateSql, nullptr, nullptr,
+                                           nullptr);
+                              return reinterpret_cast<DB>(Db);
+                            }();
+             }()
 #else
-  UE_LOG(LogTemp, Error, TEXT("ForbocAI: Sqlite::Open requires WITH_FORBOC_SQLITE_VEC=1. Native libs not available."));
-  return nullptr;
+             (UE_LOG(LogTemp, Error,
+                     TEXT("ForbocAI: Sqlite::Open requires "
+                          "WITH_FORBOC_SQLITE_VEC=1. Native libs not "
+                          "available.")),
+              static_cast<DB>(nullptr))
 #endif
+      ;
 }
 
 /**
@@ -459,15 +496,14 @@ DB Open(const FString &Path) {
  * vector storage does not leak native resources.
  */
 void Close(DB Database) {
-  if (!Database) {
-    return;
-  }
-
+  !Database ? void()
+            :
 #if WITH_FORBOC_SQLITE_VEC
-  sqlite3_close(reinterpret_cast<sqlite3 *>(Database));
+            (sqlite3_close(reinterpret_cast<sqlite3 *>(Database)), void())
 #else
-  (void)Database;
+            ((void)Database, void())
 #endif
+      ;
 }
 
 /**
@@ -478,10 +514,11 @@ void Close(DB Database) {
 void Clear(DB Database) {
 #if WITH_FORBOC_SQLITE_VEC
   sqlite3 *Handle = reinterpret_cast<sqlite3 *>(Database);
-  if (!Handle) {
-    return;
-  }
-  sqlite3_exec(Handle, "DELETE FROM memories;", nullptr, nullptr, nullptr);
+  Handle
+      ? (sqlite3_exec(Handle, "DELETE FROM memories;", nullptr, nullptr,
+                      nullptr),
+         void())
+      : void();
 #else
   (void)Database;
 #endif
@@ -499,18 +536,18 @@ void ClearPath(const FString &Path) {
                                      ? TEXT(":memory:")
                                      : FPaths::ConvertRelativePathToFull(Path);
 
-  if (NormalizedPath != TEXT(":memory:") && NormalizedPath.Contains(TEXT(".."))) {
-    UE_LOG(LogTemp, Error,
-           TEXT("ForbocAI: Rejected database path containing '..': %s"),
-           *NormalizedPath);
-    return;
-  }
-
+  (NormalizedPath != TEXT(":memory:") && NormalizedPath.Contains(TEXT("..")))
+      ? (UE_LOG(LogTemp, Error,
+                TEXT("ForbocAI: Rejected database path containing '..': %s"),
+                *NormalizedPath),
+         void())
+      :
 #if WITH_FORBOC_SQLITE_VEC
-  static_cast<void>(NormalizedPath);
+      (static_cast<void>(NormalizedPath), void())
 #else
-  (void)NormalizedPath;
+      ((void)NormalizedPath, void())
 #endif
+      ;
 }
 
 /**
@@ -523,34 +560,36 @@ TArray<FMemoryItem> SearchRows(DB Database, const TArray<float> &Vector,
   TArray<FMemoryItem> Results;
 #if WITH_FORBOC_SQLITE_VEC
   sqlite3 *Handle = reinterpret_cast<sqlite3 *>(Database);
-  if (!Handle) {
-    return Results;
-  }
+  return !Handle
+             ? Results
+             : [&]() -> TArray<FMemoryItem> {
+                 const int32 Limit = TopK > 0 ? TopK : 10;
+                 const char *Sql =
+                     "SELECT id, text, type, importance, timestamp, distance "
+                     "FROM memories "
+                     "WHERE embedding MATCH ? "
+                     "ORDER BY distance "
+                     "LIMIT ?;";
 
-  const int32 Limit = TopK > 0 ? TopK : 10;
-  const char *Sql =
-      "SELECT id, text, type, importance, timestamp, distance "
-      "FROM memories "
-      "WHERE embedding MATCH ? "
-      "ORDER BY distance "
-      "LIMIT ?;";
+                 sqlite3_stmt *Stmt = nullptr;
+                 return sqlite3_prepare_v2(Handle, Sql, -1, &Stmt, nullptr) !=
+                                SQLITE_OK
+                            ? Results
+                            : [&]() -> TArray<FMemoryItem> {
+                                const FString JsonVec =
+                                    BuildJsonVector(Vector);
 
-  sqlite3_stmt *Stmt = nullptr;
-  if (sqlite3_prepare_v2(Handle, Sql, -1, &Stmt, nullptr) !=
-      SQLITE_OK) {
-    return Results;
-  }
+                                sqlite3_bind_text(Stmt, 1,
+                                                  TCHAR_TO_UTF8(*JsonVec), -1,
+                                                  SQLITE_TRANSIENT);
+                                sqlite3_bind_int(Stmt, 2, Limit);
+                                CollectSearchRowsRecursive(Stmt, Results);
 
-  const FString JsonVec = BuildJsonVector(Vector);
+                                sqlite3_finalize(Stmt);
 
-  sqlite3_bind_text(Stmt, 1, TCHAR_TO_UTF8(*JsonVec), -1,
-                    SQLITE_TRANSIENT);
-  sqlite3_bind_int(Stmt, 2, Limit);
-  CollectSearchRowsRecursive(Stmt, Results);
-
-  sqlite3_finalize(Stmt);
-
-  return Results;
+                                return Results;
+                              }();
+               }();
 #else
   (void)Database;
   (void)Vector;
@@ -593,44 +632,57 @@ TArray<FMemoryItem> Search(DB Database, const TArray<float> &Vector,
 bool Upsert(DB Database, const FMemoryItem &Item, const TArray<float> &Vector) {
 #if WITH_FORBOC_SQLITE_VEC
   sqlite3 *Handle = reinterpret_cast<sqlite3 *>(Database);
-  if (!Handle) {
-    return false;
-  }
+  return !Handle
+             ? false
+             : Vector.Num() == 0
+                   ? false
+                   : [&]() -> bool {
+                       const char *Sql =
+                           "INSERT OR REPLACE INTO memories "
+                           "(id, text, type, importance, timestamp, embedding) "
+                           "VALUES (?, ?, ?, ?, ?, ?);";
 
-  if (Vector.Num() == 0) {
-    return false;
-  }
+                       sqlite3_stmt *Stmt = nullptr;
+                       return sqlite3_prepare_v2(Handle, Sql, -1, &Stmt,
+                                                nullptr) != SQLITE_OK
+                                  ? false
+                                  : [&]() -> bool {
+                                      const FMemoryItem StoredItem =
+                                          PrepareStoredItem(Item);
+                                      const FString JsonVec =
+                                          BuildJsonVector(Vector);
 
-  const char *Sql =
-      "INSERT OR REPLACE INTO memories "
-      "(id, text, type, importance, timestamp, embedding) "
-      "VALUES (?, ?, ?, ?, ?, ?);";
+                                      sqlite3_bind_text(
+                                          Stmt, 1,
+                                          TCHAR_TO_UTF8(*StoredItem.Id), -1,
+                                          SQLITE_TRANSIENT);
+                                      sqlite3_bind_text(
+                                          Stmt, 2,
+                                          TCHAR_TO_UTF8(*StoredItem.Text), -1,
+                                          SQLITE_TRANSIENT);
+                                      sqlite3_bind_text(
+                                          Stmt, 3,
+                                          TCHAR_TO_UTF8(*StoredItem.Type), -1,
+                                          SQLITE_TRANSIENT);
+                                      sqlite3_bind_double(
+                                          Stmt, 4,
+                                          static_cast<double>(
+                                              StoredItem.Importance));
+                                      sqlite3_bind_int64(
+                                          Stmt, 5,
+                                          static_cast<sqlite3_int64>(
+                                              StoredItem.Timestamp));
+                                      sqlite3_bind_text(
+                                          Stmt, 6,
+                                          TCHAR_TO_UTF8(*JsonVec), -1,
+                                          SQLITE_TRANSIENT);
 
-  sqlite3_stmt *Stmt = nullptr;
-  if (sqlite3_prepare_v2(Handle, Sql, -1, &Stmt, nullptr) !=
-      SQLITE_OK) {
-    return false;
-  }
-
-  const FMemoryItem StoredItem = PrepareStoredItem(Item);
-  const FString JsonVec = BuildJsonVector(Vector);
-
-  sqlite3_bind_text(Stmt, 1, TCHAR_TO_UTF8(*StoredItem.Id), -1,
-                    SQLITE_TRANSIENT);
-  sqlite3_bind_text(Stmt, 2, TCHAR_TO_UTF8(*StoredItem.Text), -1,
-                    SQLITE_TRANSIENT);
-  sqlite3_bind_text(Stmt, 3, TCHAR_TO_UTF8(*StoredItem.Type), -1,
-                    SQLITE_TRANSIENT);
-  sqlite3_bind_double(Stmt, 4,
-                      static_cast<double>(StoredItem.Importance));
-  sqlite3_bind_int64(Stmt, 5,
-                     static_cast<sqlite3_int64>(StoredItem.Timestamp));
-  sqlite3_bind_text(Stmt, 6, TCHAR_TO_UTF8(*JsonVec), -1,
-                    SQLITE_TRANSIENT);
-
-  const bool bOk = (sqlite3_step(Stmt) == SQLITE_DONE);
-  sqlite3_finalize(Stmt);
-  return bOk;
+                                      const bool bOk =
+                                          (sqlite3_step(Stmt) == SQLITE_DONE);
+                                      sqlite3_finalize(Stmt);
+                                      return bOk;
+                                    }();
+                     }();
 #else
   (void)Database;
   (void)Item;

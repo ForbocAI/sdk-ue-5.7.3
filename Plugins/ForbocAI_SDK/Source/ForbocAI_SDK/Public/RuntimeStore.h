@@ -4,6 +4,7 @@
 #include "Bridge/BridgeSlice.h"
 #include "Core/rtk.hpp"
 #include "CoreMinimal.h"
+#include "Core/functional_core.hpp"
 #include "Cortex/CortexSlice.h"
 #include "DirectiveSlice.h"
 #include "Ghost/GhostSlice.h"
@@ -168,14 +169,21 @@ inline FStoreState StoreReducer(const FStoreState &State,
   Next.API = StoreInternal::GetAPISlice().Reducer(State.API, Action);
 
   /**
-   * G8: Run extra reducers (game slices)
+   * G8: Run extra reducers (game slices) — recursive application.
    * User Story: As a maintainer, I need this implementation note so I can understand which milestone behavior the surrounding code is preserving.
    */
-  for (const auto &Reducer : StoreInternal::ExtraReducers()) {
-    Next = Reducer(Next, Action);
-  }
-
-  return Next;
+  return [&]() -> FStoreState {
+    struct ApplyReducers {
+      static FStoreState apply(FStoreState S, const rtk::AnyAction &A,
+                               const std::vector<ExtraReducerFn> &Rs,
+                               size_t Index) {
+        return Index >= Rs.size() ? S
+                                 : apply(Rs[Index](S, A), A, Rs, Index + 1);
+      }
+    };
+    return ApplyReducers::apply(Next, Action, StoreInternal::ExtraReducers(),
+                                0);
+  }();
 }
 
 /**
@@ -191,22 +199,30 @@ inline rtk::Middleware<FStoreState> createNpcRemovalListener() {
         const FString ActiveNpcIdBefore = Api.getState().NPCs.ActiveNpcId;
         const rtk::AnyAction Result = Next(Action);
 
-        if (NPCSlice::Actions::RemoveNPCActionCreator().match(Action)) {
-          const auto RemovedNpcId =
-              NPCSlice::Actions::RemoveNPCActionCreator().extract(Action);
-          if (RemovedNpcId.hasValue) {
-            Api.dispatch(
-                DirectiveSlice::Actions::ClearDirectivesForNpc(RemovedNpcId.value));
-            Api.dispatch(BridgeSlice::Actions::ClearBridgeValidation());
-            Api.dispatch(GhostSlice::Actions::ClearGhostSession());
-            Api.dispatch(SoulSlice::Actions::ClearSoulState());
-            Api.dispatch(NPCSlice::Actions::ClearBlock(RemovedNpcId.value));
-
-            if (RemovedNpcId.value == ActiveNpcIdBefore) {
-              Api.dispatch(MemorySlice::Actions::MemoryClear());
-            }
-          }
-        }
+        NPCSlice::Actions::RemoveNPCActionCreator().match(Action)
+            ? [&]() {
+                const auto RemovedNpcId =
+                    NPCSlice::Actions::RemoveNPCActionCreator().extract(Action);
+                RemovedNpcId.hasValue
+                    ? (Api.dispatch(
+                           DirectiveSlice::Actions::ClearDirectivesForNpc(
+                               RemovedNpcId.value)),
+                       Api.dispatch(
+                           BridgeSlice::Actions::ClearBridgeValidation()),
+                       Api.dispatch(
+                           GhostSlice::Actions::ClearGhostSession()),
+                       Api.dispatch(SoulSlice::Actions::ClearSoulState()),
+                       Api.dispatch(
+                           NPCSlice::Actions::ClearBlock(RemovedNpcId.value)),
+                       RemovedNpcId.value == ActiveNpcIdBefore
+                           ? (Api.dispatch(
+                                  MemorySlice::Actions::MemoryClear()),
+                              void())
+                           : void(),
+                       void())
+                    : void();
+              }()
+            : void();
 
         return Result;
       };
@@ -246,12 +262,20 @@ createStore(func::Maybe<FStoreState> PreloadedState =
   Middlewares.push_back(createNpcRemovalListener());
 
   /**
-   * G8: Append game-provided middleware
+   * G8: Append game-provided middleware — recursive merge.
    * User Story: As a maintainer, I need this implementation note so I can understand which milestone behavior the surrounding code is preserving.
    */
-  for (const auto &MW : ExtraMiddlewares) {
-    Middlewares.push_back(MW);
-  }
+  struct AppendMiddlewares {
+    static void apply(std::vector<rtk::Middleware<FStoreState>> &Target,
+                      const std::vector<rtk::Middleware<FStoreState>> &Source,
+                      size_t Index) {
+      Index < Source.size()
+          ? (Target.push_back(Source[Index]),
+             apply(Target, Source, Index + 1), void())
+          : void();
+    }
+  };
+  AppendMiddlewares::apply(Middlewares, ExtraMiddlewares, 0);
 
   return rtk::configureStore<FStoreState>(
       &StoreReducer,

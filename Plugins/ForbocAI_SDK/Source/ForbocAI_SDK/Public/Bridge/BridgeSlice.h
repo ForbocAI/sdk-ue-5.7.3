@@ -249,19 +249,16 @@ inline Slice<FBridgeSliceState> CreateBridgeSlice() {
             const FString TargetId = Action.PayloadValue.Id.IsEmpty()
                                          ? Action.PayloadValue.RulesetId
                                          : Action.PayloadValue.Id;
-            bool bExists = false;
-            for (const FDirectiveRuleSet &Preset : Next.ActivePresets) {
-              const FString ExistingId =
-                  Preset.Id.IsEmpty() ? Preset.RulesetId : Preset.Id;
-              if (ExistingId == TargetId) {
-                bExists = true;
-                break;
-              }
-            }
-            if (!bExists) {
-              Next.ActivePresets.Add(Action.PayloadValue);
-            }
-            return Next;
+            return (Next.ActivePresets.IndexOfByPredicate(
+                        [&TargetId](const FDirectiveRuleSet &Preset) {
+                          const FString ExistingId =
+                              Preset.Id.IsEmpty() ? Preset.RulesetId
+                                                  : Preset.Id;
+                          return ExistingId == TargetId;
+                        }) == INDEX_NONE
+                        ? (Next.ActivePresets.Add(Action.PayloadValue), void())
+                        : void(),
+                    Next);
           })
       | addExtraCase(Actions::SetAvailableRulesetsActionCreator(),
                     [](const FBridgeSliceState &State,

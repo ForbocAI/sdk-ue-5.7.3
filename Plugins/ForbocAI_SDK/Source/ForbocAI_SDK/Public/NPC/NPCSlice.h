@@ -119,14 +119,12 @@ inline Slice<FNPCSliceState> CreateNPCSlice() {
                 Next.Entities, Payload.Id,
                 [Payload](const FNPCInternalState &Existing) {
                   FNPCInternalState Updated = Existing;
-                  if (Payload.bHasAction) {
-                    Updated.LastAction = Payload.Action;
-                    Updated.bHasLastAction = true;
-                  } else {
-                    Updated.LastAction = FAgentAction{};
-                    Updated.bHasLastAction = false;
-                  }
-                  return Updated;
+                  return (Payload.bHasAction
+                              ? (Updated.LastAction = Payload.Action,
+                                 Updated.bHasLastAction = true, void())
+                              : (Updated.LastAction = FAgentAction{},
+                                 Updated.bHasLastAction = false, void()),
+                          Updated);
                 });
             return Next;
           }) |
@@ -164,12 +162,12 @@ inline Slice<FNPCSliceState> CreateNPCSlice() {
                     [](const FNPCSliceState &State,
                        const Action<FString> &Action) -> FNPCSliceState {
                       FNPCSliceState Next = State;
-                      Next.Entities = GetNPCAdapter().removeOne(
-                          Next.Entities, Action.PayloadValue);
-                      if (Next.ActiveNpcId == Action.PayloadValue) {
-                        Next.ActiveNpcId.Empty();
-                      }
-                      return Next;
+                      return (Next.Entities = GetNPCAdapter().removeOne(
+                                  Next.Entities, Action.PayloadValue),
+                              Next.ActiveNpcId == Action.PayloadValue
+                                  ? (Next.ActiveNpcId.Empty(), void())
+                                  : void(),
+                              Next);
                     }));
 }
 
@@ -208,10 +206,9 @@ inline FString SelectActiveNpcId(const FNPCSliceState &State) {
  */
 inline func::Maybe<FNPCInternalState>
 SelectActiveNPC(const FNPCSliceState &State) {
-  if (State.ActiveNpcId.IsEmpty()) {
-    return func::nothing<FNPCInternalState>();
-  }
-  return SelectNPCById(State, State.ActiveNpcId);
+  return State.ActiveNpcId.IsEmpty()
+             ? func::nothing<FNPCInternalState>()
+             : SelectNPCById(State, State.ActiveNpcId);
 }
 
 } // namespace NPCSlice

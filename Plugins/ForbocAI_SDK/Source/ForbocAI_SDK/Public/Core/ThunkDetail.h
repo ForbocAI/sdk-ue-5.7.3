@@ -146,17 +146,32 @@ inline FString SerializeInferenceResult(const FString &GeneratedOutput) {
  * User Story: As protocol execution, I need recalled memories wrapped in a
  * stable JSON envelope so follow-up instructions can read them consistently.
  */
+/**
+ * Recursively serializes memory items into a JSON value array.
+ * User Story: As a maintainer, I need this note so the surrounding code intent
+ * stays clear during maintenance and debugging.
+ */
+inline void SerializeMemoryItemsRecursive(
+    const TArray<FMemoryItem> &Memories,
+    TArray<TSharedPtr<FJsonValue>> &Out, int32 Index) {
+  Index < Memories.Num()
+      ? [&]() {
+          const FMemoryItem &Memory = Memories[Index];
+          const TSharedPtr<FJsonObject> MemoryObject =
+              MakeShared<FJsonObject>();
+          MemoryObject->SetStringField(TEXT("text"), Memory.Text);
+          MemoryObject->SetStringField(TEXT("type"), Memory.Type);
+          MemoryObject->SetNumberField(TEXT("importance"), Memory.Importance);
+          MemoryObject->SetNumberField(TEXT("similarity"), Memory.Similarity);
+          Out.Add(MakeShared<FJsonValueObject>(MemoryObject));
+          SerializeMemoryItemsRecursive(Memories, Out, Index + 1);
+        }()
+      : void();
+}
+
 inline FString SerializeQueryVectorResult(const TArray<FMemoryItem> &Memories) {
   TArray<TSharedPtr<FJsonValue>> MemoryValues;
-  for (int32 Index = 0; Index < Memories.Num(); ++Index) {
-    const FMemoryItem &Memory = Memories[Index];
-    const TSharedPtr<FJsonObject> MemoryObject = MakeShared<FJsonObject>();
-    MemoryObject->SetStringField(TEXT("text"), Memory.Text);
-    MemoryObject->SetStringField(TEXT("type"), Memory.Type);
-    MemoryObject->SetNumberField(TEXT("importance"), Memory.Importance);
-    MemoryObject->SetNumberField(TEXT("similarity"), Memory.Similarity);
-    MemoryValues.Add(MakeShared<FJsonValueObject>(MemoryObject));
-  }
+  SerializeMemoryItemsRecursive(Memories, MemoryValues, 0);
 
   const TSharedPtr<FJsonObject> Root = MakeShared<FJsonObject>();
   Root->SetStringField(TEXT("type"), TEXT("QueryVectorResult"));
@@ -234,12 +249,12 @@ inline FMemoryItem MakeMemoryItem(const FMemoryStoreInstruction &Instruction) {
  */
 inline FAgentResponse BuildAgentResponse(const FNPCInstruction &Instruction) {
   FAgentResponse Response;
-  Response.Dialogue = Instruction.Dialogue;
-  Response.Thought = Instruction.Dialogue;
-  if (Instruction.bHasAction) {
-    Response.Action = Instruction.Action;
-  }
-  return Response;
+  return (Response.Dialogue = Instruction.Dialogue,
+          Response.Thought = Instruction.Dialogue,
+          Instruction.bHasAction
+              ? (Response.Action = Instruction.Action, void())
+              : void(),
+          Response);
 }
 
 /**
@@ -271,10 +286,9 @@ UploadSignedSoul(const FArweaveUploadInstruction &Instruction,
         const FString Payload =
             !Instruction.PayloadJson.IsEmpty() ? Instruction.PayloadJson
                                                : SignedPayload;
-        if (Url.IsEmpty()) {
-          Reject("Missing Arweave upload URL");
-          return;
-        }
+        Url.IsEmpty()
+            ? (Reject("Missing Arweave upload URL"), void())
+            : [&]() {
 
         /**
          * Shared mutable attempt counter, accessed from the async task.
@@ -315,75 +329,26 @@ UploadSignedSoul(const FArweaveUploadInstruction &Instruction,
                              State->Instruction.ContentType.IsEmpty()
                                  ? TEXT("application/octet-stream")
                                  : State->Instruction.ContentType);
-          if (!State->Instruction.AuiAuthHeader.IsEmpty()) {
-            Request->SetHeader(TEXT("Authorization"),
-                               State->Instruction.AuiAuthHeader);
-          }
-          if (!State->Instruction.TagsJson.IsEmpty()) {
-            Request->SetHeader(TEXT("X-Forboc-Tags"),
-                               State->Instruction.TagsJson);
-          }
+          !State->Instruction.AuiAuthHeader.IsEmpty()
+              ? (Request->SetHeader(TEXT("Authorization"),
+                                    State->Instruction.AuiAuthHeader),
+                 void())
+              : void();
+          !State->Instruction.TagsJson.IsEmpty()
+              ? (Request->SetHeader(TEXT("X-Forboc-Tags"),
+                                    State->Instruction.TagsJson),
+                 void())
+              : void();
           Request->SetContentAsString(State->Payload);
 
           Request->OnProcessRequestComplete().BindLambda(
               [State, TryOnce](FHttpRequestPtr Req, FHttpResponsePtr Res,
                                bool bWasSuccessful) {
                 /**
-                 * --- Network-level failure (timeout, DNS, connection reset) ---
+                 * Retry helper: schedules backoff then re-invokes TryOnce.
                  * User Story: As a maintainer, I need this note so the surrounding code intent stays clear during maintenance and debugging.
                  */
-                if (!bWasSuccessful || !Res.IsValid()) {
-                  if (State->Attempt < State->MaxRetries) {
-                    const float BackoffSec =
-                        0.250f *
-                        FMath::Pow(2.0f,
-                                   static_cast<float>(State->Attempt - 1));
-                    AsyncTask(ENamedThreads::AnyBackgroundThreadNormalTask,
-                              [State, TryOnce, BackoffSec]() {
-                                FPlatformProcess::Sleep(BackoffSec);
-                                AsyncTask(ENamedThreads::GameThread,
-                                          [TryOnce]() { (*TryOnce)(); });
-                              });
-                    return;
-                  }
-                  /**
-                   * All retries exhausted — resolve with error (not reject,
-                   * matching TS SDK).
-                   * User Story: As a maintainer, I need this note so the surrounding code intent stays clear during maintenance and debugging.
-                   */
-                  FArweaveUploadResult Result;
-                  Result.StatusCode = 0;
-                  Result.bSuccess = false;
-                  Result.Status = TEXT("0");
-                  Result.Error = TEXT("upload_request_failed:network_error");
-                  Result.TxId = FString::Printf(
-                      TEXT("ar_tx_failed_%lld"), FDateTime::UtcNow().ToUnixTimestamp());
-                  State->Resolve(Result);
-                  return;
-                }
-
-                /**
-                 * --- Got an HTTP response ---
-                 * User Story: As a maintainer, I need this note so the surrounding code intent stays clear during maintenance and debugging.
-                 */
-                FArweaveUploadResult Result;
-                Result.ResponseJson = Res->GetContentAsString();
-                Result.StatusCode = Res->GetResponseCode();
-                Result.bSuccess =
-                    Result.StatusCode >= 200 && Result.StatusCode < 300;
-                Result.Status = FString::FromInt(Result.StatusCode);
-                Result.Error =
-                    Result.bSuccess
-                        ? TEXT("")
-                        : FString::Printf(TEXT("upload_failed_status_%d"),
-                                          Result.StatusCode);
-
-                /**
-                 * Non-2xx: retry if attempts remain.
-                 * User Story: As a maintainer, I need this note so the surrounding code intent stays clear during maintenance and debugging.
-                 */
-                if (!Result.bSuccess &&
-                    State->Attempt < State->MaxRetries) {
+                const auto ScheduleRetry = [&State, &TryOnce]() {
                   const float BackoffSec =
                       0.250f *
                       FMath::Pow(2.0f,
@@ -394,43 +359,81 @@ UploadSignedSoul(const FArweaveUploadInstruction &Instruction,
                               AsyncTask(ENamedThreads::GameThread,
                                         [TryOnce]() { (*TryOnce)(); });
                             });
-                  return;
-                }
+                };
 
                 /**
-                 * --- Derive txId ---
-                 * 1. UE-only enhancement: check x-id response header.
+                 * Network-level failure → retry or exhaust.
                  * User Story: As a maintainer, I need this note so the surrounding code intent stays clear during maintenance and debugging.
                  */
-                Result.TxId = Res->GetHeader(TEXT("x-id"));
-                /**
-                 * 2. Response JSON ".id" field (matches TS SDK).
-                 * User Story: As a maintainer, I need this note so the surrounding code intent stays clear during maintenance and debugging.
-                 */
-                if (Result.TxId.IsEmpty()) {
-                  TSharedPtr<FJsonObject> ResponseObject;
-                  if (JsonInterop::ParseJsonObject(Result.ResponseJson,
-                                                   ResponseObject) &&
-                      ResponseObject.IsValid()) {
-                    Result.TxId =
-                        ResponseObject->GetStringField(TEXT("id"));
-                  }
-                }
-                /**
-                 * 3. Generated fallback (matches TS SDK).
-                 * User Story: As a maintainer, I need this note so the surrounding code intent stays clear during maintenance and debugging.
-                 */
-                if (Result.TxId.IsEmpty()) {
-                  Result.TxId =
-                      LexToString(GetTypeHash(Result.ResponseJson));
-                }
+                (!bWasSuccessful || !Res.IsValid())
+                    ? (State->Attempt < State->MaxRetries
+                           ? (ScheduleRetry(), void())
+                           : [&State]() {
+                               FArweaveUploadResult Result;
+                               Result.StatusCode = 0;
+                               Result.bSuccess = false;
+                               Result.Status = TEXT("0");
+                               Result.Error =
+                                   TEXT("upload_request_failed:network_error");
+                               Result.TxId = FString::Printf(
+                                   TEXT("ar_tx_failed_%lld"),
+                                   FDateTime::UtcNow().ToUnixTimestamp());
+                               State->Resolve(Result);
+                             }())
+                    : [&State, &Res, &ScheduleRetry]() {
+                        /**
+                         * Got an HTTP response — build result and handle.
+                         * User Story: As a maintainer, I need this note so the surrounding code intent stays clear during maintenance and debugging.
+                         */
+                        FArweaveUploadResult Result;
+                        Result.ResponseJson = Res->GetContentAsString();
+                        Result.StatusCode = Res->GetResponseCode();
+                        Result.bSuccess = Result.StatusCode >= 200 &&
+                                          Result.StatusCode < 300;
+                        Result.Status = FString::FromInt(Result.StatusCode);
+                        Result.Error =
+                            Result.bSuccess
+                                ? FString(TEXT(""))
+                                : FString::Printf(
+                                      TEXT("upload_failed_status_%d"),
+                                      Result.StatusCode);
 
-                Result.ArweaveUrl =
-                    !State->Instruction.GatewayUrl.IsEmpty()
-                        ? State->Instruction.GatewayUrl + TEXT("/") +
-                              Result.TxId
-                        : TEXT("");
-                State->Resolve(Result);
+                        /**
+                         * Non-2xx: retry if attempts remain; otherwise derive
+                         * txId and resolve.
+                         * User Story: As a maintainer, I need this note so the surrounding code intent stays clear during maintenance and debugging.
+                         */
+                        (!Result.bSuccess &&
+                         State->Attempt < State->MaxRetries)
+                            ? (ScheduleRetry(), void())
+                            : (Result.TxId = Res->GetHeader(TEXT("x-id")),
+                               Result.TxId.IsEmpty()
+                                   ? [&Result]() {
+                                       TSharedPtr<FJsonObject> ResponseObject;
+                                       (JsonInterop::ParseJsonObject(
+                                            Result.ResponseJson,
+                                            ResponseObject) &&
+                                        ResponseObject.IsValid())
+                                           ? (Result.TxId =
+                                                  ResponseObject
+                                                      ->GetStringField(
+                                                          TEXT("id")),
+                                              void())
+                                           : void();
+                                     }()
+                                   : void(),
+                               Result.TxId.IsEmpty()
+                                   ? (Result.TxId = LexToString(GetTypeHash(
+                                          Result.ResponseJson)),
+                                      void())
+                                   : void(),
+                               Result.ArweaveUrl =
+                                   !State->Instruction.GatewayUrl.IsEmpty()
+                                       ? State->Instruction.GatewayUrl +
+                                             TEXT("/") + Result.TxId
+                                       : TEXT(""),
+                               State->Resolve(Result), void());
+                      }();
               });
           Request->ProcessRequest();
         };
@@ -440,6 +443,7 @@ UploadSignedSoul(const FArweaveUploadInstruction &Instruction,
          * User Story: As a maintainer, I need this note so the surrounding code intent stays clear during maintenance and debugging.
          */
         (*TryOnce)();
+      }();
       });
 }
 
@@ -458,49 +462,53 @@ DownloadSoulPayload(const FArweaveDownloadInstruction &Instruction) {
   return func::AsyncResult<FArweaveDownloadResult>::create(
       [Instruction](std::function<void(FArweaveDownloadResult)> Resolve,
                     std::function<void(std::string)> Reject) {
-        FString Url = Instruction.DownloadUrl;
-        if (Url.IsEmpty() && !Instruction.GatewayUrl.IsEmpty() &&
-            !Instruction.TxId.IsEmpty()) {
-          Url = Instruction.GatewayUrl + TEXT("/") + Instruction.TxId;
-        }
+        const FString Url =
+            !Instruction.DownloadUrl.IsEmpty()
+                ? Instruction.DownloadUrl
+                : (!Instruction.GatewayUrl.IsEmpty() &&
+                           !Instruction.TxId.IsEmpty()
+                       ? Instruction.GatewayUrl + TEXT("/") + Instruction.TxId
+                       : FString());
 
-        if (Url.IsEmpty()) {
-          Reject("Missing Arweave download URL");
-          return;
-        }
-
-        TSharedRef<IHttpRequest, ESPMode::ThreadSafe> Request =
-            FHttpModule::Get().CreateRequest();
-        Request->SetURL(Url);
-        Request->SetVerb(TEXT("GET"));
-        Request->SetTimeout(60.0f); // 60-second timeout (matches TS SDK)
-        Request->OnProcessRequestComplete().BindLambda(
-            [Instruction, Resolve, Reject](FHttpRequestPtr Req,
-                                           FHttpResponsePtr Res,
-                                           bool bWasSuccessful) {
-              if (!bWasSuccessful || !Res.IsValid()) {
-                Reject("Arweave download failed");
-                return;
-              }
-
-              FArweaveDownloadResult Result;
-              Result.TxId = !Instruction.ExpectedTxId.IsEmpty()
-                                ? Instruction.ExpectedTxId
-                                : Instruction.TxId;
-              Result.Payload = Res->GetContentAsString();
-              Result.BodyJson = Result.Payload;
-              Result.StatusCode = Res->GetResponseCode();
-              Result.bSuccess =
-                  Result.StatusCode >= 200 && Result.StatusCode < 300;
-              Result.Status = FString::FromInt(Result.StatusCode);
-              Result.Error = Result.bSuccess
-                                 ? TEXT("")
-                                 : FString::Printf(TEXT("download_failed_status_%d"),
-                                                   Result.StatusCode);
-              Result.ResponseJson = Result.Payload;
-              Resolve(Result);
-            });
-        Request->ProcessRequest();
+        Url.IsEmpty()
+            ? (Reject("Missing Arweave download URL"), void())
+            : [&]() {
+                TSharedRef<IHttpRequest, ESPMode::ThreadSafe> Request =
+                    FHttpModule::Get().CreateRequest();
+                Request->SetURL(Url);
+                Request->SetVerb(TEXT("GET"));
+                Request->SetTimeout(60.0f);
+                Request->OnProcessRequestComplete().BindLambda(
+                    [Instruction, Resolve, Reject](FHttpRequestPtr Req,
+                                                   FHttpResponsePtr Res,
+                                                   bool bWasSuccessful) {
+                      (!bWasSuccessful || !Res.IsValid())
+                          ? (Reject("Arweave download failed"), void())
+                          : [&]() {
+                              FArweaveDownloadResult Result;
+                              Result.TxId =
+                                  !Instruction.ExpectedTxId.IsEmpty()
+                                      ? Instruction.ExpectedTxId
+                                      : Instruction.TxId;
+                              Result.Payload = Res->GetContentAsString();
+                              Result.BodyJson = Result.Payload;
+                              Result.StatusCode = Res->GetResponseCode();
+                              Result.bSuccess = Result.StatusCode >= 200 &&
+                                                Result.StatusCode < 300;
+                              Result.Status =
+                                  FString::FromInt(Result.StatusCode);
+                              Result.Error =
+                                  Result.bSuccess
+                                      ? FString(TEXT(""))
+                                      : FString::Printf(
+                                            TEXT("download_failed_status_%d"),
+                                            Result.StatusCode);
+                              Result.ResponseJson = Result.Payload;
+                              Resolve(Result);
+                            }();
+                    });
+                Request->ProcessRequest();
+              }();
       });
 }
 

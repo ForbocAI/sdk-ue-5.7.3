@@ -13,6 +13,41 @@ namespace MemorySlice {
 using namespace rtk;
 using namespace func;
 
+namespace detail {
+
+/**
+ * Recursively collects memory item ids into an output array.
+ * User Story: As a maintainer, I need this note so the surrounding code intent
+ * stays clear during maintenance and debugging.
+ */
+inline void CollectIdsRecursive(const TArray<FMemoryItem> &Items,
+                                TArray<FString> &Out, int32 Index) {
+  Index < Items.Num()
+      ? (Out.Add(Items[Index].Id),
+         CollectIdsRecursive(Items, Out, Index + 1), void())
+      : void();
+}
+
+/**
+ * Recursively resolves memory ids into items, keeping only found entries.
+ * User Story: As a maintainer, I need this note so the surrounding code intent
+ * stays clear during maintenance and debugging.
+ */
+template <typename SelectorFn>
+inline void ResolveIdsRecursive(const TArray<FString> &Ids,
+                                TArray<FMemoryItem> &Out, int32 Index,
+                                SelectorFn Selector) {
+  Index < Ids.Num()
+      ? [&]() {
+          const Maybe<FMemoryItem> Item = Selector(Ids[Index]);
+          Item.hasValue ? (Out.Add(Item.value), void()) : void();
+          ResolveIdsRecursive(Ids, Out, Index + 1, Selector);
+        }()
+      : void();
+}
+
+} // namespace detail
+
 /**
  * Returns the entity id for a memory item.
  * User Story: As memory entity adapters, I need a stable id selector so memory
@@ -236,9 +271,8 @@ inline Slice<FMemorySliceState> CreateMemorySlice() {
             Next.Entities = GetMemoryAdapter().upsertMany(Next.Entities,
                                                           Action.PayloadValue);
             Next.LastRecalledIds.Empty(Action.PayloadValue.Num());
-            for (int32 Index = 0; Index < Action.PayloadValue.Num(); ++Index) {
-              Next.LastRecalledIds.Add(Action.PayloadValue[Index].Id);
-            }
+            detail::CollectIdsRecursive(Action.PayloadValue,
+                                        Next.LastRecalledIds, 0);
             return Next;
           }) |
       addExtraCase(Actions::MemoryRecallFailedActionCreator(),
@@ -284,13 +318,9 @@ inline TArray<FMemoryItem> SelectAllMemories(const FMemorySliceState &State) {
 inline TArray<FMemoryItem>
 SelectLastRecalledMemories(const FMemorySliceState &State) {
   TArray<FMemoryItem> Results;
-  for (int32 Index = 0; Index < State.LastRecalledIds.Num(); ++Index) {
-    const Maybe<FMemoryItem> Item =
-        SelectMemoryById(State, State.LastRecalledIds[Index]);
-    if (Item.hasValue) {
-      Results.Add(Item.value);
-    }
-  }
+  detail::ResolveIdsRecursive(
+      State.LastRecalledIds, Results, 0,
+      [&State](const FString &Id) { return SelectMemoryById(State, Id); });
   return Results;
 }
 
