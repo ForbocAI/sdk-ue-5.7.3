@@ -175,9 +175,9 @@ inline rtk::Slice<FNPCsSliceState> CreateNPCsSlice() {
                 Next.Entities, A.PayloadValue.Id,
                 [&A](const FGameNPC &Existing) {
                   FGameNPC Updated = Existing;
-                  if (A.PayloadValue.bHasSuspicion) {
-                    Updated.Suspicion = A.PayloadValue.Suspicion;
-                  }
+                  Updated.Suspicion = A.PayloadValue.bHasSuspicion
+                      ? A.PayloadValue.Suspicion
+                      : Updated.Suspicion;
                   return Updated;
                 });
             return Next;
@@ -193,9 +193,9 @@ inline rtk::Slice<FNPCsSliceState> CreateNPCsSlice() {
                 Next.Entities, P.Id, [&P](const FGameNPC &Existing) {
                   FGameNPC Updated = Existing;
                   Updated.Suspicion += P.SuspicionDelta;
-                  if (P.ActionType == TEXT("MOVE")) {
-                    Updated.Position = P.TargetHex;
-                  }
+                  Updated.Position = P.ActionType == TEXT("MOVE")
+                      ? P.TargetHex
+                      : Updated.Position;
                   return Updated;
                 });
             return Next;
@@ -591,12 +591,10 @@ inline rtk::Slice<FBridgeRulesState> CreateGameBridgeSlice() {
              const rtk::Action<FString> &A) -> FBridgeRulesState {
             FBridgeRulesState Next = S;
             Next.ActivePreset = A.PayloadValue;
-            if (A.PayloadValue == TEXT("social")) {
-              Next.MaxMoveDistance = 1;
-            }
-            if (A.PayloadValue == TEXT("default")) {
-              Next.MaxMoveDistance = 2;
-            }
+            Next.MaxMoveDistance =
+                A.PayloadValue == TEXT("social") ? 1
+                : A.PayloadValue == TEXT("default") ? 2
+                : Next.MaxMoveDistance;
             return Next;
           }));
 }
@@ -688,14 +686,23 @@ inline rtk::Slice<FGameMemorySliceState> CreateGameMemorySlice() {
           [](const FGameMemorySliceState &S,
              const rtk::Action<FString> &A) -> FGameMemorySliceState {
             FGameMemorySliceState Next = S;
-            TArray<FString> ToRemove;
-            for (const FString &Id : Next.Entities.ids) {
-              if (const FMemoryRecord *R = Next.Entities.entities.Find(Id)) {
-                if (R->NpcId == A.PayloadValue) {
-                  ToRemove.Add(Id);
-                }
+            struct CollectIds {
+              static void apply(
+                  const rtk::EntityState<FMemoryRecord> &E,
+                  const FString &NpcId,
+                  TArray<FString> &Out,
+                  int32 Idx) {
+                Idx >= E.ids.Num()
+                    ? void()
+                    : ((E.entities.Find(E.ids[Idx]) != nullptr &&
+                        E.entities.Find(E.ids[Idx])->NpcId == NpcId)
+                           ? (Out.Add(E.ids[Idx]), void())
+                           : void(),
+                       apply(E, NpcId, Out, Idx + 1), void());
               }
-            }
+            };
+            TArray<FString> ToRemove;
+            CollectIds::apply(Next.Entities, A.PayloadValue, ToRemove, 0);
             Next.Entities =
                 GetGameMemoryAdapter().removeMany(Next.Entities, ToRemove);
             return Next;
@@ -1119,12 +1126,23 @@ inline rtk::Slice<FScenarioSliceState> CreateScenarioSlice() {
  */
 inline TArray<ECommandGroup>
 SelectMissingGroups(const TMap<ECommandGroup, bool> &Covered) {
-  TArray<ECommandGroup> Missing;
-  for (ECommandGroup G : RequiredGroups()) {
-    if (!Covered.Contains(G) || !Covered[G]) {
-      Missing.Add(G);
+  const TArray<ECommandGroup> &Groups = RequiredGroups();
+  struct CollectMissing {
+    static void apply(
+        const TMap<ECommandGroup, bool> &C,
+        const TArray<ECommandGroup> &G,
+        TArray<ECommandGroup> &Out,
+        int32 Idx) {
+      Idx >= G.Num()
+          ? void()
+          : ((!C.Contains(G[Idx]) || !(*C.Find(G[Idx])))
+                 ? (Out.Add(G[Idx]), void())
+                 : void(),
+             apply(C, G, Out, Idx + 1), void());
     }
-  }
+  };
+  TArray<ECommandGroup> Missing;
+  CollectMissing::apply(Covered, Groups, Missing, 0);
   return Missing;
 }
 

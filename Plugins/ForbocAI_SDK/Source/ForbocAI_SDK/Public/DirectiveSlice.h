@@ -319,17 +319,27 @@ inline Slice<FDirectiveSliceState> CreateDirectiveSlice() {
             FDirectiveSliceState Next = State;
             const TArray<FDirectiveRun> Runs =
                 GetDirectiveAdapter().getSelectors().selectAll(Next.Entities);
-            TArray<FString> IdsToRemove;
-            for (int32 Index = 0; Index < Runs.Num(); ++Index) {
-              if (Runs[Index].NpcId == Action.PayloadValue) {
-                IdsToRemove.Add(Runs[Index].Id);
+            struct CollectIds {
+              static void apply(
+                  const TArray<FDirectiveRun> &R,
+                  const FString &NpcId,
+                  TArray<FString> &Out,
+                  int32 Idx) {
+                Idx >= R.Num()
+                    ? void()
+                    : (R[Idx].NpcId == NpcId
+                           ? (Out.Add(R[Idx].Id), void())
+                           : void(),
+                       apply(R, NpcId, Out, Idx + 1), void());
               }
-            }
+            };
+            TArray<FString> IdsToRemove;
+            CollectIds::apply(Runs, Action.PayloadValue, IdsToRemove, 0);
             Next.Entities =
                 GetDirectiveAdapter().removeMany(Next.Entities, IdsToRemove);
-            if (IdsToRemove.Contains(Next.ActiveDirectiveId)) {
-              Next.ActiveDirectiveId.Empty();
-            }
+            IdsToRemove.Contains(Next.ActiveDirectiveId)
+                ? (Next.ActiveDirectiveId.Empty(), void())
+                : void();
             return Next;
           }));
 }
@@ -370,10 +380,9 @@ inline FString SelectActiveDirectiveId(const FDirectiveSliceState &State) {
  */
 inline func::Maybe<FDirectiveRun> SelectActiveDirective(
     const FDirectiveSliceState &State) {
-  if (State.ActiveDirectiveId.IsEmpty()) {
-    return func::nothing<FDirectiveRun>();
-  }
-  return SelectDirectiveById(State, State.ActiveDirectiveId);
+  return State.ActiveDirectiveId.IsEmpty()
+      ? func::nothing<FDirectiveRun>()
+      : SelectDirectiveById(State, State.ActiveDirectiveId);
 }
 
 } // namespace DirectiveSlice

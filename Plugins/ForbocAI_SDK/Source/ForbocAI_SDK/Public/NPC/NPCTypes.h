@@ -96,37 +96,46 @@ struct FNPCSliceState {
  */
 inline FAgentState MergeStateDelta(const FAgentState &Current,
                                    const FAgentState &Delta) {
-  if (Delta.JsonData.IsEmpty() || Delta.JsonData == TEXT("{}")) {
-    return Current;
-  }
-
-  if (Current.JsonData.IsEmpty() || Current.JsonData == TEXT("{}")) {
-    return Delta;
-  }
-
-  TSharedPtr<FJsonObject> CurrentJson = MakeShared<FJsonObject>();
-  TSharedPtr<FJsonObject> DeltaJson = MakeShared<FJsonObject>();
-
-  if (!FJsonSerializer::Deserialize(
-          TJsonReaderFactory<>::Create(Current.JsonData), CurrentJson) ||
-      !CurrentJson.IsValid()) {
-    return Delta;
-  }
-
-  if (!FJsonSerializer::Deserialize(
-          TJsonReaderFactory<>::Create(Delta.JsonData), DeltaJson) ||
-      !DeltaJson.IsValid()) {
-    return Delta;
-  }
-
-  for (const auto &Pair : DeltaJson->Values) {
-    CurrentJson->SetField(Pair.Key, Pair.Value);
-  }
-
-  FString MergedJson;
-  FJsonSerializer::Serialize(CurrentJson.ToSharedRef(),
-                             TJsonWriterFactory<>::Create(&MergedJson));
-  return TypeFactory::AgentState(MergedJson);
+  return (Delta.JsonData.IsEmpty() || Delta.JsonData == TEXT("{}"))
+      ? Current
+      : (Current.JsonData.IsEmpty() || Current.JsonData == TEXT("{}"))
+      ? Delta
+      : [&]() -> FAgentState {
+          TSharedPtr<FJsonObject> CurrentJson = MakeShared<FJsonObject>();
+          TSharedPtr<FJsonObject> DeltaJson = MakeShared<FJsonObject>();
+          return (!FJsonSerializer::Deserialize(
+                      TJsonReaderFactory<>::Create(Current.JsonData),
+                      CurrentJson) ||
+                  !CurrentJson.IsValid())
+              ? Delta
+              : (!FJsonSerializer::Deserialize(
+                      TJsonReaderFactory<>::Create(Delta.JsonData),
+                      DeltaJson) ||
+                  !DeltaJson.IsValid())
+              ? Delta
+              : [&]() -> FAgentState {
+                  TArray<FString> Keys;
+                  DeltaJson->Values.GetKeys(Keys);
+                  struct MergeFields {
+                    static void apply(
+                        const TSharedPtr<FJsonObject> &Src,
+                        const TSharedPtr<FJsonObject> &Dst,
+                        const TArray<FString> &K,
+                        int32 Idx) {
+                      Idx >= K.Num()
+                          ? void()
+                          : (Dst->SetField(K[Idx], Src->TryGetField(K[Idx])),
+                             apply(Src, Dst, K, Idx + 1), void());
+                    }
+                  };
+                  MergeFields::apply(DeltaJson, CurrentJson, Keys, 0);
+                  FString MergedJson;
+                  FJsonSerializer::Serialize(
+                      CurrentJson.ToSharedRef(),
+                      TJsonWriterFactory<>::Create(&MergedJson));
+                  return TypeFactory::AgentState(MergedJson);
+                }();
+        }();
 }
 
 /**

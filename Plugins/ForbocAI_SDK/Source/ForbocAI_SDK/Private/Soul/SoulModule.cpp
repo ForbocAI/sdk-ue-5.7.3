@@ -30,11 +30,11 @@ SoulOps::FromAgent(const FAgentState &State,
 SoulTypes::SoulSerializationResult SoulOps::Serialize(const FSoul &Soul) {
   try {
     FString JsonString;
-    if (FJsonObjectConverter::UStructToJsonObjectString(Soul, JsonString)) {
-      return SoulTypes::make_right(FString(), JsonString);
-    }
-    return SoulTypes::make_left(
-        FString(TEXT("Failed to serialize Soul to JSON")), FString());
+    return FJsonObjectConverter::UStructToJsonObjectString(Soul, JsonString)
+               ? SoulTypes::make_right(FString(), JsonString)
+               : SoulTypes::make_left(
+                     FString(TEXT("Failed to serialize Soul to JSON")),
+                     FString());
   } catch (const std::exception &e) {
     return SoulTypes::make_left(FString(e.what()), FString());
   }
@@ -43,11 +43,11 @@ SoulTypes::SoulSerializationResult SoulOps::Serialize(const FSoul &Soul) {
 SoulTypes::SoulDeserializationResult SoulOps::Deserialize(const FString &Json) {
   try {
     FSoul Soul;
-    if (FJsonObjectConverter::JsonObjectStringToUStruct(Json, &Soul, 0, 0)) {
-      return SoulTypes::make_right(FString(), Soul);
-    }
-    return SoulTypes::make_left(
-        FString(TEXT("Failed to deserialize JSON to Soul")), FSoul{});
+    return FJsonObjectConverter::JsonObjectStringToUStruct(Json, &Soul, 0, 0)
+               ? SoulTypes::make_right(FString(), Soul)
+               : SoulTypes::make_left(
+                     FString(TEXT("Failed to deserialize JSON to Soul")),
+                     FSoul{});
   } catch (const std::exception &e) {
     return SoulTypes::make_left(FString(e.what()), FSoul{});
   }
@@ -61,11 +61,8 @@ SoulTypes::SoulValidationResult SoulOps::Validate(const FSoul &Soul) {
   auto result =
       func::runValidation(SoulHelpers::soulValidationPipeline(), Soul);
 
-  if (result.isLeft) {
-    return SoulTypes::make_left(result.left, FSoul{});
-  }
-
-  return SoulTypes::make_right(FString(), Soul);
+  return result.isLeft ? SoulTypes::make_left(result.left, FSoul{})
+                       : SoulTypes::make_right(FString(), Soul);
 }
 
 SoulTypes::SoulExportResult SoulOps::ExportToArweave(const FSoul &Soul,

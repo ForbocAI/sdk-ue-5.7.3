@@ -29,12 +29,14 @@ TFuture<CortexTypes::CortexInitResult> CortexOps::Init(FCortex &Cortex) {
   auto configValidation =
       func::runValidation(CortexHelpers::cortexConfigValidationPipeline(),
                           Cortex.Config);
-  if (configValidation.isLeft) {
-    TPromise<CortexTypes::CortexInitResult> Promise;
-    Promise.SetValue(CortexTypes::make_left(configValidation.left, false));
-    return Promise.GetFuture();
-  }
-
+  return configValidation.isLeft
+             ? [&]() {
+                 TPromise<CortexTypes::CortexInitResult> Promise;
+                 Promise.SetValue(
+                     CortexTypes::make_left(configValidation.left, false));
+                 return Promise.GetFuture();
+               }()
+             : [&]() {
   auto PromisePtr =
       std::make_shared<TPromise<CortexTypes::CortexInitResult>>();
   auto Future = PromisePtr->GetFuture();
@@ -54,6 +56,7 @@ TFuture<CortexTypes::CortexInitResult> CortexOps::Init(FCortex &Cortex) {
       .execute();
 
   return Future;
+               }();
 }
 
 TFuture<CortexTypes::CortexCompletionResult>
@@ -104,10 +107,8 @@ CortexOps::CompleteStream(const FCortex &Cortex, const FString &Prompt,
 }
 
 FString CortexOps::GetStatus(const FCortex &Cortex) {
-  if (!Cortex.bReady) {
-    return TEXT("Cortex engine not initialized");
-  }
-  return TEXT("Cortex engine running");
+  return !Cortex.bReady ? FString(TEXT("Cortex engine not initialized"))
+                        : FString(TEXT("Cortex engine running"));
 }
 
 void CortexOps::Shutdown(FCortex &Cortex) {

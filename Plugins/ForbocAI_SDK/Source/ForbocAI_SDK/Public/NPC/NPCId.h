@@ -9,19 +9,21 @@ namespace NPCId {
  * User Story: As id generation, I need compact base36 encoding so NPC ids stay
  * short while preserving timestamp uniqueness.
  */
+namespace detail {
+inline FString ToBase36Recursive(uint64 Value, const TCHAR *Digits,
+                                 const FString &Acc) {
+  return Value == 0
+             ? Acc
+             : ToBase36Recursive(
+                   Value / 36, Digits,
+                   FString::Chr(Digits[static_cast<int32>(Value % 36)]) + Acc);
+}
+} // namespace detail
+
 inline FString ToBase36(uint64 Value) {
   const TCHAR Digits[] = TEXT("0123456789abcdefghijklmnopqrstuvwxyz");
-  if (Value == 0) {
-    return TEXT("0");
-  }
-
-  FString Encoded;
-  while (Value > 0) {
-    const int32 Index = static_cast<int32>(Value % 36);
-    Encoded.InsertAt(0, FString::Chr(Digits[Index]));
-    Value /= 36;
-  }
-  return Encoded;
+  return Value == 0 ? FString(TEXT("0"))
+                    : detail::ToBase36Recursive(Value, Digits, FString());
 }
 
 /**

@@ -19,20 +19,19 @@ namespace BridgeRules {
 
 FValidationResult ValidateMovement(const FAgentAction &Action,
                                    const FBridgeRuleContext &Context) {
-  if (Action.PayloadJson.Contains(TEXT("x")) &&
-      Action.PayloadJson.Contains(TEXT("y"))) {
-    return TypeFactory::Valid(TEXT("Valid coordinates"));
-  }
-
-  return TypeFactory::Invalid(TEXT("Missing x,y in payload"));
+  (void)Context;
+  return (Action.PayloadJson.Contains(TEXT("x")) &&
+          Action.PayloadJson.Contains(TEXT("y")))
+             ? TypeFactory::Valid(TEXT("Valid coordinates"))
+             : TypeFactory::Invalid(TEXT("Missing x,y in payload"));
 }
 
 FValidationResult ValidateAttack(const FAgentAction &Action,
                                  const FBridgeRuleContext &Context) {
-  if (Action.Target.IsEmpty()) {
-    return TypeFactory::Invalid(TEXT("Missing target"));
-  }
-  return TypeFactory::Valid(TEXT("Target specified"));
+  (void)Context;
+  return Action.Target.IsEmpty()
+             ? TypeFactory::Invalid(TEXT("Missing target"))
+             : TypeFactory::Valid(TEXT("Target specified"));
 }
 
 } // namespace BridgeRules
@@ -55,21 +54,30 @@ FValidationResult RunLocalBridgeValidation(const FAgentAction &Action,
   auto validationPipeline = bridgeValidationPipeline();
   auto result = func::runValidation(validationPipeline, Action);
 
-  if (result.isLeft) {
-    return TypeFactory::Invalid(result.left);
-  }
-
-  FAgentAction validatedAction = result.right;
-  for (const FValidationRule &Rule : Rules) {
-    if (Rule.ActionTypes.Contains(validatedAction.Type)) {
-      const FValidationResult RuleResult =
-          Rule.Validator(validatedAction, Context);
-      if (!RuleResult.bValid) {
-        return RuleResult;
-      }
-    }
-  }
-  return TypeFactory::Valid(TEXT("All rules passed"));
+  return result.isLeft
+             ? TypeFactory::Invalid(result.left)
+             : [&]() -> FValidationResult {
+                 const FAgentAction validatedAction = result.right;
+                 struct CheckRules {
+                   static FValidationResult apply(
+                       const TArray<FValidationRule> &R,
+                       const FAgentAction &VA,
+                       const FBridgeRuleContext &Ctx, int32 Idx) {
+                     return Idx >= R.Num()
+                         ? TypeFactory::Valid(TEXT("All rules passed"))
+                         : R[Idx].ActionTypes.Contains(VA.Type)
+                             ? [&]() -> FValidationResult {
+                                 const FValidationResult RuleResult =
+                                     R[Idx].Validator(VA, Ctx);
+                                 return !RuleResult.bValid
+                                            ? RuleResult
+                                            : apply(R, VA, Ctx, Idx + 1);
+                               }()
+                             : apply(R, VA, Ctx, Idx + 1);
+                   }
+                 };
+                 return CheckRules::apply(Rules, validatedAction, Context, 0);
+               }();
 }
 
 } // namespace BridgeHelpers

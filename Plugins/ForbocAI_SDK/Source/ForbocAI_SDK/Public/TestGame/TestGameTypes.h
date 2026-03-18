@@ -262,13 +262,21 @@ struct FMoveResult {
  * AI movement can reject blocked or out-of-bounds tiles.
  */
 inline bool IsPassable(const FGridState &Grid, const FPosition &Pos) {
-  if (Pos.X < 0 || Pos.Y < 0 || Pos.X >= Grid.Width || Pos.Y >= Grid.Height) {
-    return false;
-  }
-  for (const FPosition &B : Grid.Blocked) {
-    if (B == Pos) return false;
-  }
-  return true;
+  struct CheckBlocked {
+    static bool apply(const TArray<FPosition> &Blocked,
+                      const FPosition &P,
+                      int32 Idx) {
+      return Idx >= Blocked.Num()
+          ? true
+          : Blocked[Idx] == P
+          ? false
+          : apply(Blocked, P, Idx + 1);
+    }
+  };
+  return (Pos.X < 0 || Pos.Y < 0 || Pos.X >= Grid.Width ||
+          Pos.Y >= Grid.Height)
+      ? false
+      : CheckBlocked::apply(Grid.Blocked, Pos, 0);
 }
 
 /**
@@ -279,10 +287,10 @@ inline bool IsPassable(const FGridState &Grid, const FPosition &Pos) {
 inline FJumpResult ValidateJump(const FBridgeRulesState &Rules, int32 Force) {
   FJumpResult R;
   R.bValid = Force <= Rules.MaxJumpForce;
-  if (!R.bValid) {
-    R.Reason = FString::Printf(TEXT("Force %d exceeds max %d"), Force,
-                               Rules.MaxJumpForce);
-  }
+  R.Reason = !R.bValid
+      ? FString::Printf(TEXT("Force %d exceeds max %d"), Force,
+                         Rules.MaxJumpForce)
+      : FString();
   return R;
 }
 

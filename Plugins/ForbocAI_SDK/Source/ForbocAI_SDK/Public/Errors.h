@@ -271,12 +271,11 @@ inline FString extractThunkErrorMessage(const std::string &Message,
  */
 inline func::Maybe<FString>
 requireApiKeyGuidance(const FString &ApiUrl, const FString &ApiKey) {
-  if (ApiKey.IsEmpty() && ApiUrl.Contains(TEXT("api.forboc.ai"))) {
-    return func::just<FString>(
-        TEXT("Missing API key. Set FORBOCAI_API_KEY (or run `forboc config set "
-             "apiKey <key>`) for production API calls."));
-  }
-  return func::nothing<FString>();
+  return (ApiKey.IsEmpty() && ApiUrl.Contains(TEXT("api.forboc.ai")))
+             ? func::just<FString>(
+                   TEXT("Missing API key. Set FORBOCAI_API_KEY (or run `forboc "
+                        "config set apiKey <key>`) for production API calls."))
+             : func::nothing<FString>();
 }
 
 } // namespace Errors

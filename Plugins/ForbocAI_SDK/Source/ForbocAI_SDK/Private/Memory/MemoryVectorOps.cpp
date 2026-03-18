@@ -18,21 +18,22 @@ namespace SQLiteVSS {
 MemoryTypes::MemoryStoreRecallResult
 VectorSearch(void *Handle, const FString &Query, int32 Limit) {
   try {
-    if (Handle == nullptr) {
-      return MemoryTypes::MemoryStoreRecallResult{
-          true, TEXT("Memory database is not open"), TArray<FMemoryItem>()};
-    }
-
-    const MemoryTypes::MemoryStoreEmbeddingResult EmbeddingResult =
-        GenerateEmbedding(Handle, Query);
-    if (EmbeddingResult.isLeft) {
-      return MemoryTypes::MemoryStoreRecallResult{true, EmbeddingResult.left,
-                                                  TArray<FMemoryItem>()};
-    }
-
-    const TArray<FMemoryItem> Results =
-        Native::Sqlite::VssSearch(Handle, EmbeddingResult.right, Limit);
-    return MemoryTypes::MemoryStoreRecallResult{false, FString(), Results};
+    return Handle == nullptr
+               ? MemoryTypes::MemoryStoreRecallResult{
+                     true, TEXT("Memory database is not open"),
+                     TArray<FMemoryItem>()}
+               : [&]() -> MemoryTypes::MemoryStoreRecallResult {
+                   const MemoryTypes::MemoryStoreEmbeddingResult
+                       EmbeddingResult = GenerateEmbedding(Handle, Query);
+                   return EmbeddingResult.isLeft
+                              ? MemoryTypes::MemoryStoreRecallResult{
+                                    true, EmbeddingResult.left,
+                                    TArray<FMemoryItem>()}
+                              : MemoryTypes::MemoryStoreRecallResult{
+                                    false, FString(),
+                                    Native::Sqlite::VssSearch(
+                                        Handle, EmbeddingResult.right, Limit)};
+                 }();
   } catch (const std::exception &e) {
     return MemoryTypes::MemoryStoreRecallResult{
         true, FString(e.what()), TArray<FMemoryItem>()};

@@ -34,15 +34,24 @@ func::TestResult<void> DispatchCommand(const FString &CommandKey,
       HandleBridge, HandleSoul,   HandleConfig, HandleVector, HandleSetup,
   };
 
-  try {
-    for (const auto &H : Handlers) {
-      HandlerResult R = H(Store, CommandKey, Args);
-      if (R.hasValue) {
-        return R.value;
-      }
+  struct DispatchRecursive {
+    static func::TestResult<void>
+    apply(const std::vector<Handler> &Hs, size_t Index,
+          rtk::EnhancedStore<FStoreState> &Store, const FString &Key,
+          const TArray<FString> &Args) {
+      return Index >= Hs.size()
+                 ? Result::Failure(TCHAR_TO_UTF8(
+                       *FString::Printf(TEXT("Unknown command: %s"), *Key)))
+                 : [&]() -> func::TestResult<void> {
+                     HandlerResult R = Hs[Index](Store, Key, Args);
+                     return R.hasValue ? R.value
+                                       : apply(Hs, Index + 1, Store, Key, Args);
+                   }();
     }
-    return Result::Failure(
-        TCHAR_TO_UTF8(*FString::Printf(TEXT("Unknown command: %s"), *CommandKey)));
+  };
+
+  try {
+    return DispatchRecursive::apply(Handlers, 0, Store, CommandKey, Args);
   } catch (const std::exception &Error) {
     return Result::Failure(std::string(Error.what()));
   }

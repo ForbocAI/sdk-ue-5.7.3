@@ -28,13 +28,14 @@ FGhost GhostOps::Create(const FGhostConfig &Config) {
  */
 GhostTypes::GhostTestRunResult GhostOps::RunTest(const FGhost &Ghost,
                                                  const FString &Scenario) {
-  if (!Ghost.bInitialized) {
-    return GhostTypes::AsyncResult<FGhostTestResult>::create(
-        [](std::function<void(FGhostTestResult)>,
-           std::function<void(std::string)> Reject) { Reject("Ghost not initialized"); });
-  }
-  auto Store = ConfigureStore();
-  return Store.dispatch(rtk::runLocalGhostTestThunk(Ghost.Config.Agent, Scenario));
+  return !Ghost.bInitialized
+             ? GhostTypes::AsyncResult<FGhostTestResult>::create(
+                   [](std::function<void(FGhostTestResult)>,
+                      std::function<void(std::string)> Reject) {
+                     Reject("Ghost not initialized");
+                   })
+             : ConfigureStore().dispatch(
+                   rtk::runLocalGhostTestThunk(Ghost.Config.Agent, Scenario));
 }
 
 /**

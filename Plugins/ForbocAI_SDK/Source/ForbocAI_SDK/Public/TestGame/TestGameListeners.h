@@ -33,40 +33,58 @@ inline rtk::Middleware<FTestGameState> createGameListenerMiddleware() {
          * React to NPC movement
          * User Story: As a maintainer, I need this note so the surrounding code intent stays clear during maintenance and debugging.
          */
-        if (NPCsActions::MoveNPCActionCreator().match(Action)) {
-          auto Payload = NPCsActions::MoveNPCActionCreator().extract(Action);
-          if (Payload.hasValue) {
-            const auto &State = Api.getState();
-            auto MaybeNpc = GetNPCAdapter().getSelectors().selectById(
-                State.NPCs.Entities, Payload.value.Id);
-            if (MaybeNpc.hasValue) {
-              FString Msg = FString::Printf(
-                  TEXT("%s moved to %d,%d"), *MaybeNpc.value.Name,
-                  Payload.value.Position.X, Payload.value.Position.Y);
-              Api.dispatch(UIActions::AddMessage(Msg));
-            }
-          }
-        }
+        NPCsActions::MoveNPCActionCreator().match(Action)
+            ? [&]() {
+                auto Payload =
+                    NPCsActions::MoveNPCActionCreator().extract(Action);
+                Payload.hasValue
+                    ? [&]() {
+                        const auto &State = Api.getState();
+                        auto MaybeNpc =
+                            GetNPCAdapter().getSelectors().selectById(
+                                State.NPCs.Entities, Payload.value.Id);
+                        MaybeNpc.hasValue
+                            ? (Api.dispatch(UIActions::AddMessage(
+                                   FString::Printf(
+                                       TEXT("%s moved to %d,%d"),
+                                       *MaybeNpc.value.Name,
+                                       Payload.value.Position.X,
+                                       Payload.value.Position.Y))),
+                               void())
+                            : void();
+                      }()
+                    : (void)0;
+              }()
+            : (void)0;
 
         /**
          * React to NPC verdict application
          * User Story: As a maintainer, I need this note so the surrounding code intent stays clear during maintenance and debugging.
          */
-        if (NPCsActions::ApplyNpcVerdictActionCreator().match(Action)) {
-          auto Payload =
-              NPCsActions::ApplyNpcVerdictActionCreator().extract(Action);
-          if (Payload.hasValue) {
-            const auto &State = Api.getState();
-            auto MaybeNpc = GetNPCAdapter().getSelectors().selectById(
-                State.NPCs.Entities, Payload.value.Id);
-            if (MaybeNpc.hasValue) {
-              FString Msg = FString::Printf(
-                  TEXT("Verdict applied to %s (action: %s)"),
-                  *MaybeNpc.value.Name, *Payload.value.ActionType);
-              Api.dispatch(UIActions::AddMessage(Msg));
-            }
-          }
-        }
+        NPCsActions::ApplyNpcVerdictActionCreator().match(Action)
+            ? [&]() {
+                auto Payload =
+                    NPCsActions::ApplyNpcVerdictActionCreator().extract(
+                        Action);
+                Payload.hasValue
+                    ? [&]() {
+                        const auto &State = Api.getState();
+                        auto MaybeNpc =
+                            GetNPCAdapter().getSelectors().selectById(
+                                State.NPCs.Entities, Payload.value.Id);
+                        MaybeNpc.hasValue
+                            ? (Api.dispatch(UIActions::AddMessage(
+                                   FString::Printf(
+                                       TEXT("Verdict applied to %s "
+                                            "(action: %s)"),
+                                       *MaybeNpc.value.Name,
+                                       *Payload.value.ActionType))),
+                               void())
+                            : void();
+                      }()
+                    : (void)0;
+              }()
+            : (void)0;
 
         return Result;
       };

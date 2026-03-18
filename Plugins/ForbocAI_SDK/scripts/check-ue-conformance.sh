@@ -111,6 +111,36 @@ else
   echo "[ok] ThirdParty headers quarantined from public surface"
 fi
 
+# 7) No imperative branching (if/for/while/switch) in first-party non-test code.
+#    Excludes: Tests/, comments, ThirdParty/, SqliteAmalgamation.c
+IMPERATIVE_HITS="$(rg -n '\b(if|for|while|switch)\s*\(' \
+  "$SRC/Public" "$SRC/Private" \
+  --glob '!**/Tests/**' \
+  --glob '!**/ThirdParty/**' \
+  --glob '!**/Native/SqliteAmalgamation.c' \
+  2>/dev/null | grep -v '^\s*//' | grep -v '^\s*\*' | grep -v '^\s*//.*\b(if|for|while|switch)\s*(' || true)"
+# Filter out comment-only matches (lines starting with // or * after filename:line:)
+IMPERATIVE_REAL=""
+while IFS= read -r line; do
+  [ -z "$line" ] && continue
+  # Extract the code after filename:linenum:
+  code="${line#*:*:}"
+  # Skip lines where the match is inside a comment
+  stripped="$(echo "$code" | sed 's|//.*||' | sed 's|/\*.*\*/||g')"
+  if echo "$stripped" | rg -q '\b(if|for|while|switch)\s*\(' 2>/dev/null; then
+    IMPERATIVE_REAL="$IMPERATIVE_REAL
+$line"
+  fi
+done <<< "$IMPERATIVE_HITS"
+IMPERATIVE_REAL="$(echo "$IMPERATIVE_REAL" | sed '/^$/d')"
+if [ -n "$IMPERATIVE_REAL" ]; then
+  echo "[fail] Imperative branching/loops in first-party non-test code:"
+  echo "$IMPERATIVE_REAL"
+  STATUS=1
+else
+  echo "[ok] No imperative branching in first-party non-test code"
+fi
+
 echo ""
 echo "[done] UE conformance check complete (exit $STATUS)"
 exit "$STATUS"

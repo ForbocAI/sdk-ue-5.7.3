@@ -20,20 +20,37 @@ namespace {
  * into JSON so remote processing receives the same context the game provided.
  */
 FString SerializeContextMap(const TMap<FString, FString> &Context) {
-  if (Context.IsEmpty()) {
-    return TEXT("{}");
-  }
-
-  const TSharedRef<FJsonObject> Root = MakeShared<FJsonObject>();
-  for (const TPair<FString, FString> &Entry : Context) {
-    Root->SetStringField(Entry.Key, Entry.Value);
-  }
-
-  FString Json;
-  const TSharedRef<TJsonWriter<TCHAR, TCondensedJsonPrintPolicy<TCHAR>>> Writer =
-      TJsonWriterFactory<TCHAR, TCondensedJsonPrintPolicy<TCHAR>>::Create(&Json);
-  FJsonSerializer::Serialize(Root, Writer);
-  return Json;
+  return Context.IsEmpty()
+             ? FString(TEXT("{}"))
+             : [&]() -> FString {
+                 const TSharedRef<FJsonObject> Root =
+                     MakeShared<FJsonObject>();
+                 TArray<FString> Keys;
+                 Context.GetKeys(Keys);
+                 struct AddEntries {
+                   static void apply(
+                       const TMap<FString, FString> &Map,
+                       const TSharedRef<FJsonObject> &Obj,
+                       const TArray<FString> &K, int32 Idx) {
+                     Idx >= K.Num()
+                         ? void()
+                         : (Obj->SetStringField(K[Idx],
+                                                *Map.Find(K[Idx])),
+                            apply(Map, Obj, K, Idx + 1), void());
+                   }
+                 };
+                 AddEntries::apply(Context, Root, Keys, 0);
+                 FString Json;
+                 const TSharedRef<TJsonWriter<
+                     TCHAR, TCondensedJsonPrintPolicy<TCHAR>>>
+                     Writer =
+                         TJsonWriterFactory<
+                             TCHAR,
+                             TCondensedJsonPrintPolicy<TCHAR>>::
+                             Create(&Json);
+                 FJsonSerializer::Serialize(Root, Writer);
+                 return Json;
+               }();
 }
 
 } // namespace
@@ -101,11 +118,9 @@ FAgent AgentOps::WithMemories(const FAgent &Agent,
  */
 FAgentState AgentOps::CalculateNewState(const FAgentState &Current,
                                         const FAgentState &Updates) {
-  if (Updates.JsonData.IsEmpty() || Updates.JsonData == TEXT("{}")) {
-    return Current;
-  }
-
-  return TypeFactory::AgentState(Updates.JsonData);
+  return (Updates.JsonData.IsEmpty() || Updates.JsonData == TEXT("{}"))
+             ? Current
+             : TypeFactory::AgentState(Updates.JsonData);
 }
 
 #include "RuntimeStore.h"

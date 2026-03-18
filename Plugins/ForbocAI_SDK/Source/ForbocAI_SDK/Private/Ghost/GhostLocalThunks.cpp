@@ -15,14 +15,12 @@ runLocalGhostTestThunk(const FAgent &Agent, const FString &Scenario) {
   return [Agent, Scenario](std::function<AnyAction(const AnyAction &)> Dispatch,
                            std::function<FStoreState()> GetState)
              -> func::AsyncResult<FGhostTestResult> {
-    if (Scenario.IsEmpty()) {
-      return detail::RejectAsync<FGhostTestResult>(
-          TCHAR_TO_UTF8(*FString(TEXT("Scenario cannot be empty"))));
-    }
-
-    Dispatch(GhostSlice::Actions::GhostSessionStarted(Scenario, TEXT("running")));
-
-    return func::AsyncChain::then<FGhostTestResult, FGhostTestResult>(
+    return Scenario.IsEmpty()
+               ? detail::RejectAsync<FGhostTestResult>(
+                     TCHAR_TO_UTF8(*FString(TEXT("Scenario cannot be empty"))))
+               : (Dispatch(GhostSlice::Actions::GhostSessionStarted(
+                      Scenario, TEXT("running"))),
+                  func::AsyncChain::then<FGhostTestResult, FGhostTestResult>(
         GhostInternal::RunScenarioTest(Agent, Scenario),
         [Dispatch](const FGhostTestResult &Result) {
           FGhostTestReport Report;
@@ -38,7 +36,7 @@ runLocalGhostTestThunk(const FAgent &Agent, const FString &Scenario) {
         .catch_([Dispatch, Scenario](std::string Error) {
           Dispatch(GhostSlice::Actions::GhostSessionFailed(
               Scenario, FString(UTF8_TO_TCHAR(Error.c_str()))));
-        });
+        }));
   };
 }
 

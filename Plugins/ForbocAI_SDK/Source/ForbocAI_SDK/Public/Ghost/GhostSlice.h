@@ -224,12 +224,6 @@ inline Slice<FGhostSliceState> CreateGhostSlice() {
             Next.Status = TEXT("completed");
             Next.Progress = 1.0f;
             Next.bLoading = false;
-            if (Action.PayloadValue.Results.Num() > 0) {
-              Next.ActiveSessionId =
-                  Action.PayloadValue.Results[0].Scenario.IsEmpty()
-                      ? Next.ActiveSessionId
-                      : Next.ActiveSessionId;
-            }
             return Next;
           }) |
                     addExtraCase(Actions::GhostSessionFailedActionCreator(),

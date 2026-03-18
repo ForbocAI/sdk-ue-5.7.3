@@ -480,8 +480,23 @@ int32 UForbocAICommandlet::Main(const FString &Params) {
          *Command);
 
   const TArray<FString> Args = BuildCommandArgs(Command, Params);
-  createCommandPipeline(Command, Args).execute();
-  return 0;
+  bool bCommandFailed = false;
+  FString CommandError;
+  createCommandPipeline(Command, Args)
+      .then([]() {
+        UE_LOG(LogTemp, Display, TEXT(""));
+        UE_LOG(LogTemp, Display,
+               TEXT("[RESULT] Command completed successfully"));
+      })
+      .catch_([&bCommandFailed, &CommandError](std::string Message) {
+        bCommandFailed = true;
+        CommandError = UTF8_TO_TCHAR(Message.c_str());
+        UE_LOG(LogTemp, Error, TEXT(""));
+        UE_LOG(LogTemp, Error, TEXT("[RESULT] Command failed: %s"),
+               *CommandError);
+      })
+      .execute();
+  return bCommandFailed ? 1 : 0;
 }
 
 UForbocAICommandlet::CommandResult

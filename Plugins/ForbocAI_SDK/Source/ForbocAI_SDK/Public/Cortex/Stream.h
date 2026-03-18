@@ -43,15 +43,9 @@ inline void StreamFromCortexWithCallbacks(const FCortex &Cortex,
                                    OnError]() mutable {
     auto Result = Future.Get();
     AsyncTask(ENamedThreads::GameThread, [Result, OnComplete, OnError]() {
-      if (Result.isLeft) {
-        if (OnError) {
-          OnError(Result.left);
-        }
-      } else {
-        if (OnComplete) {
-          OnComplete(Result.right.Text);
-        }
-      }
+      Result.isLeft
+          ? (OnError ? (OnError(Result.left), void()) : void())
+          : (OnComplete ? (OnComplete(Result.right.Text), void()) : void());
     });
   });
 }

@@ -43,19 +43,24 @@ T WaitForResult(func::AsyncResult<T> &&Async, double TimeoutSeconds = 15.0) {
   Async.execute();
 
   const double StartTime = FPlatformTime::Seconds();
-  while (!bCompleted &&
-         (FPlatformTime::Seconds() - StartTime) < TimeoutSeconds) {
-    FHttpModule::Get().GetHttpManager().Tick(0.05f);
-    FPlatformProcess::Sleep(0.05f);
-  }
+  struct PollLoop {
+    static void apply(bool &Completed, double Start, double Timeout) {
+      (!Completed && (FPlatformTime::Seconds() - Start) < Timeout)
+          ? (FHttpModule::Get().GetHttpManager().Tick(0.05f),
+             FPlatformProcess::Sleep(0.05f),
+             apply(Completed, Start, Timeout), void())
+          : void();
+    }
+  };
+  PollLoop::apply(bCompleted, StartTime, TimeoutSeconds);
 
-  if (!Error.IsEmpty()) {
-    throw std::runtime_error(TCHAR_TO_UTF8(*Error));
-  }
+  !Error.IsEmpty()
+      ? throw std::runtime_error(TCHAR_TO_UTF8(*Error))
+      : (void)0;
 
-  if (!bCompleted) {
-    throw std::runtime_error("Timed out waiting for async result");
-  }
+  !bCompleted
+      ? throw std::runtime_error("Timed out waiting for async result")
+      : (void)0;
 
   return Result;
 }
@@ -170,9 +175,9 @@ inline TArray<FMemoryItem> MemoryRecall(rtk::EnhancedStore<FStoreState> &Store,
                                         float Threshold = 0.7f) {
   TArray<FMemoryItem> Results = WaitForResult(
       Store.dispatch(rtk::recallMemoryRemoteThunk(NpcId, Query, Threshold)));
-  if (Limit >= 0 && Results.Num() > Limit) {
-    Results.SetNum(Limit);
-  }
+  (Limit >= 0 && Results.Num() > Limit)
+      ? (Results.SetNum(Limit), void())
+      : void();
   return Results;
 }
 

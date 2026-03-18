@@ -51,11 +51,11 @@ namespace SQLiteVSS {
 FDatabaseOpenResult OpenDatabase(const FString &Path) {
   try {
     void *Handle = Native::Sqlite::Open(Path);
-    if (Handle == nullptr) {
-      return {true, TEXT("Failed to open memory database"), nullptr};
-    }
-
-    return {false, FString(), Handle};
+    return Handle == nullptr
+               ? FDatabaseOpenResult{true,
+                                     TEXT("Failed to open memory database"),
+                                     nullptr}
+               : FDatabaseOpenResult{false, FString(), Handle};
   } catch (const std::exception &e) {
     return {true, FString(e.what()), nullptr};
   }
@@ -67,9 +67,7 @@ FDatabaseOpenResult OpenDatabase(const FString &Path) {
  * teardown remains safe even when initialization only partially succeeded.
  */
 void CloseDatabase(void *Handle) {
-  if (Handle != nullptr) {
-    Native::Sqlite::Close(Handle);
-  }
+  Handle != nullptr ? (Native::Sqlite::Close(Handle), void()) : void();
 }
 
 /**
@@ -107,13 +105,11 @@ FDatabaseMutationResult CreateTables(void *Handle) {
  */
 FDatabaseMutationResult InsertMemory(void *Handle, const FMemoryItem &Item) {
   try {
-    if (Handle == nullptr) {
-      return FDatabaseMutationResult{
-          true, TEXT("Memory database is not open"), false};
-    }
-
-    Native::Sqlite::Insert(Handle, Item);
-    return FDatabaseMutationResult{false, FString(), true};
+    return Handle == nullptr
+               ? FDatabaseMutationResult{
+                     true, TEXT("Memory database is not open"), false}
+               : (Native::Sqlite::Insert(Handle, Item),
+                  FDatabaseMutationResult{false, FString(), true});
   } catch (const std::exception &e) {
     return FDatabaseMutationResult{true, FString(e.what()), false};
   }
@@ -128,23 +124,21 @@ FDatabaseMutationResult InsertMemory(void *Handle, const FMemoryItem &Item) {
  * Directory traversal segments are rejected before resolution.
  */
 FString GetDatabasePath(const FMemoryConfig &Config) {
-  if (Config.DatabasePath.IsEmpty()) {
-    return FString();
-  }
-
-  if (Config.DatabasePath.Contains(TEXT(".."))) {
-    UE_LOG(LogTemp, Error,
-           TEXT("ForbocAI: Rejected database path containing '..': %s"),
-           *Config.DatabasePath);
-    return FString();
-  }
-
-  if (FPaths::IsRelative(Config.DatabasePath)) {
-    return FPaths::Combine(FPaths::ProjectDir(), TEXT("local_infrastructure"),
-                           Config.DatabasePath);
-  }
-
-  return Config.DatabasePath;
+  return Config.DatabasePath.IsEmpty()
+             ? FString()
+         : Config.DatabasePath.Contains(TEXT(".."))
+             ? [&]() -> FString {
+                 UE_LOG(LogTemp, Error,
+                        TEXT("ForbocAI: Rejected database path containing "
+                             "'..': %s"),
+                        *Config.DatabasePath);
+                 return FString();
+               }()
+         : FPaths::IsRelative(Config.DatabasePath)
+             ? FPaths::Combine(FPaths::ProjectDir(),
+                               TEXT("local_infrastructure"),
+                               Config.DatabasePath)
+             : Config.DatabasePath;
 }
 
 /**
@@ -155,25 +149,23 @@ FString GetDatabasePath(const FMemoryConfig &Config) {
 MemoryTypes::MemoryStoreInitializationResult
 ValidateConfig(const FMemoryConfig &Config) {
   try {
-    if (Config.DatabasePath.IsEmpty()) {
-      return MemoryTypes::MemoryStoreInitializationResult{
-          true, TEXT("Database path cannot be empty"), false};
-    }
-    if (Config.MaxMemories <= 0) {
-      return MemoryTypes::MemoryStoreInitializationResult{
-          true, TEXT("Max memories must be greater than 0"), false};
-    }
-    if (Config.VectorDimension != 384) {
-      return MemoryTypes::MemoryStoreInitializationResult{
-          true, TEXT("Vector dimension must be 384"), false};
-    }
-    if (Config.MaxRecallResults <= 0) {
-      return MemoryTypes::MemoryStoreInitializationResult{
-          true, TEXT("Max recall results must be greater than 0"), false};
-    }
-
-    return MemoryTypes::MemoryStoreInitializationResult{
-        false, FString(), true};
+    return Config.DatabasePath.IsEmpty()
+               ? MemoryTypes::MemoryStoreInitializationResult{
+                     true, TEXT("Database path cannot be empty"), false}
+           : Config.MaxMemories <= 0
+               ? MemoryTypes::MemoryStoreInitializationResult{
+                     true,
+                     TEXT("Max memories must be greater than 0"), false}
+           : Config.VectorDimension != 384
+               ? MemoryTypes::MemoryStoreInitializationResult{
+                     true, TEXT("Vector dimension must be 384"), false}
+           : Config.MaxRecallResults <= 0
+               ? MemoryTypes::MemoryStoreInitializationResult{
+                     true,
+                     TEXT("Max recall results must be greater than 0"),
+                     false}
+               : MemoryTypes::MemoryStoreInitializationResult{
+                     false, FString(), true};
   } catch (const std::exception &e) {
     return MemoryTypes::MemoryStoreInitializationResult{
         true, FString(e.what()), false};

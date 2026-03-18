@@ -4,15 +4,15 @@ namespace GhostInternal {
 
 GhostTypes::Either<FString, FGhostConfig>
 ValidateTestConfig(const FGhostConfig &Config) {
-  if (Config.Scenarios.Num() == 0) {
-    return GhostTypes::make_left(FString(TEXT("No test scenarios provided")),
-                                 FGhostConfig{});
-  }
-  if (Config.MaxIterations < 1) {
-    return GhostTypes::make_left(FString(TEXT("Max iterations must be >= 1")),
-                                 FGhostConfig{});
-  }
-  return GhostTypes::make_right(FString(), Config);
+  return Config.Scenarios.Num() == 0
+             ? GhostTypes::make_left(
+                   FString(TEXT("No test scenarios provided")),
+                   FGhostConfig{})
+         : Config.MaxIterations < 1
+             ? GhostTypes::make_left(
+                   FString(TEXT("Max iterations must be >= 1")),
+                   FGhostConfig{})
+             : GhostTypes::make_right(FString(), Config);
 }
 
 GhostTypes::Either<FString, FString>
@@ -29,33 +29,59 @@ GenerateTestSummary(const FGhostTestReport &Report) {
 
 GhostTypes::Either<FString, FString>
 ExportResultsToJson(const FGhostTestReport &Report) {
-  FString Json = TEXT("{\n  \"agent\": \"") + Report.Config.Agent.Id +
-                 TEXT("\",\n  \"results\": [\n");
-  for (int32 i = 0; i < Report.Results.Num(); ++i) {
-    const auto &Res = Report.Results[i];
-    Json += FString::Printf(
-        TEXT("    { \"scenario\": \"%s\", \"passed\": %s }"), *Res.Scenario,
-        Res.bPassed ? TEXT("true") : TEXT("false"));
-    if (i < Report.Results.Num() - 1)
-      Json += TEXT(",");
-    Json += TEXT("\n");
-  }
-  Json += TEXT("  ]\n}");
-  return GhostTypes::make_right(FString(), Json);
+  struct AppendResults {
+    static FString apply(const TArray<FGhostTestResult> &Results,
+                         int32 Idx, const FString &Acc) {
+      return Idx >= Results.Num()
+                 ? Acc
+                 : apply(
+                       Results, Idx + 1,
+                       Acc +
+                           FString::Printf(
+                               TEXT("    { \"scenario\": \"%s\", "
+                                    "\"passed\": %s }"),
+                               *Results[Idx].Scenario,
+                               Results[Idx].bPassed ? TEXT("true")
+                                                    : TEXT("false")) +
+                           (Idx < Results.Num() - 1 ? TEXT(",\n")
+                                                    : TEXT("\n")));
+    }
+  };
+  const FString Header = TEXT("{\n  \"agent\": \"") +
+                          Report.Config.Agent.Id +
+                          TEXT("\",\n  \"results\": [\n");
+  return GhostTypes::make_right(
+      FString(),
+      AppendResults::apply(Report.Results, 0, Header) + TEXT("  ]\n}"));
 }
 
 GhostTypes::Either<FString, FString>
 ExportResultsToCsv(const FGhostTestReport &Report) {
-  FString Csv = TEXT("Scenario,Passed,ActualResponse,ErrorMessage\n");
-  for (const auto &Res : Report.Results) {
-    Csv +=
-        FString::Printf(TEXT("\"%s\",%s,\"%s\",\"%s\"\n"),
-                        *Res.Scenario.Replace(TEXT("\""), TEXT("\"\"")),
-                        Res.bPassed ? TEXT("True") : TEXT("False"),
-                        *Res.ActualResponse.Replace(TEXT("\""), TEXT("\"\"")),
-                        *Res.ErrorMessage.Replace(TEXT("\""), TEXT("\"\"")));
-  }
-  return GhostTypes::make_right(FString(), Csv);
+  struct AppendRows {
+    static FString apply(const TArray<FGhostTestResult> &Results,
+                         int32 Idx, const FString &Acc) {
+      return Idx >= Results.Num()
+                 ? Acc
+                 : apply(
+                       Results, Idx + 1,
+                       Acc +
+                           FString::Printf(
+                               TEXT("\"%s\",%s,\"%s\",\"%s\"\n"),
+                               *Results[Idx].Scenario.Replace(
+                                   TEXT("\""), TEXT("\"\"")),
+                               Results[Idx].bPassed ? TEXT("True")
+                                                    : TEXT("False"),
+                               *Results[Idx].ActualResponse.Replace(
+                                   TEXT("\""), TEXT("\"\"")),
+                               *Results[Idx].ErrorMessage.Replace(
+                                   TEXT("\""), TEXT("\"\""))));
+    }
+  };
+  return GhostTypes::make_right(
+      FString(),
+      AppendRows::apply(
+          Report.Results, 0,
+          FString(TEXT("Scenario,Passed,ActualResponse,ErrorMessage\n"))));
 }
 
 } // namespace GhostInternal

@@ -31,48 +31,49 @@ void RunTestsSequentially(const FGhost &Ghost,
                           TSharedPtr<FGhostTestReport> Report, int32 Index,
                           std::function<void(FGhostTestReport)> OnComplete,
                           std::function<void(std::string)> OnError) {
-  if (Index >= Ghost.Config.Scenarios.Num()) {
-    Report->TotalTests = Report->Results.Num();
-    Report->SuccessRate = Report->TotalTests > 0
-                              ? (float)Report->PassedTests / Report->TotalTests
-                              : 0.0f;
+  Index >= Ghost.Config.Scenarios.Num()
+      ? [&]() {
+          Report->TotalTests = Report->Results.Num();
+          Report->SuccessRate =
+              Report->TotalTests > 0
+                  ? (float)Report->PassedTests / Report->TotalTests
+                  : 0.0f;
 
-    auto summaryResult = GhostInternal::GenerateTestSummary(*Report);
-    if (summaryResult.isLeft)
-      Report->Summary = summaryResult.left;
-    else
-      Report->Summary = summaryResult.right;
+          auto summaryResult =
+              GhostInternal::GenerateTestSummary(*Report);
+          Report->Summary = summaryResult.isLeft ? summaryResult.left
+                                                 : summaryResult.right;
 
-    OnComplete(*Report);
-    return;
-  }
+          OnComplete(*Report);
+        }()
+      : [&]() {
+          FString Scenario = Ghost.Config.Scenarios[Index];
 
-  FString Scenario = Ghost.Config.Scenarios[Index];
+          GhostOps::RunTest(Ghost, Scenario)
+              .then([Ghost, Report, Index, OnComplete,
+                     OnError](FGhostTestResult Result) {
+                Report->Results.Add(Result);
+                Result.bPassed ? (Report->PassedTests++, void())
+                               : (Report->FailedTests++, void());
 
-  GhostOps::RunTest(Ghost, Scenario)
-      .then(
-          [Ghost, Report, Index, OnComplete, OnError](FGhostTestResult Result) {
-            Report->Results.Add(Result);
-            if (Result.bPassed)
-              Report->PassedTests++;
-            else
-              Report->FailedTests++;
+                RunTestsSequentially(Ghost, Report, Index + 1,
+                                     OnComplete, OnError);
+              })
+              .catch_([Ghost, Report, Scenario, Index, OnComplete,
+                       OnError](std::string Error) {
+                FGhostTestResult Result;
+                Result.Scenario = Scenario;
+                Result.bPassed = false;
+                Result.ErrorMessage = FString(Error.c_str());
 
-            RunTestsSequentially(Ghost, Report, Index + 1, OnComplete, OnError);
-          })
-      .catch_([Ghost, Report, Scenario, Index, OnComplete,
-               OnError](std::string Error) {
-        FGhostTestResult Result;
-        Result.Scenario = Scenario;
-        Result.bPassed = false;
-        Result.ErrorMessage = FString(Error.c_str());
+                Report->Results.Add(Result);
+                Report->FailedTests++;
 
-        Report->Results.Add(Result);
-        Report->FailedTests++;
-
-        RunTestsSequentially(Ghost, Report, Index + 1, OnComplete, OnError);
-      })
-      .execute();
+                RunTestsSequentially(Ghost, Report, Index + 1,
+                                     OnComplete, OnError);
+              })
+              .execute();
+        }();
 }
 
 } // namespace GhostInternal

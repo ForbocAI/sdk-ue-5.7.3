@@ -12,12 +12,10 @@ HandlerResult HandleVector(rtk::EnhancedStore<FStoreState> &Store,
   using func::just;
   using func::nothing;
 
-  if (CommandKey == TEXT("vector_init")) {
-    Ops::InitVector(Store);
-    return just(Result::Success("Vector initialized"));
-  }
-
-  return nothing<Result>();
+  return CommandKey == TEXT("vector_init")
+             ? (Ops::InitVector(Store),
+                just(Result::Success("Vector initialized")))
+             : nothing<Result>();
 }
 
 } // namespace Handlers

@@ -93,6 +93,14 @@ PersistMemoryInstructions(const TArray<FMemoryStoreInstruction> &Instructions,
                           std::function<AnyAction(const AnyAction &)> Dispatch,
                           std::function<FStoreState()> GetState);
 
+func::AsyncResult<FAgentResponse>
+RunProtocolTurn(const FString &NpcId, const FString &Input,
+                const FString &RunId, const FNPCProcessTape &Tape,
+                const FString &LastResultJson, bool bHasLastResult,
+                int32 Turn, const FProtocolRuntime &Runtime,
+                std::function<AnyAction(const AnyAction &)> Dispatch,
+                std::function<FStoreState()> GetState);
+
 /**
  * Handles the IdentifyActor protocol instruction by serializing actor info
  * and recursing into the next protocol turn.

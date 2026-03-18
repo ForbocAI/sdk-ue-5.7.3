@@ -21,9 +21,9 @@ FMemoryStore MemoryFactory::CreateStore(const FMemoryConfig &Config) {
   auto validationResult =
       func::runValidation(MemoryHelpers::memoryConfigValidationPipeline(),
                           Config);
-  if (validationResult.isLeft) {
-    throw std::runtime_error(TCHAR_TO_UTF8(*validationResult.left));
-  }
+  validationResult.isLeft
+      ? throw std::runtime_error(TCHAR_TO_UTF8(*validationResult.left))
+      : (void)0;
 
   FMemoryStore Store;
   Store.Config = Config;
@@ -39,49 +39,49 @@ FMemoryStore MemoryFactory::CreateStore(const FMemoryConfig &Config) {
 MemoryTypes::MemoryStoreInitializationResult
 MemoryOps::Initialize(FMemoryStore &Store) {
   try {
-    if (Store.bInitialized) {
-      return MemoryTypes::make_right(FString(), true);
-    }
-
-    /**
-     * Validate configuration
-     * User Story: As a maintainer, I need this note so the surrounding code intent stays clear during maintenance and debugging.
-     */
-    auto configValidation = MemoryInternal::ValidateConfig(Store.Config);
-    if (configValidation.isLeft) {
-      return configValidation;
-    }
-
-    /**
-     * Get database path
-     * User Story: As a maintainer, I need this note so the surrounding code intent stays clear during maintenance and debugging.
-     */
-    const FString DatabasePath = MemoryInternal::GetDatabasePath(Store.Config);
-
-    /**
-     * Open database connection
-     * User Story: As a maintainer, I need this note so the surrounding code intent stays clear during maintenance and debugging.
-     */
-    auto openResult = MemoryInternal::SQLiteVSS::OpenDatabase(DatabasePath);
-    if (openResult.isLeft) {
-      return openResult;
-    }
-    Store.DatabaseHandle = openResult.right;
-
-    /**
-     * Create tables
-     * User Story: As a maintainer, I need this step note so I can follow the scenario progression and reason about the expected state changes.
-     */
-    auto tableResult =
-        MemoryInternal::SQLiteVSS::CreateTables(Store.DatabaseHandle);
-    if (tableResult.isLeft) {
-      MemoryInternal::SQLiteVSS::CloseDatabase(Store.DatabaseHandle);
-      Store.DatabaseHandle = nullptr;
-      return tableResult;
-    }
-
-    Store.bInitialized = true;
-    return MemoryTypes::make_right(FString(), true);
+    return Store.bInitialized
+               ? MemoryTypes::make_right(FString(), true)
+               : [&]() -> MemoryTypes::MemoryStoreInitializationResult {
+                   auto configValidation =
+                       MemoryInternal::ValidateConfig(Store.Config);
+                   return configValidation.isLeft
+                       ? configValidation
+                       : [&]() -> MemoryTypes::MemoryStoreInitializationResult {
+                           const FString DatabasePath =
+                               MemoryInternal::GetDatabasePath(Store.Config);
+                           auto openResult =
+                               MemoryInternal::SQLiteVSS::OpenDatabase(
+                                   DatabasePath);
+                           return openResult.isLeft
+                               ? openResult
+                               : [&]() -> MemoryTypes::
+                                     MemoryStoreInitializationResult {
+                                       Store.DatabaseHandle = openResult.right;
+                                       auto tableResult =
+                                           MemoryInternal::SQLiteVSS::
+                                               CreateTables(
+                                                   Store.DatabaseHandle);
+                                       return tableResult.isLeft
+                                           ? [&]() -> MemoryTypes::
+                                                 MemoryStoreInitializationResult {
+                                                   MemoryInternal::SQLiteVSS::
+                                                       CloseDatabase(
+                                                           Store
+                                                               .DatabaseHandle);
+                                                   Store.DatabaseHandle =
+                                                       nullptr;
+                                                   return tableResult;
+                                                 }()
+                                           : [&]() -> MemoryTypes::
+                                                 MemoryStoreInitializationResult {
+                                                   Store.bInitialized = true;
+                                                   return MemoryTypes::
+                                                       make_right(FString(),
+                                                                  true);
+                                                 }();
+                                     }();
+                         }();
+                 }();
   } catch (const std::exception &e) {
     return MemoryTypes::make_left(FString(e.what()), false);
   }
@@ -94,52 +94,63 @@ MemoryOps::Initialize(FMemoryStore &Store) {
 TFuture<MemoryTypes::MemoryStoreAddResult>
 MemoryOps::Store(const FMemoryStore &Store, const FString &Text,
                  const FString &Type, float Importance) {
-  if (!Store.bInitialized) {
-    TPromise<MemoryTypes::MemoryStoreAddResult> Promise;
-    Promise.SetValue(MemoryTypes::make_left(
-        FString(TEXT("Memory store not initialized")), FMemoryStore{}));
-    return Promise.GetFuture();
-  }
+  return !Store.bInitialized
+             ? [&]() -> TFuture<MemoryTypes::MemoryStoreAddResult> {
+                 TPromise<MemoryTypes::MemoryStoreAddResult> Promise;
+                 Promise.SetValue(MemoryTypes::make_left(
+                     FString(TEXT("Memory store not initialized")),
+                     FMemoryStore{}));
+                 return Promise.GetFuture();
+               }()
+             : [&]() -> TFuture<MemoryTypes::MemoryStoreAddResult> {
+                 TSharedPtr<TPromise<MemoryTypes::MemoryStoreAddResult>>
+                     Promise = MakeShared<
+                         TPromise<MemoryTypes::MemoryStoreAddResult>>();
 
-  TSharedPtr<TPromise<MemoryTypes::MemoryStoreAddResult>> Promise =
-      MakeShared<TPromise<MemoryTypes::MemoryStoreAddResult>>();
+                 FMemoryItem Item;
+                 Item.Id = FString::Printf(
+                     TEXT("mem_%s"),
+                     *FGuid::NewGuid().ToString());
+                 Item.Text = Text;
+                 Item.Type = Type;
+                 Item.Importance =
+                     FMath::Clamp(Importance, 0.0f, 1.0f);
+                 Item.Timestamp =
+                     FDateTime::Now().ToUnixTimestamp();
 
-  FMemoryItem Item;
-  Item.Id = FString::Printf(TEXT("mem_%s"), *FGuid::NewGuid().ToString());
-  Item.Text = Text;
-  Item.Type = Type;
-  Item.Importance = FMath::Clamp(Importance, 0.0f, 1.0f);
-  Item.Timestamp = FDateTime::Now().ToUnixTimestamp();
+                 auto RuntimeStore = ConfigureStore();
 
-  auto RuntimeStore = ConfigureStore();
+                 /**
+                  * Dispatch the store thunk
+                  * User Story: As a maintainer, I need this step note so I can follow the scenario progression and reason about the expected state changes.
+                  */
+                 auto ThunkResult = rtk::nodeMemoryStoreThunk(Item)(
+                     [RuntimeStore](const rtk::AnyAction &a) {
+                       return RuntimeStore.dispatch(a);
+                     },
+                     [RuntimeStore]() {
+                       return RuntimeStore.getState();
+                     });
 
-  /**
-   * Dispatch the store thunk
-   * User Story: As a maintainer, I need this step note so I can follow the scenario progression and reason about the expected state changes.
-   */
-  auto ThunkResult = rtk::nodeMemoryStoreThunk(Item)(
-      [RuntimeStore](const rtk::AnyAction &a) {
-        return RuntimeStore.dispatch(a);
-      },
-      [RuntimeStore]() { return RuntimeStore.getState(); });
+                 /**
+                  * Chain result back to the promise
+                  * User Story: As a maintainer, I need this note so the surrounding code intent stays clear during maintenance and debugging.
+                  */
+                 ThunkResult
+                     .then([Promise, Store](FMemoryItem SavedItem) {
+                       FMemoryStore NewStore = Store;
+                       NewStore.Items.Add(SavedItem);
+                       Promise->SetValue(MemoryTypes::make_right(
+                           FString(), NewStore));
+                     })
+                     .catch_([Promise](std::string Error) {
+                       Promise->SetValue(MemoryTypes::make_left(
+                           FString(Error.c_str()), FMemoryStore{}));
+                     })
+                     .execute();
 
-  /**
-   * Chain result back to the promise
-   * User Story: As a maintainer, I need this note so the surrounding code intent stays clear during maintenance and debugging.
-   */
-  ThunkResult
-      .then([Promise, Store](FMemoryItem SavedItem) {
-        FMemoryStore NewStore = Store;
-        NewStore.Items.Add(SavedItem);
-        Promise->SetValue(MemoryTypes::make_right(FString(), NewStore));
-      })
-      .catch_([Promise](std::string Error) {
-        Promise->SetValue(
-            MemoryTypes::make_left(FString(Error.c_str()), FMemoryStore{}));
-      })
-      .execute();
-
-  return Promise->GetFuture();
+                 return Promise->GetFuture();
+               }();
 }
 
 /**
@@ -158,47 +169,56 @@ MemoryOps::Add(const FMemoryStore &Store, const FMemoryItem &Item) {
 TFuture<MemoryTypes::MemoryStoreRecallResult>
 MemoryOps::Recall(const FMemoryStore &Store, const FString &Query,
                   int32 Limit) {
-  if (!Store.bInitialized) {
-    TPromise<MemoryTypes::MemoryStoreRecallResult> Promise;
-    Promise.SetValue(MemoryTypes::make_left(
-        FString(TEXT("Memory store not initialized")), TArray<FMemoryItem>{}));
-    return Promise.GetFuture();
-  }
+  return !Store.bInitialized
+             ? [&]() -> TFuture<MemoryTypes::MemoryStoreRecallResult> {
+                 TPromise<MemoryTypes::MemoryStoreRecallResult> Promise;
+                 Promise.SetValue(MemoryTypes::make_left(
+                     FString(TEXT("Memory store not initialized")),
+                     TArray<FMemoryItem>{}));
+                 return Promise.GetFuture();
+               }()
+             : [&]() -> TFuture<MemoryTypes::MemoryStoreRecallResult> {
+                 TSharedPtr<TPromise<MemoryTypes::MemoryStoreRecallResult>>
+                     Promise = MakeShared<
+                         TPromise<MemoryTypes::MemoryStoreRecallResult>>();
 
-  TSharedPtr<TPromise<MemoryTypes::MemoryStoreRecallResult>> Promise =
-      MakeShared<TPromise<MemoryTypes::MemoryStoreRecallResult>>();
+                 auto RuntimeStore = ConfigureStore();
+                 FMemoryRecallRequest RecallRequest;
+                 RecallRequest.Query = Query;
+                 RecallRequest.Limit =
+                     Limit < 0 ? Store.Config.MaxRecallResults : Limit;
+                 RecallRequest.Threshold = 0.0f;
 
-  auto RuntimeStore = ConfigureStore();
-  FMemoryRecallRequest RecallRequest;
-  RecallRequest.Query = Query;
-  RecallRequest.Limit = Limit < 0 ? Store.Config.MaxRecallResults : Limit;
-  RecallRequest.Threshold = 0.0f;
+                 /**
+                  * Dispatch the recall thunk
+                  * User Story: As a maintainer, I need this step note so I can follow the scenario progression and reason about the expected state changes.
+                  */
+                 auto ThunkResult = rtk::nodeMemoryRecallThunk(RecallRequest)(
+                     [RuntimeStore](const rtk::AnyAction &a) {
+                       return RuntimeStore.dispatch(a);
+                     },
+                     [RuntimeStore]() {
+                       return RuntimeStore.getState();
+                     });
 
-  /**
-   * Dispatch the recall thunk
-   * User Story: As a maintainer, I need this step note so I can follow the scenario progression and reason about the expected state changes.
-   */
-  auto ThunkResult = rtk::nodeMemoryRecallThunk(RecallRequest)(
-      [RuntimeStore](const rtk::AnyAction &a) {
-        return RuntimeStore.dispatch(a);
-      },
-      [RuntimeStore]() { return RuntimeStore.getState(); });
+                 /**
+                  * Chain result back to the promise
+                  * User Story: As a maintainer, I need this note so the surrounding code intent stays clear during maintenance and debugging.
+                  */
+                 ThunkResult
+                     .then([Promise](TArray<FMemoryItem> Results) {
+                       Promise->SetValue(
+                           MemoryTypes::make_right(FString(), Results));
+                     })
+                     .catch_([Promise](std::string Error) {
+                       Promise->SetValue(MemoryTypes::make_left(
+                           FString(Error.c_str()),
+                           TArray<FMemoryItem>{}));
+                     })
+                     .execute();
 
-  /**
-   * Chain result back to the promise
-   * User Story: As a maintainer, I need this note so the surrounding code intent stays clear during maintenance and debugging.
-   */
-  ThunkResult
-      .then([Promise](TArray<FMemoryItem> Results) {
-        Promise->SetValue(MemoryTypes::make_right(FString(), Results));
-      })
-      .catch_([Promise](std::string Error) {
-        Promise->SetValue(MemoryTypes::make_left(FString(Error.c_str()),
-                                                 TArray<FMemoryItem>{}));
-      })
-      .execute();
-
-  return Promise->GetFuture();
+                 return Promise->GetFuture();
+               }();
 }
 
 /**
@@ -207,23 +227,26 @@ MemoryOps::Recall(const FMemoryStore &Store, const FString &Query,
  */
 TFuture<MemoryTypes::MemoryStoreEmbeddingResult>
 MemoryOps::GenerateEmbedding(const FMemoryStore &Store, const FString &Text) {
-  if (!Store.bInitialized) {
-    TPromise<MemoryTypes::MemoryStoreEmbeddingResult> Promise;
-    Promise.SetValue(MemoryTypes::make_left(
-        FString(TEXT("Memory store not initialized")), TArray<float>{}));
-    return Promise.GetFuture();
-  }
-
-  return Async(EAsyncExecution::Thread,
-               [Store, Text]() -> MemoryTypes::MemoryStoreEmbeddingResult {
-                 try {
-                   return MemoryInternal::SQLiteVSS::GenerateEmbedding(
-                       Store.DatabaseHandle, Text);
-                 } catch (const std::exception &e) {
-                   return MemoryTypes::make_left(FString(e.what()),
-                                                 TArray<float>{});
-                 }
-               });
+  return !Store.bInitialized
+             ? [&]() -> TFuture<MemoryTypes::MemoryStoreEmbeddingResult> {
+                 TPromise<MemoryTypes::MemoryStoreEmbeddingResult> Promise;
+                 Promise.SetValue(MemoryTypes::make_left(
+                     FString(TEXT("Memory store not initialized")),
+                     TArray<float>{}));
+                 return Promise.GetFuture();
+               }()
+             : Async(
+                   EAsyncExecution::Thread,
+                   [Store,
+                    Text]() -> MemoryTypes::MemoryStoreEmbeddingResult {
+                     try {
+                       return MemoryInternal::SQLiteVSS::GenerateEmbedding(
+                           Store.DatabaseHandle, Text);
+                     } catch (const std::exception &e) {
+                       return MemoryTypes::make_left(FString(e.what()),
+                                                     TArray<float>{});
+                     }
+                   });
 }
 
 /**
@@ -239,9 +262,11 @@ FString MemoryOps::GetStatistics(const FMemoryStore &Store) {
  * User Story: As a maintainer, I need this note so the surrounding code intent stays clear during maintenance and debugging.
  */
 void MemoryOps::Cleanup(FMemoryStore &Store) {
-  if (Store.bInitialized && Store.DatabaseHandle != nullptr) {
-    MemoryInternal::SQLiteVSS::CloseDatabase(Store.DatabaseHandle);
-    Store.DatabaseHandle = nullptr;
-    Store.bInitialized = false;
-  }
+  (Store.bInitialized && Store.DatabaseHandle != nullptr)
+      ? [&]() {
+          MemoryInternal::SQLiteVSS::CloseDatabase(Store.DatabaseHandle);
+          Store.DatabaseHandle = nullptr;
+          Store.bInitialized = false;
+        }()
+      : (void)0;
 }
