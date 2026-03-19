@@ -136,7 +136,12 @@ while IFS= read -r line; do
   [ -z "$line" ] && continue
   # Extract the code after filename:linenum:
   code="${line#*:*:}"
-  # Skip lines where the match is inside a comment
+  # Skip block-comment continuation lines ( * ...) and line comments (// ...)
+  trimmed="$(echo "$code" | sed 's/^[[:space:]]*//')"
+  case "$trimmed" in
+    \**|//*) continue ;;
+  esac
+  # Skip lines where the remaining match is inside an inline comment
   stripped="$(echo "$code" | sed 's|//.*||' | sed 's|/\*.*\*/||g')"
   if echo "$stripped" | rg -q '\b(if|for|while|switch)\s*\(' 2>/dev/null; then
     IMPERATIVE_REAL="$IMPERATIVE_REAL

@@ -257,8 +257,10 @@ ClearNodeMemory(rtk::EnhancedStore<FStoreState> &Store) {
  * model so CLI commands can prepare inference without extra wiring.
  */
 inline FCortexStatus InitCortex(rtk::EnhancedStore<FStoreState> &Store,
-                                const FString &Model) {
-  return WaitForResult(Store.dispatch(rtk::initNodeCortexThunk(Model)));
+                                const FString &Model,
+                                double TimeoutSeconds = 60.0) {
+  return WaitForResult(Store.dispatch(rtk::initNodeCortexThunk(Model)),
+                       TimeoutSeconds);
 }
 
 /**
@@ -267,8 +269,10 @@ inline FCortexStatus InitCortex(rtk::EnhancedStore<FStoreState> &Store,
  * completion so terminal prompts exercise the same thunk path as gameplay.
  */
 inline FCortexResponse CompleteCortex(rtk::EnhancedStore<FStoreState> &Store,
-                                      const FString &Prompt) {
-  return WaitForResult(Store.dispatch(rtk::completeNodeCortexThunk(Prompt)));
+                                      const FString &Prompt,
+                                      double TimeoutSeconds = 60.0) {
+  return WaitForResult(Store.dispatch(rtk::completeNodeCortexThunk(Prompt)),
+                       TimeoutSeconds);
 }
 
 /**
