@@ -48,8 +48,15 @@ else
 fi
 
 # 3) No direct FHttpModule::Get().CreateRequest() outside approved adapter layer.
+#    Approved locations (Public + Private):
+#      AsyncHttp.h       — canonical HTTP adapter (all SDK HTTP goes through here)
+#      ThunkDetail.h     — Arweave transport (binary payloads, retries, custom timeouts)
+#      BridgeModule.cpp  — lazy HTTP wrapper for bridge rules
+#      NativeEngine.cpp  — binary file download for native deps
 DIRECT_HTTP="$(rg -n 'FHttpModule::Get\(\)\.CreateRequest\(\)' \
-  "$SRC/Private" \
+  "$SRC/Public" "$SRC/Private" \
+  --glob '!**/Core/AsyncHttp.h' \
+  --glob '!**/Core/ThunkDetail.h' \
   --glob '!**/Bridge/BridgeModule.cpp' \
   --glob '!**/NativeEngine.cpp' \
   --glob '!**/Tests/**' \
@@ -86,9 +93,13 @@ else
 fi
 
 # 5) No FPlatformProcess::CreateProc outside approved CLI/setup code.
+#    Approved locations (Public + Private):
+#      CLI/              — CLI command handlers (setup, build, etc.)
+#      TestGameLib.h     — test-game scenario command runner
 DIRECT_PROC="$(rg -n 'FPlatformProcess::CreateProc' \
-  "$SRC/Private" \
+  "$SRC/Public" "$SRC/Private" \
   --glob '!**/CLI/**' \
+  --glob '!**/TestGame/TestGameLib.h' \
   --glob '!**/Tests/**' \
   2>/dev/null || true)"
 if [ -n "$DIRECT_PROC" ]; then

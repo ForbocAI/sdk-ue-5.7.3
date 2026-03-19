@@ -46,7 +46,9 @@ T WaitForResult(func::AsyncResult<T> &&Async, double TimeoutSeconds = 15.0) {
   struct PollLoop {
     static void apply(bool &Completed, double Start, double Timeout) {
       (!Completed && (FPlatformTime::Seconds() - Start) < Timeout)
-          ? (FHttpModule::Get().GetHttpManager().Tick(0.05f),
+          ? (FTaskGraphInterface::Get().ProcessThreadUntilIdle(
+                 ENamedThreads::GameThread),
+             FHttpModule::Get().GetHttpManager().Tick(0.05f),
              FPlatformProcess::Sleep(0.05f),
              apply(Completed, Start, Timeout), void())
           : void();

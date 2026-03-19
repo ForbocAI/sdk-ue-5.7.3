@@ -7,6 +7,7 @@
 #if WITH_FORBOC_SQLITE_VEC
 extern "C" {
 #include "sqlite3.h"
+#include "sqlite-vec.h"
 }
 #endif
 
@@ -271,15 +272,19 @@ TArray<float> Embed(Context Ctx, const FString &Text) {
                             Utf8Bytes(Utf8.Get()), Out.GetData(),
                             EmbeddingDimensions)
                             ? Out
-                            : (UE_LOG(LogTemp, Error,
-                                      TEXT("ForbocAI: Embed failed — native "
-                                           "embedding model required.")),
-                               TArray<float>());
+                            : [&]() -> TArray<float> {
+                                UE_LOG(LogTemp, Error,
+                                       TEXT("ForbocAI: Embed failed — native "
+                                            "embedding model required."));
+                                return TArray<float>();
+                              }();
                }()
-             : (UE_LOG(LogTemp, Error,
-                       TEXT("ForbocAI: Embed failed — native embedding model "
-                            "required.")),
-                TArray<float>());
+             : [&]() -> TArray<float> {
+                 UE_LOG(LogTemp, Error,
+                        TEXT("ForbocAI: Embed failed — native embedding model "
+                             "required."));
+                 return TArray<float>();
+               }();
 #else
   UE_LOG(LogTemp, Error, TEXT("ForbocAI: Embed failed — native embedding model required."));
   return TArray<float>();
@@ -309,10 +314,12 @@ FString Infer(Context Ctx, const FString &Prompt, int32 MaxTokens) {
                               : TEXT("Error: Inference failed");
              }()
 #else
-             (UE_LOG(LogTemp, Error,
-                     TEXT("ForbocAI: Infer requires WITH_FORBOC_NATIVE=1. "
-                          "Native libs not available.")),
-              FString(TEXT("Error: Native inference not available")))
+             [&]() -> FString {
+               UE_LOG(LogTemp, Error,
+                      TEXT("ForbocAI: Infer requires WITH_FORBOC_NATIVE=1. "
+                           "Native libs not available."));
+               return FString(TEXT("Error: Native inference not available"));
+             }()
 #endif
       ;
 }
@@ -348,10 +355,12 @@ FString Infer(Context Ctx, const FString &Prompt, const FCortexConfig &Config) {
                                             "inference failed");
                      }())
 #else
-             (UE_LOG(LogTemp, Error,
-                     TEXT("ForbocAI: Grammar-constrained inference requires "
-                          "WITH_FORBOC_NATIVE=1.")),
-              FString(TEXT("Error: Native inference not available")))
+             [&]() -> FString {
+               UE_LOG(LogTemp, Error,
+                      TEXT("ForbocAI: Grammar-constrained inference requires "
+                           "WITH_FORBOC_NATIVE=1."));
+               return FString(TEXT("Error: Native inference not available"));
+             }()
 #endif
              : ApplyStopTokens(Infer(Ctx, Prompt, Config.MaxTokens),
                                Config.Stop);
@@ -404,10 +413,12 @@ FString InferStream(Context Ctx, const FString &Prompt,
                return ApplyStopTokens(State.Accumulated, Config.Stop);
              }()
 #else
-             (UE_LOG(LogTemp, Error,
-                     TEXT("ForbocAI: InferStream requires "
-                          "WITH_FORBOC_NATIVE=1. Native libs not available.")),
-              FString(TEXT("Error: Native inference not available")))
+             [&]() -> FString {
+               UE_LOG(LogTemp, Error,
+                      TEXT("ForbocAI: InferStream requires "
+                           "WITH_FORBOC_NATIVE=1. Native libs not available."));
+               return FString(TEXT("Error: Native inference not available"));
+             }()
 #endif
       ;
 }
@@ -454,11 +465,13 @@ DB Open(const FString &Path) {
 
   return (NormalizedPath != TEXT(":memory:") &&
           NormalizedPath.Contains(TEXT("..")))
-             ? (UE_LOG(LogTemp, Error,
-                       TEXT("ForbocAI: Rejected database path containing "
-                            "'..': %s"),
-                       *NormalizedPath),
-                static_cast<DB>(nullptr))
+             ? [&]() -> DB {
+                 UE_LOG(LogTemp, Error,
+                        TEXT("ForbocAI: Rejected database path containing "
+                             "'..': %s"),
+                        *NormalizedPath);
+                 return static_cast<DB>(nullptr);
+               }()
              :
 #if WITH_FORBOC_SQLITE_VEC
              [&]() -> DB {
@@ -469,23 +482,30 @@ DB Open(const FString &Path) {
                           ? (Db ? (sqlite3_close(Db), static_cast<DB>(nullptr))
                                 : static_cast<DB>(nullptr))
                           : [&]() -> DB {
+                              /* Register sqlite-vec extension before creating
+                               * the vec0 virtual table. With SQLITE_CORE=1 the
+                               * extension uses the host sqlite3 API directly. */
+                              sqlite3_vec_init(Db, nullptr, nullptr);
+
                               const char *CreateSql =
                                   "CREATE VIRTUAL TABLE IF NOT EXISTS memories "
                                   "USING "
                                   "vec0(embedding float[384], "
-                                  "id TEXT, text TEXT, type TEXT, importance "
-                                  "REAL, timestamp INTEGER);";
+                                  "+id text, +text text, +type text, "
+                                  "+importance float, +timestamp integer);";
                               sqlite3_exec(Db, CreateSql, nullptr, nullptr,
                                            nullptr);
                               return reinterpret_cast<DB>(Db);
                             }();
              }()
 #else
-             (UE_LOG(LogTemp, Error,
-                     TEXT("ForbocAI: Sqlite::Open requires "
-                          "WITH_FORBOC_SQLITE_VEC=1. Native libs not "
-                          "available.")),
-              static_cast<DB>(nullptr))
+             [&]() -> DB {
+               UE_LOG(LogTemp, Error,
+                      TEXT("ForbocAI: Sqlite::Open requires "
+                           "WITH_FORBOC_SQLITE_VEC=1. Native libs not "
+                           "available."));
+               return static_cast<DB>(nullptr);
+             }()
 #endif
       ;
 }
@@ -537,10 +557,11 @@ void ClearPath(const FString &Path) {
                                      : FPaths::ConvertRelativePathToFull(Path);
 
   (NormalizedPath != TEXT(":memory:") && NormalizedPath.Contains(TEXT("..")))
-      ? (UE_LOG(LogTemp, Error,
-                TEXT("ForbocAI: Rejected database path containing '..': %s"),
-                *NormalizedPath),
-         void())
+      ? [&]() {
+          UE_LOG(LogTemp, Error,
+                 TEXT("ForbocAI: Rejected database path containing '..': %s"),
+                 *NormalizedPath);
+        }()
       :
 #if WITH_FORBOC_SQLITE_VEC
       (static_cast<void>(NormalizedPath), void())

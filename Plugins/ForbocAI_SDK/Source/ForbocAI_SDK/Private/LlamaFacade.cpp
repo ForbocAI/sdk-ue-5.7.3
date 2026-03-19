@@ -116,7 +116,7 @@ static int StreamRecursive(llama_facade_context *Ctx,
                            const llama_vocab *Vocab,
                            llama_sampler *Smpl,
                            llama_batch &Batch,
-                           TokenCallback OnToken, void *UserData,
+                           LlamaFacade::TokenCallback OnToken, void *UserData,
                            int MaxTokens, int Generated, int32_t Pos) {
   return Generated >= MaxTokens
              ? Generated
@@ -261,13 +261,21 @@ char *Infer(llama_facade_context *Ctx, const char *PromptUtf8, int MaxTokens,
              : [&]() -> char * {
                  const llama_vocab *Vocab =
                      llama_model_get_vocab(Ctx->Model);
-                 const int32_t CtxSize = llama_n_ctx(Ctx->Ctx);
+                 const int32_t PromptLen = static_cast<int32_t>(strlen(PromptUtf8));
+                 const int32_t EstTokens = PromptLen + 2;
 
-                 std::vector<llama_token> Tokens(CtxSize, 0);
-                 const int32_t N = llama_tokenize(
-                     Vocab, PromptUtf8, -1, Tokens.data(),
+                 std::vector<llama_token> Tokens(EstTokens);
+                 int32_t N = llama_tokenize(
+                     Vocab, PromptUtf8, PromptLen, Tokens.data(),
                      static_cast<int32_t>(Tokens.size()), true, false);
-                 return N < 0
+                 N < 0 ? (Tokens.resize(static_cast<size_t>(-N)),
+                          N = llama_tokenize(Vocab, PromptUtf8, PromptLen,
+                                             Tokens.data(),
+                                             static_cast<int32_t>(Tokens.size()),
+                                             true, false),
+                          void())
+                       : void();
+                 return N <= 0
                             ? nullptr
                             : [&]() -> char * {
                                 Tokens.resize(static_cast<size_t>(N));
@@ -328,13 +336,21 @@ int InferStream(llama_facade_context *Ctx, const char *PromptUtf8, int MaxTokens
              : [&]() -> int {
                  const llama_vocab *Vocab =
                      llama_model_get_vocab(Ctx->Model);
-                 const int32_t CtxSize = llama_n_ctx(Ctx->Ctx);
+                 const int32_t PromptLen = static_cast<int32_t>(strlen(PromptUtf8));
+                 const int32_t EstTokens = PromptLen + 2;
 
-                 std::vector<llama_token> Tokens(CtxSize, 0);
-                 const int32_t N = llama_tokenize(
-                     Vocab, PromptUtf8, -1, Tokens.data(),
+                 std::vector<llama_token> Tokens(EstTokens);
+                 int32_t N = llama_tokenize(
+                     Vocab, PromptUtf8, PromptLen, Tokens.data(),
                      static_cast<int32_t>(Tokens.size()), true, false);
-                 return N < 0
+                 N < 0 ? (Tokens.resize(static_cast<size_t>(-N)),
+                          N = llama_tokenize(Vocab, PromptUtf8, PromptLen,
+                                             Tokens.data(),
+                                             static_cast<int32_t>(Tokens.size()),
+                                             true, false),
+                          void())
+                       : void();
+                 return N <= 0
                             ? 0
                             : [&]() -> int {
                                 Tokens.resize(static_cast<size_t>(N));
@@ -391,13 +407,21 @@ char *InferWithGrammar(llama_facade_context *Ctx, const char *PromptUtf8,
                    : [&]() -> char * {
                        const llama_vocab *Vocab =
                            llama_model_get_vocab(Ctx->Model);
-                       const int32_t CtxSize = llama_n_ctx(Ctx->Ctx);
+                       const int32_t PromptLen = static_cast<int32_t>(strlen(PromptUtf8));
+                       const int32_t EstTokens = PromptLen + 2;
 
-                       std::vector<llama_token> Tokens(CtxSize, 0);
-                       const int32_t N = llama_tokenize(
-                           Vocab, PromptUtf8, -1, Tokens.data(),
+                       std::vector<llama_token> Tokens(EstTokens);
+                       int32_t N = llama_tokenize(
+                           Vocab, PromptUtf8, PromptLen, Tokens.data(),
                            static_cast<int32_t>(Tokens.size()), true, false);
-                       return N < 0
+                       N < 0 ? (Tokens.resize(static_cast<size_t>(-N)),
+                                N = llama_tokenize(Vocab, PromptUtf8, PromptLen,
+                                                   Tokens.data(),
+                                                   static_cast<int32_t>(Tokens.size()),
+                                                   true, false),
+                                void())
+                             : void();
+                       return N <= 0
                                   ? nullptr
                                   : [&]() -> char * {
                                       Tokens.resize(static_cast<size_t>(N));
@@ -472,12 +496,22 @@ bool Embed(llama_facade_context *Ctx, const char *TextUtf8, float *Out,
   return (!Ctx || !TextUtf8 || !Out || Dims < 1 || !Ctx->IsEmbedding)
              ? false
              : [&]() -> bool {
+                 try {
                  const llama_vocab *Vocab =
                      llama_model_get_vocab(Ctx->Model);
-                 std::vector<llama_token> Tokens(512, 0);
-                 const int32_t N = llama_tokenize(
-                     Vocab, TextUtf8, -1, Tokens.data(),
+                 const int32_t TextLen = static_cast<int32_t>(strlen(TextUtf8));
+                 const int32_t EstTokens = TextLen + 2;
+                 std::vector<llama_token> Tokens(EstTokens);
+                 int32_t N = llama_tokenize(
+                     Vocab, TextUtf8, TextLen, Tokens.data(),
                      static_cast<int32_t>(Tokens.size()), true, false);
+                 N < 0 ? (Tokens.resize(static_cast<size_t>(-N)),
+                          N = llama_tokenize(Vocab, TextUtf8, TextLen,
+                                             Tokens.data(),
+                                             static_cast<int32_t>(Tokens.size()),
+                                             true, false),
+                          void())
+                       : void();
                  return N <= 0
                             ? false
                             : [&]() -> bool {
@@ -522,6 +556,11 @@ bool Embed(llama_facade_context *Ctx, const char *TextUtf8, float *Out,
                                                             }();
                                              }();
                               }();
+                 } catch (const std::exception &) {
+                   return false;
+                 } catch (...) {
+                   return false;
+                 }
                }();
 }
 

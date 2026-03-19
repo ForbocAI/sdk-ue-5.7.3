@@ -1367,7 +1367,7 @@ inline bool DecodeGhostStatusResponse(const FString &Json,
                                  const TSharedPtr<FJsonValue> Value =
                                      Root->TryGetField(TEXT("ghostErrors"));
                                  Value.IsValid()
-                                     ? func::or_else(
+                                     ? (func::or_else(
                                            func::multi_match<EJson, bool>(
                                                Value->Type,
                                                {func::when<EJson, bool>(
@@ -1402,7 +1402,7 @@ inline bool DecodeGhostStatusResponse(const FString &Json,
                                                           : void();
                                                       return true;
                                                     })}),
-                                           false)
+                                           false), void())
                                      : void();
                                }()
                              : void());

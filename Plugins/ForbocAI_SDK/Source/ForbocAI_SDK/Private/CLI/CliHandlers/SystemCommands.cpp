@@ -14,9 +14,11 @@ HandlerResult HandleSystem(rtk::EnhancedStore<FStoreState> &Store,
   using func::nothing;
 
   return CommandKey == TEXT("version")
-             ? (UE_LOG(LogTemp, Display, TEXT("ForbocAI SDK v%s (UE5)"),
-                       *SDKConfig::GetSdkVersion()),
-                just(Result::Success("Version printed")))
+             ? [&]() -> HandlerResult {
+                 UE_LOG(LogTemp, Display, TEXT("ForbocAI SDK v%s (UE5)"),
+                        *SDKConfig::GetSdkVersion());
+                 return just(Result::Success("Version printed"));
+               }()
          : CommandKey == TEXT("status")
              ? [&]() -> HandlerResult {
                  FApiStatusResponse Status = Ops::CheckApiStatus(Store);

@@ -20,7 +20,7 @@ namespace {
  */
 static const TCHAR *SQLITE_VERSION = TEXT("3460100");
 static const TCHAR *SQLITE_VEC_VERSION = TEXT("v0.1.6");
-static const TCHAR *LLAMA_CPP_TAG = TEXT("b8191");
+static const TCHAR *LLAMA_CPP_TAG = TEXT("b8420");
 static const TCHAR *MACOS_DEPLOYMENT_TARGET = TEXT("14.0");
 static const TCHAR *DEFAULT_CORTEX_MODEL_FILE =
     TEXT("SmolLM2-135M-Instruct-Q4_K_M.gguf");
