@@ -4,6 +4,7 @@
 #include "CoreMinimal.h"
 #include "Commandlets/Commandlet.h"
 #include "Core/functional_core.hpp"
+#include "TestGame/TestGameLib.h"
 #include "RuntimeCommandlet.generated.h"
 
 namespace CLITypes {
@@ -30,6 +31,7 @@ using func::make_right;
  *   soul_export -Id="..."
  *   config_set -Key="..." -Value="..."
  *   config_get -Key="..."
+ *   test_game -Mode=autoplay
  */
 UCLASS()
 class UForbocAICommandlet : public UCommandlet {
@@ -71,6 +73,17 @@ public:
    */
   CommandExecution createCommandPipeline(const FString &Command,
                                          const TArray<FString> &Args);
+
+  /**
+   * Builds the async execution pipeline for one CLI command, with an optional
+   * injected test-game executor for deterministic harness testing.
+   * User Story: As commandlet test coverage, I need the test-game command to
+   * accept a stub executor so the CLI entrypoint can be validated without
+   * depending on live runtime/network state.
+   */
+  CommandExecution createCommandPipeline(
+      const FString &Command, const TArray<FString> &Args,
+      const TestGame::FCommandExecutor &TestGameExecutor);
 
   /**
    * Builds the validation pipeline for incoming CLI commands.

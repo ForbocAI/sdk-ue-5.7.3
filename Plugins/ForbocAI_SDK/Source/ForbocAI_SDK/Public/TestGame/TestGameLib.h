@@ -6,8 +6,11 @@
  */
 
 #include "CLI/CliOperations.h"
+#include "Core/AsyncHttp.h"
 #include "CoreMinimal.h"
 #include "RuntimeStore.h"
+#include "Serialization/JsonReader.h"
+#include "Serialization/JsonSerializer.h"
 #include "TestGame/TestGameStore.h"
 #include "TestGame/TestGameTypes.h"
 #include "Core/functional_core.hpp"
@@ -661,26 +664,35 @@ inline FString RenderLegend() {
   return TEXT("Legend :: P=Scout  D=Doomguard  M=Miller  #=Blocked  .=Open");
 }
 
+using FRuntimeConnectivityProbe = TFunction<bool(const FString &)>;
+
 /**
  * Checks runtime connectivity to a given status URL.
- * Returns true if the endpoint responds with HTTP 200 within 1.5s.
+ * Returns true if the endpoint responds with JSON containing a status field
+ * within 1.5s.
  * User Story: As runtime fallback selection, I need a connectivity probe so
  * the test game can decide which runtime URL is available.
  */
+namespace detail {
+inline bool HasStatusJsonField(const FString &Body) {
+  TSharedPtr<FJsonObject> JsonObject;
+  TSharedRef<TJsonReader<>> Reader = TJsonReaderFactory<>::Create(Body);
+  return FJsonSerializer::Deserialize(Reader, JsonObject) &&
+         JsonObject.IsValid() && JsonObject->HasTypedField<EJson::String>(
+                                     TEXT("status"));
+}
+} // namespace detail
+
 inline bool CheckRuntimeConnectivity(
     const FString &Url = TEXT("http://localhost:8080/status")) {
-  /**
-   * Simplified sync check — in UE context this would use FHttpModule
-   * For the test harness, we just check if the URL is reachable
-   * User Story: As a maintainer, I need this note so the surrounding code intent stays clear during maintenance and debugging.
-   */
-  FString ResponseBody;
-  /**
-   * Note: Actual HTTP connectivity requires async FHttpModule usage.
-   * For the test game this is a stub — the orchestrator handles fallback.
-   * User Story: As a maintainer, I need this section note so related declarations and logic stay easy to locate.
-   */
-  return false;
+  try {
+    const func::HttpResult<FString> Result = Ops::WaitForResult(
+        func::AsyncHttp::Get<FString>(Url), 1.5);
+    return Result.bSuccess && Result.ResponseCode == 200 &&
+           detail::HasStatusJsonField(Result.data);
+  } catch (const std::exception &) {
+    return false;
+  }
 }
 
 /**
@@ -688,12 +700,17 @@ inline bool CheckRuntimeConnectivity(
  * User Story: As runtime fallback selection, I need one URL resolver so the
  * test game can prefer local runtime and fall back to remote API cleanly.
  */
-inline FString ResolveRuntimeUrl() {
-  return CheckRuntimeConnectivity(TEXT("http://localhost:8080/status"))
+inline FString ResolveRuntimeUrl(const FRuntimeConnectivityProbe &Probe) {
+  return Probe(TEXT("http://localhost:8080/status"))
              ? FString(TEXT("http://localhost:8080"))
-             : (CheckRuntimeConnectivity(TEXT("https://api.forboc.ai/status"))
+             : (Probe(TEXT("https://api.forboc.ai/status"))
                     ? FString(TEXT("https://api.forboc.ai"))
                     : FString());
+}
+
+inline FString ResolveRuntimeUrl() {
+  return ResolveRuntimeUrl(
+      [](const FString &Url) { return CheckRuntimeConnectivity(Url); });
 }
 
 } // namespace TestGame

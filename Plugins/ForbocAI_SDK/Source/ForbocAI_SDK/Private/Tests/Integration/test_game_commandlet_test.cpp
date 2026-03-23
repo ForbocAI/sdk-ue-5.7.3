@@ -1,0 +1,108 @@
+#include "Misc/AutomationTest.h"
+#include "RuntimeCommandlet.h"
+#include "TestGame/TestGameLib.h"
+
+// @covers:cli:test_game
+
+using namespace TestGame;
+
+namespace {
+
+FCommandExecutor MakeExecutor(const FString &FailCommand = FString()) {
+  return [FailCommand](FCommandExecutionContext &Context,
+                       const FCommandSpec &Command) -> FCommandResult {
+    (void)Context;
+    return !FailCommand.IsEmpty() && Command.Command == FailCommand
+               ? FCommandResult{ETranscriptStatus::Error, TEXT("stub failure")}
+               : FCommandResult{ETranscriptStatus::Ok, TEXT("stub success")};
+  };
+}
+
+} // namespace
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+    FTestGameCommandletPipelineSuccessTest,
+    "ForbocAI.Integration.TestGame.Commandlet.PipelineSuccess",
+    EAutomationTestFlags_ApplicationContextMask |
+        EAutomationTestFlags::EngineFilter)
+bool FTestGameCommandletPipelineSuccessTest::RunTest(
+    const FString &Parameters) {
+  (void)Parameters;
+  UForbocAICommandlet *Commandlet = NewObject<UForbocAICommandlet>();
+  bool bCompleted = false;
+  FString Error;
+  TArray<FString> Args;
+  Args.Add(TEXT("autoplay"));
+
+  Commandlet->createCommandPipeline(TEXT("test_game"), Args, MakeExecutor())
+      .then([&bCompleted]() { bCompleted = true; })
+      .catch_([&Error](std::string Message) {
+        Error = UTF8_TO_TCHAR(Message.c_str());
+      })
+      .execute();
+
+  TestTrue("test_game command completes through commandlet pipeline",
+           bCompleted);
+  TestTrue("test_game command does not reject on success", Error.IsEmpty());
+  return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+    FTestGameCommandletPipelineFailureTest,
+    "ForbocAI.Integration.TestGame.Commandlet.PipelineFailure",
+    EAutomationTestFlags_ApplicationContextMask |
+        EAutomationTestFlags::EngineFilter)
+bool FTestGameCommandletPipelineFailureTest::RunTest(
+    const FString &Parameters) {
+  (void)Parameters;
+  AddExpectedError(TEXT("LOG_ERR_CRITICAL // BIT_ROT_DETECTED"),
+                   EAutomationExpectedErrorFlags::Contains, 1);
+  AddExpectedError(TEXT("stub failure"),
+                   EAutomationExpectedErrorFlags::Contains, 1);
+
+  UForbocAICommandlet *Commandlet = NewObject<UForbocAICommandlet>();
+  bool bCompleted = false;
+  FString Error;
+  TArray<FString> Args;
+  Args.Add(TEXT("autoplay"));
+
+  Commandlet
+      ->createCommandPipeline(TEXT("test_game"), Args,
+                              MakeExecutor(TEXT("forbocai status")))
+      .then([&bCompleted]() { bCompleted = true; })
+      .catch_([&Error](std::string Message) {
+        Error = UTF8_TO_TCHAR(Message.c_str());
+      })
+      .execute();
+
+  TestFalse("test_game command rejects when the harness run fails", bCompleted);
+  TestTrue("test_game command returns the run summary on failure",
+           Error.Contains(TEXT("VOID_GAPS_DETECTED")));
+  return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+    FTestGameRuntimeUrlResolutionTest,
+    "ForbocAI.Integration.TestGame.RuntimeUrlResolution",
+    EAutomationTestFlags_ApplicationContextMask |
+        EAutomationTestFlags::EngineFilter)
+bool FTestGameRuntimeUrlResolutionTest::RunTest(const FString &Parameters) {
+  (void)Parameters;
+
+  const FString LocalPreferred = ResolveRuntimeUrl(
+      [](const FString &Url) { return Url.Contains(TEXT("localhost:8080")); });
+  TestEqual("ResolveRuntimeUrl prefers localhost when available",
+            LocalPreferred, FString(TEXT("http://localhost:8080")));
+
+  const FString RemoteFallback = ResolveRuntimeUrl([](const FString &Url) {
+    return Url.Contains(TEXT("api.forboc.ai"));
+  });
+  TestEqual("ResolveRuntimeUrl falls back to remote API when localhost fails",
+            RemoteFallback, FString(TEXT("https://api.forboc.ai")));
+
+  const FString MissingRuntime =
+      ResolveRuntimeUrl([](const FString &) { return false; });
+  TestTrue("ResolveRuntimeUrl returns empty when no runtime is reachable",
+           MissingRuntime.IsEmpty());
+  return true;
+}
