@@ -154,10 +154,10 @@ inline void ApplyScenarioInitialState(
 
   (Step.EventType == EEventType::Persistence)
       ? [&]() {
-          GameSoulActions::FMarkSoulExportedPayload Export;
-          Export.NpcId = TEXT("doomguard");
-          Export.TxId = TEXT("tx-demo-001");
-          Store.dispatch(GameSoulActions::MarkSoulExported(Export));
+          FMarkSoulExportedPayload ExportPayload;
+          ExportPayload.NpcId = TEXT("doomguard");
+          ExportPayload.TxId = TEXT("tx-demo-001");
+          Store.dispatch(GameSoulActions::MarkSoulExported(ExportPayload));
           Store.dispatch(
               GameSoulActions::MarkSoulImported(TEXT("tx-demo-001")));
           Store.dispatch(
@@ -242,15 +242,12 @@ inline void LogCommandResult(const FCommandSpec &Cmd,
                           : FString(TEXT("[error]"));
   UE_LOG(LogTemp, Display, TEXT("%s %s"), *StatusStr, *Cmd.Command);
 
-  (CmdResult.Status == ETranscriptStatus::Error)
-      ? [&]() {
-          UE_LOG(LogTemp, Error, TEXT("LOG_ERR_CRITICAL // BIT_ROT_DETECTED"));
-          !CmdResult.Output.IsEmpty()
-              ? (UE_LOG(LogTemp, Error, TEXT("  | %s"), *CmdResult.Output),
-                 void())
-              : (void)0;
-        }()
-      : (void)0;
+  if (CmdResult.Status == ETranscriptStatus::Error) {
+    UE_LOG(LogTemp, Error, TEXT("LOG_ERR_CRITICAL // BIT_ROT_DETECTED"));
+    if (!CmdResult.Output.IsEmpty()) {
+      UE_LOG(LogTemp, Error, TEXT("  | %s"), *CmdResult.Output);
+    }
+  }
 }
 
 /**
@@ -258,14 +255,19 @@ inline void LogCommandResult(const FCommandSpec &Cmd,
  * User Story: As a maintainer, I need this note so the surrounding code intent stays clear during maintenance and debugging.
  */
 inline void ProcessCommand(const FScenarioStep &Step, const FCommandSpec &Cmd,
-                            rtk::EnhancedStore<FTestGameState> &Store) {
-  FCommandResult CmdResult = RunCommand(Cmd);
+                           FCommandExecutionContext &CommandContext,
+                           const FCommandExecutor &Executor,
+                           rtk::EnhancedStore<FTestGameState> &Store) {
+  FCommandResult CmdResult =
+      Executor ? Executor(CommandContext, Cmd) : RunCommand(CommandContext, Cmd);
 
   /**
    * Update coverage
    * User Story: As a maintainer, I need this step note so I can follow the scenario progression and reason about the expected state changes.
    */
-  Store.dispatch(HarnessActions::MarkCovered(Cmd.Group));
+  (CmdResult.Status == ETranscriptStatus::Ok)
+      ? (Store.dispatch(HarnessActions::MarkCovered(Cmd.Group)), void())
+      : (void)0;
 
   /**
    * Record transcript
@@ -284,7 +286,9 @@ inline void ProcessCommand(const FScenarioStep &Step, const FCommandSpec &Cmd,
    * Drive state from CLI output
    * User Story: As a maintainer, I need this note so the surrounding code intent stays clear during maintenance and debugging.
    */
-  ApplyVerdictIfValid(Cmd, CmdResult, Store);
+  (CmdResult.Status == ETranscriptStatus::Ok)
+      ? (ApplyVerdictIfValid(Cmd, CmdResult, Store), void())
+      : (void)0;
 
   LogCommandResult(Cmd, CmdResult);
 }
@@ -295,12 +299,16 @@ inline void ProcessCommand(const FScenarioStep &Step, const FCommandSpec &Cmd,
  */
 namespace detail {
 inline void ProcessCommands(const FScenarioStep &Step,
-                             const TArray<FCommandSpec> &Commands, int32 Index,
-                             rtk::EnhancedStore<FTestGameState> &Store) {
+                            const TArray<FCommandSpec> &Commands, int32 Index,
+                            FCommandExecutionContext &CommandContext,
+                            const FCommandExecutor &Executor,
+                            rtk::EnhancedStore<FTestGameState> &Store) {
   return Index >= Commands.Num()
              ? (void)0
-             : (ProcessCommand(Step, Commands[Index], Store),
-                ProcessCommands(Step, Commands, Index + 1, Store));
+             : (ProcessCommand(Step, Commands[Index], CommandContext, Executor,
+                               Store),
+                ProcessCommands(Step, Commands, Index + 1, CommandContext,
+                                Executor, Store));
 }
 
 /**
@@ -308,16 +316,20 @@ inline void ProcessCommands(const FScenarioStep &Step,
  * User Story: As a maintainer, I need this note so the surrounding code intent stays clear during maintenance and debugging.
  */
 inline void ProcessSteps(const TArray<FScenarioStep> &Steps, int32 Index,
-                          rtk::EnhancedStore<FTestGameState> &Store) {
-  return Index >= Steps.Num()
-             ? (void)0
-             : (UE_LOG(LogTemp, Display, TEXT("\n:: %s [%s]"),
-                       *Steps[Index].Title, *Steps[Index].Id),
-                UE_LOG(LogTemp, Display, TEXT("%s"),
-                       *Steps[Index].Description),
-                ApplyScenarioInitialState(Steps[Index], Store),
-                ProcessCommands(Steps[Index], Steps[Index].Commands, 0, Store),
-                ProcessSteps(Steps, Index + 1, Store));
+                         FCommandExecutionContext &CommandContext,
+                         const FCommandExecutor &Executor,
+                         rtk::EnhancedStore<FTestGameState> &Store) {
+  if (Index >= Steps.Num()) {
+    return;
+  }
+
+  UE_LOG(LogTemp, Display, TEXT("\n:: %s [%s]"), *Steps[Index].Title,
+         *Steps[Index].Id);
+  UE_LOG(LogTemp, Display, TEXT("%s"), *Steps[Index].Description);
+  ApplyScenarioInitialState(Steps[Index], Store);
+  ProcessCommands(Steps[Index], Steps[Index].Commands, 0, CommandContext,
+                  Executor, Store);
+  ProcessSteps(Steps, Index + 1, CommandContext, Executor, Store);
 }
 
 /**
@@ -340,15 +352,24 @@ inline FString JoinMissingGroups(const TArray<ECommandGroup> &Missing,
  */
 inline void LogTranscriptEntries(const TArray<FTranscriptEntry> &Entries,
                                   int32 Index) {
+  if (Index >= Entries.Num()) {
+    return;
+  }
+
+  const FString Status =
+      Entries[Index].Status == ETranscriptStatus::Ok ? TEXT("ok   ")
+                                                     : TEXT("error");
+  UE_LOG(LogTemp, Display, TEXT("%s | %s | %s"), *Entries[Index].Timestamp,
+         *Status, *Entries[Index].Command);
+  LogTranscriptEntries(Entries, Index + 1);
+}
+
+inline int32 CountTranscriptErrors(const TArray<FTranscriptEntry> &Entries,
+                                   int32 Index) {
   return Index >= Entries.Num()
-             ? (void)0
-             : (UE_LOG(LogTemp, Display, TEXT("%s | %s | %s"),
-                       *Entries[Index].Timestamp,
-                       *(Entries[Index].Status == ETranscriptStatus::Ok
-                             ? FString(TEXT("ok   "))
-                             : FString(TEXT("error"))),
-                       *Entries[Index].Command),
-                LogTranscriptEntries(Entries, Index + 1));
+             ? 0
+             : ((Entries[Index].Status == ETranscriptStatus::Error ? 1 : 0) +
+                CountTranscriptErrors(Entries, Index + 1));
 }
 } // namespace detail
 
@@ -359,8 +380,11 @@ inline void LogTranscriptEntries(const TArray<FTranscriptEntry> &Entries,
  * User Story: As end-to-end test execution, I need one orchestrator entrypoint
  * so a full scenario suite can run and report transcript plus coverage state.
  */
-inline FGameRunResult RunGame(EPlayMode Mode) {
+inline FGameRunResult RunGame(
+    EPlayMode Mode, const FCommandExecutor &Executor = FCommandExecutor()) {
+  SDKConfig::InitializeConfig();
   auto Store = createTestGameStoreWithListeners();
+  FCommandExecutionContext CommandContext;
   Store.dispatch(UIActions::SetMode(Mode));
 
   /**
@@ -384,7 +408,7 @@ inline FGameRunResult RunGame(EPlayMode Mode) {
   UE_LOG(LogTemp, Display, TEXT("%s"), *RenderLegend());
 
   const auto &Steps = Store.getState().Scenario.Steps;
-  detail::ProcessSteps(Steps, 0, Store);
+  detail::ProcessSteps(Steps, 0, CommandContext, Executor, Store);
 
   /**
    * Build result
@@ -392,12 +416,21 @@ inline FGameRunResult RunGame(EPlayMode Mode) {
    */
   const auto &State = Store.getState();
   TArray<ECommandGroup> Missing = SelectMissingGroups(State.Harness.Covered);
-  bool bComplete = Missing.Num() == 0;
+  const int32 ErrorCount =
+      detail::CountTranscriptErrors(State.Transcript.Entries, 0);
+  bool bComplete = Missing.Num() == 0 && ErrorCount == 0;
 
   FString Summary = bComplete
                         ? FString(TEXT("ALL_BINDINGS_COMPLETE :: Coverage achieved."))
-                        : FString(TEXT("VOID_GAPS_DETECTED :: Missing groups -> ")) +
-                              detail::JoinMissingGroups(Missing, 0, FString());
+                        : FString::Printf(TEXT("VOID_GAPS_DETECTED :: %d transcript error%s"),
+                                          ErrorCount,
+                                          ErrorCount == 1 ? TEXT("")
+                                                          : TEXT("s"));
+  Missing.Num() > 0
+      ? (Summary += FString(TEXT(" | Missing groups -> ")) +
+                    detail::JoinMissingGroups(Missing, 0, FString()),
+         void())
+      : (void)0;
 
   /**
    * Log transcript summary
