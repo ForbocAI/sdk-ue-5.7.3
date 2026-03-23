@@ -209,6 +209,12 @@ inline FTestGameState TestGameReducer(const FTestGameState &State,
   return Next;
 }
 
+inline FTestGameState CreateInitialTestGameState() {
+  FTestGameState Initial;
+  Initial.Scenario.Steps = GetDefaultScenarioSteps();
+  return Initial;
+}
+
 /**
  * Creates a fresh test-game store instance.
  * User Story: As deterministic game runs, I need a new store per session so
@@ -221,7 +227,8 @@ inline rtk::EnhancedStore<FTestGameState> createTestGameStore() {
    * User Story: As a maintainer, I need this note so the surrounding code intent stays clear during maintenance and debugging.
    */
   return rtk::configureStore<FTestGameState>(&TestGameReducer,
-                                             FTestGameState(), Middlewares);
+                                             CreateInitialTestGameState(),
+                                             Middlewares);
 }
 
 } // namespace TestGame

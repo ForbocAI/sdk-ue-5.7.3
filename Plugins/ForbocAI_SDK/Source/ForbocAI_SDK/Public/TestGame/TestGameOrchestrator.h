@@ -258,15 +258,18 @@ inline void ProcessCommand(const FScenarioStep &Step, const FCommandSpec &Cmd,
                            FCommandExecutionContext &CommandContext,
                            const FCommandExecutor &Executor,
                            rtk::EnhancedStore<FTestGameState> &Store) {
+  const FString ScenarioId = Step.Id;
+  const FCommandSpec StableCmd = Cmd;
   FCommandResult CmdResult =
-      Executor ? Executor(CommandContext, Cmd) : RunCommand(CommandContext, Cmd);
+      Executor ? Executor(CommandContext, StableCmd)
+               : RunCommand(CommandContext, StableCmd);
 
   /**
    * Update coverage
    * User Story: As a maintainer, I need this step note so I can follow the scenario progression and reason about the expected state changes.
    */
   (CmdResult.Status == ETranscriptStatus::Ok)
-      ? (Store.dispatch(HarnessActions::MarkCovered(Cmd.Group)), void())
+      ? (Store.dispatch(HarnessActions::MarkCovered(StableCmd.Group)), void())
       : (void)0;
 
   /**
@@ -274,10 +277,10 @@ inline void ProcessCommand(const FScenarioStep &Step, const FCommandSpec &Cmd,
    * User Story: As a maintainer, I need this note so the surrounding code intent stays clear during maintenance and debugging.
    */
   TranscriptActions::FRecordTranscriptPayload TxPayload;
-  TxPayload.ScenarioId = Step.Id;
-  TxPayload.CommandGroup = Cmd.Group;
-  TxPayload.Command = Cmd.Command;
-  TxPayload.ExpectedRoutes = Cmd.ExpectedRoutes;
+  TxPayload.ScenarioId = ScenarioId;
+  TxPayload.CommandGroup = StableCmd.Group;
+  TxPayload.Command = StableCmd.Command;
+  TxPayload.ExpectedRoutes = StableCmd.ExpectedRoutes;
   TxPayload.Status = CmdResult.Status;
   TxPayload.Output = CmdResult.Output;
   Store.dispatch(TranscriptActions::RecordTranscript(TxPayload));
@@ -287,10 +290,10 @@ inline void ProcessCommand(const FScenarioStep &Step, const FCommandSpec &Cmd,
    * User Story: As a maintainer, I need this note so the surrounding code intent stays clear during maintenance and debugging.
    */
   (CmdResult.Status == ETranscriptStatus::Ok)
-      ? (ApplyVerdictIfValid(Cmd, CmdResult, Store), void())
+      ? (ApplyVerdictIfValid(StableCmd, CmdResult, Store), void())
       : (void)0;
 
-  LogCommandResult(Cmd, CmdResult);
+  LogCommandResult(StableCmd, CmdResult);
 }
 
 /**
@@ -407,7 +410,7 @@ inline FGameRunResult RunGame(
          Mode == EPlayMode::Autoplay ? TEXT("autoplay") : TEXT("manual"));
   UE_LOG(LogTemp, Display, TEXT("%s"), *RenderLegend());
 
-  const auto &Steps = Store.getState().Scenario.Steps;
+  const TArray<FScenarioStep> Steps = Store.getState().Scenario.Steps;
   detail::ProcessSteps(Steps, 0, CommandContext, Executor, Store);
 
   /**

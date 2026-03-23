@@ -102,7 +102,8 @@ inline rtk::EnhancedStore<FTestGameState> createTestGameStoreWithListeners() {
   std::vector<rtk::Middleware<FTestGameState>> Middlewares;
   Middlewares.push_back(createGameListenerMiddleware());
   return rtk::configureStore<FTestGameState>(&TestGameReducer,
-                                             FTestGameState(), Middlewares);
+                                             CreateInitialTestGameState(),
+                                             Middlewares);
 }
 
 } // namespace TestGame

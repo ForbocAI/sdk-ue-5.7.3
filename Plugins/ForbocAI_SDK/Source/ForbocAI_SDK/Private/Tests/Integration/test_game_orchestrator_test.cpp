@@ -74,6 +74,10 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(
 bool FTestGameRunGameTranscriptErrorFailsTest::RunTest(
     const FString &Parameters) {
   (void)Parameters;
+  AddExpectedError(TEXT("LOG_ERR_CRITICAL // BIT_ROT_DETECTED"),
+                   EAutomationExpectedErrorFlags::Contains, 1);
+  AddExpectedError(TEXT("stub failure"),
+                   EAutomationExpectedErrorFlags::Contains, 1);
 
   const FGameRunResult Result =
       RunGame(EPlayMode::Autoplay,
@@ -97,6 +101,10 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(
 bool FTestGameRunGameFailedCommandLeavesCoverageGapTest::RunTest(
     const FString &Parameters) {
   (void)Parameters;
+  AddExpectedError(TEXT("LOG_ERR_CRITICAL // BIT_ROT_DETECTED"),
+                   EAutomationExpectedErrorFlags::Contains, 1);
+  AddExpectedError(TEXT("stub failure"),
+                   EAutomationExpectedErrorFlags::Contains, 1);
 
   const FGameRunResult Result =
       RunGame(EPlayMode::Autoplay, MakeExecutor(TEXT("forbocai status")));
